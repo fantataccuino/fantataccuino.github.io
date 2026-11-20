@@ -676,7 +676,7 @@ async function pSng(){
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
       return `<div class="card"><div class="row between"><b>${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">G${t.giornata}</span></div>
       <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'} · Iscritti <b>${n}/${t.posti}</b></p>
-      ${io?`<button class="del" onclick="sngEsci(${t.id})">Esci (rimborso)</button> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:premOk()?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:''}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
+      ${io?`<span class="badge" style="color:var(--green)">✅ Sei al tavolo</span> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:premOk()?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:''}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
   }
   if(sg.tab==='gestisci'&&profilo.ruolo==='admin'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').in('stato',['aperto','draft','in_gioco','annullato']).order('id',{ascending:false}).limit(60));
@@ -733,7 +733,7 @@ async function pSng(){
   }
   if(sg.tab==='regole') h+=`<div class="card"><h3>Come funziona il Calcetto</h3><p class="muted">
     1. Ogni tavolo vale per <b>una o più partite di Serie A</b> scelte dalla redazione: puoi scegliere solo giocatori di quelle squadre.<br>
-    2. Entri pagando l'ingresso in gettoni. Finché il tavolo non è pieno puoi uscire e riavere i gettoni.<br>
+    2. Entri pagando l'ingresso in gettoni. <b>Una volta iscritto non puoi più uscire</b>, come nel Sit & Go del poker.<br>
     3. A tavolo pieno parte il <b>draft a carte</b>, in 6 giri: 🧤 Portiere, 🛡️ Difensore, ⚙️ Centrocampista, ⚡ Attaccante, 🃏 Jolly (difensore, centrocampista o attaccante, scegli tu) e 🪑 Riserva (qualsiasi ruolo).<br>
     4. A ogni giro, uno alla volta, ricevi <b>fino a 5 carte</b> e ne scegli una. È <b>equo</b>: i giocatori di quel ruolo sono divisi in fasce di forza (⭐⭐⭐⭐⭐ → ⭐) e ognuno riceve un giocatore diverso da ogni fascia. Ogni giocatore può stare in <b>una sola squadra</b>: le tue carte sono solo tue e chi viene scelto sparisce per tutti.<br>
     4b. Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
@@ -776,7 +776,7 @@ async function creaTavoli(){
   toast(righe.length+' tavoli creati');sg.tab=profilo.ruolo==='admin'?'gestisci':'lobby';pSng();
 }
 async function sngEntra(id,ing){
-  if(!confirm(`Entrare al tavolo? Paghi ${ing} gettoni.`))return;
+  if(!confirm(`Entrare al tavolo? Paghi ${ing} gettoni.\n\nAttenzione: una volta iscritto non potrai più uscire. I gettoni tornano indietro solo se il tavolo non si riempie prima del calcio d'inizio.`))return;
   const {data,error}=await db.rpc('sng_entra',{p_tavolo:id});if(error)return toast(error.message,true);
   toast(data==='draft'?'Tavolo pieno: il draft è partito!':'Sei al tavolo!');sg.tav=id;pSng();
 }
