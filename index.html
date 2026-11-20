@@ -657,7 +657,7 @@ function premOk(){return !on('f_premium')||isPrem()}
 function boxPremium(cosa){return `<div class="card" style="border-color:var(--gold)"><h3>💎 ${cosa} è per gli utenti Premium</h3><p class="muted">Il Premium FantaTaccuino sblocca il Calcetto, leghe illimitate, voto spiegato e altro. Per attivarlo contatta l'admin.</p></div>`}
 
 // ---------- calcetto ----------
-let sg={tab:'lobby',tav:null,g:null,squadre:null},sngTimer=null;
+let sg={tab:'lobby',tav:null,g:null,squadre:null,edit:null},sngTimer=null;
 async function pSng(){
   clearTimeout(sngTimer);
   await db.rpc('sng_aggiorna');
@@ -665,24 +665,49 @@ async function pSng(){
   if(sg.tav) return tavoloView();
   let h=`<h2>⚽ Calcetto</h2><div class="card row between"><span>🪙 <b style="font-size:20px;color:var(--gold)">${profilo.gettoni}</b> gettoni</span><small class="muted">+10 ogni giorno · minimo 100 a inizio mese</small></div>`;
   if(!premOk()) h+=boxPremium('Il Calcetto');
-  h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole']].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
+  h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole'],...(profilo.ruolo==='admin'?[['gestisci','🛠️ Gestisci tavoli']]:[])].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
   if(sg.tab==='lobby'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso'));
     const ids=[...new Set(tav.flatMap(t=>t.partite||[]))];
     const pp=ids.length?chk(await db.from('partite_sa').select('api_id,casa,trasferta,data').in('api_id',ids)):[];
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:''}).join(', ');
-    if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='crea';pSng()">➕ Crea tavoli (admin)</button>`;
+    if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='gestisci';pSng()">🛠️ Gestisci / crea tavoli (admin)</button>`;
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
       return `<div class="card"><div class="row between"><b>${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">G${t.giornata}</span></div>
       <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'} · Iscritti <b>${n}/${t.posti}</b></p>
       ${io?`<button class="del" onclick="sngEsci(${t.id})">Esci (rimborso)</button> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:premOk()?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:''}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
+  }
+  if(sg.tab==='gestisci'&&profilo.ruolo==='admin'){
+    const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').in('stato',['aperto','draft','in_gioco','annullato']).order('id',{ascending:false}).limit(60));
+    const ids=[...new Set(tav.flatMap(t=>t.partite||[]))];
+    const pp=ids.length?chk(await db.from('partite_sa').select('api_id,casa,trasferta').in('api_id',ids)):[];
+    const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:'?'}).join(', ')||'nessuna partita';
+    const ST={aperto:'⏳ Aperto',draft:'🔥 Draft',in_gioco:'⚽ In gioco',annullato:'↩️ Annullato'};
+    h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='crea';pSng()">➕ Crea tavoli</button>`+tav.map(t=>`<div class="card">
+      <div class="row between"><b>#${t.id} · ${esc(t.nome||'Calcetto')}</b><span class="badge">${ST[t.stato]||t.stato}</span></div>
+      <p class="muted" style="margin:6px 0">G${t.giornata} · ${t.posti} posti · 🪙 ${t.ingresso} · iscritti ${t.sng_iscritti.length}<br>⚽ ${desc(t)}</p>
+      <div class="row">${t.stato==='aperto'?`<button onclick="sg.edit=${t.id};sg.tab='modifica';pSng()">✏️ Modifica</button>`:''}
+      <button class="del" onclick="eliminaTavolo(${t.id})">🗑️ Elimina</button></div></div>`).join('')||'<p class="muted">Nessun tavolo.</p>';
+  }
+  if(sg.tab==='modifica'&&profilo.ruolo==='admin'){
+    const t=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('id',sg.edit).single());
+    const pp=chk(await db.from('partite_sa').select('*').eq('giornata',t.giornata).order('data'));
+    const vuoto=!t.sng_iscritti.length,ora=new Date();
+    h+=`<button onclick="sg.tab='gestisci';pSng()">← Gestisci tavoli</button><div class="card" style="margin-top:12px"><h3>✏️ Tavolo #${t.id} · Giornata ${t.giornata}</h3>
+      <label>Nome</label><input id="mt_nome" value="${esc(t.nome||'')}">
+      <label>Partite</label>${pp.map(p=>{const sel=(t.partite||[]).includes(p.api_id),ok=new Date(p.data)>ora;
+        return `<div style="padding:5px 0"><label style="color:${ok||sel?'var(--txt)':'var(--muted)'}"><input type="checkbox" class="mp" value="${p.api_id}" data-d="${p.data}" ${sel?'checked':''} ${ok||sel?'':'disabled'}> ${esc(p.casa)} – ${esc(p.trasferta)} <small class="muted">${fmt(p.data)}</small></label></div>`}).join('')}
+      <label>Posti</label><select id="mt_posti" ${vuoto?'':'disabled'}>${[2,4,6,8].map(n=>`<option ${n===t.posti?'selected':''}>${n}</option>`).join('')}</select>
+      <label>Ingresso (gettoni)</label><input id="mt_ing" type="number" min="0" value="${t.ingresso}" ${vuoto?'':'disabled'}>
+      ${vuoto?'':'<p class="muted" style="font-size:12px">Ci sono già iscritti: posti e ingresso non si possono cambiare. Se serve, elimina il tavolo (i gettoni vengono restituiti) e ricrealo.</p>'}
+      <button class="pri" style="width:100%;margin-top:10px" onclick="salvaTavolo(${t.id},${vuoto})">Salva modifiche</button></div>`;
   }
   if(sg.tab==='crea'&&profilo.ruolo==='admin'){
     const fg=chk(await db.from('fanta_giornate').select('numero').order('numero'));
     if(!sg.g&&fg.length){const now=new Date().toISOString();const fut=chk(await db.from('partite_sa').select('giornata').gt('data',now).order('data').limit(1));sg.g=fut[0]?.giornata||fg[fg.length-1].numero}
     const pp=sg.g?chk(await db.from('partite_sa').select('*').eq('giornata',sg.g).order('data')):[];
     const ora=new Date();
-    h+=`<button onclick="sg.tab='lobby';pSng()">← Lobby</button><div class="card" style="margin-top:12px"><h3>➕ Nuovo tavolo</h3>
+    h+=`<button onclick="sg.tab='gestisci';pSng()">← Gestisci tavoli</button><div class="card" style="margin-top:12px"><h3>➕ Nuovo tavolo</h3>
       <label>Giornata</label><select onchange="sg.g=+this.value;pSng()">${fg.map(g=>`<option value="${g.numero}" ${g.numero==sg.g?'selected':''}>Giornata ${g.numero}</option>`).join('')}</select>
       <label>Partite del tavolo (solo quelle non ancora iniziate)</label>
       ${pp.map(p=>{const ok=new Date(p.data)>ora;return `<div style="padding:5px 0"><label style="color:${ok?'var(--txt)':'var(--muted)'}"><input type="checkbox" class="cp" value="${p.api_id}" data-d="${p.data}" ${ok?'':'disabled'}> ${esc(p.casa)} – ${esc(p.trasferta)} <small class="muted">${fmt(p.data)}</small></label></div>`}).join('')||'<p class="muted">Nessuna partita.</p>'}
@@ -716,6 +741,24 @@ async function pSng(){
     🪙 I gettoni sono gratuiti, non si comprano e non hanno alcun valore: servono solo per giocare e per la classifica "Re del mese".</p></div>`;
   app.innerHTML=h;
 }
+async function salvaTavolo(id,vuoto){
+  const cp=[...document.querySelectorAll('.mp:checked')];
+  if(!cp.length) return toast('Scegli almeno una partita',true);
+  const o={nome:val('mt_nome')||null,partite:cp.map(x=>+x.value),chiusura:cp.map(x=>x.dataset.d).sort()[0]};
+  if(vuoto){o.posti=+val('mt_posti');o.ingresso=+val('mt_ing')||0}
+  chk(await db.from('sng_tavoli').update(o).eq('id',id));
+  toast('Tavolo modificato');sg.tab='gestisci';pSng();
+}
+async function eliminaTavolo(id){
+  if(!confirm('Eliminare il tavolo? Chi era iscritto riavrà i suoi gettoni.'))return;
+  const t=chk(await db.from('sng_tavoli').select('ingresso,stato').eq('id',id).single());
+  if(['aperto','draft','in_gioco'].includes(t.stato)){
+    const isc=chk(await db.from('sng_iscritti').select('utente_id, profili(gettoni)').eq('tavolo_id',id));
+    for(const i of isc) chk(await db.from('profili').update({gettoni:(i.profili?.gettoni||0)+t.ingresso}).eq('id',i.utente_id));
+  }
+  chk(await db.from('sng_tavoli').delete().eq('id',id));
+  toast('Tavolo eliminato');pSng();
+}
 async function creaTavoli(){
   const cp=[...document.querySelectorAll('.cp:checked')];
   if(!cp.length) return toast('Scegli almeno una partita',true);
@@ -724,7 +767,7 @@ async function creaTavoli(){
   const righe=[...document.querySelectorAll('.ct:checked')].map(x=>({giornata:sg.g,posti:+x.value,ingresso:+document.getElementById('ci_'+x.value).value||0,partite,chiusura,nome}));
   if(!righe.length) return toast('Scegli almeno un tipo di tavolo',true);
   chk(await db.from('sng_tavoli').insert(righe));
-  toast(righe.length+' tavoli creati');sg.tab='lobby';pSng();
+  toast(righe.length+' tavoli creati');sg.tab=profilo.ruolo==='admin'?'gestisci':'lobby';pSng();
 }
 async function sngEntra(id,ing){
   if(!confirm(`Entrare al tavolo? Paghi ${ing} gettoni.`))return;
