@@ -368,8 +368,8 @@ async function pAdmin(){
       <button class="pri" onclick="salvaCfg()">Salva</button></div>
     <div class="card"><h3>1. Calendario</h3><p class="muted">${np||0} partite caricate. Crea anche le giornate del fantacalcio.</p>
       <button class="pri" onclick="impCalendario(this)">Importa calendario</button></div>
-    <div class="card"><h3>2. Listone giocatori</h3><p class="muted">${count||0} giocatori. Scarica 20 giocatori alla volta con una pausa di 7 secondi (limite del piano gratis): ci vogliono alcuni minuti, tieni la pagina aperta.</p>
-      <label>Parti da pagina</label><input id="lp_da" type="number" value="${ad.daPag}" min="1">
+    <div class="card"><h3>2. Listone giocatori</h3><p class="muted">${count||0} giocatori. Scarica il listone squadra per squadra con una pausa di 7 secondi tra una richiesta e l'altra (limite del piano gratis): ci vogliono circa 5 minuti, tieni la pagina aperta e lo schermo acceso. Serve prima il calendario.</p>
+      <label>Parti dalla squadra n.</label><input id="lp_da" type="number" value="${ad.daPag}" min="1" max="20">
       <button class="pri" onclick="impListone(this)">Importa listone</button><p id="prog" class="muted"></p></div>`;
   }
 
@@ -444,15 +444,22 @@ async function impCalendario(b){
   toast(data.partite+' partite importate');pAdmin();
 }
 async function impListone(b){
-  let p=Math.max(1,+val('lp_da')||1),tot=p,n=0;const box=document.getElementById('prog');b.disabled=true;
-  while(p<=tot){
-    box.textContent=`Pagina ${p} di ${tot}… (${n} giocatori)`;
-    const {data,error}=await db.rpc('importa_giocatori',{p_pagina:p});
-    if(error){box.textContent=`Errore a pagina ${p}: ${error.message}. Riprova più tardi partendo da pagina ${p}.`;ad.daPag=p;b.disabled=false;return}
-    tot=data.totale||tot;n+=data.importati;p++;
-    if(p<=tot) await sleep(7000);
+  const pp=chk(await db.from('partite_sa').select('casa_id,casa'));
+  const sq=[...new Map(pp.map(p=>[p.casa_id,p.casa])).entries()].sort((x,y)=>x[1].localeCompare(y[1]));
+  if(!sq.length) return toast('Importa prima il calendario',true);
+  const box=document.getElementById('prog');b.disabled=true;let n=0,primo=true;
+  for(let i=Math.max(1,+val('lp_da')||1)-1;i<sq.length;i++){
+    const [tid,nome]=sq[i];let p=1,tot=1;
+    while(p<=tot){
+      if(!primo) await sleep(7000);
+      primo=false;
+      box.textContent=`Squadra ${i+1} di ${sq.length}: ${nome} (pagina ${p})… ${n} giocatori finora`;
+      const {data,error}=await db.rpc('importa_giocatori_squadra',{p_team:tid,p_pagina:p});
+      if(error){box.textContent=`Errore su ${nome}: ${error.message}. Riprova partendo dalla squadra n. ${i+1}.`;ad.daPag=i+1;b.disabled=false;return}
+      tot=Math.min(data.totale||1,3);n+=data.importati;p++;
+    }
   }
-  ad.daPag=1;b.disabled=false;box.textContent=`Fatto: ${n} giocatori importati.`;toast('Listone importato');
+  ad.daPag=1;b.disabled=false;box.textContent=`Fatto: ${n} giocatori importati da ${sq.length} squadre.`;toast('Listone importato');
 }
 async function salvaScad(n){chk(await db.from('fanta_giornate').update({scadenza:new Date(val('sc_g')).toISOString()}).eq('numero',n));toast('Scadenza salvata')}
 async function pubblica(n,stato){
