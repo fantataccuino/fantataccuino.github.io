@@ -80,11 +80,13 @@ tr.mod td{background:#ffd44722}
 .fcard .fs{position:absolute;left:4%;right:4%;top:66%;text-align:center;font-weight:700;font-size:.85em;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:12px;justify-items:center}
 /* campo */
-.campo{position:relative;border-radius:24px;background:repeating-linear-gradient(180deg,#3b1fa8 0 70px,#3417a0 70px 140px);border:2px solid #ffffff22;overflow:hidden;padding:16px 4px;display:flex;flex-direction:column;gap:12px}
+.campo{position:relative;border-radius:24px;background:repeating-linear-gradient(180deg,#3b1fa8 0 60px,#3417a0 60px 120px);border:2px solid #ffffff22;overflow:hidden;padding:26px 8px;display:flex;flex-direction:column;gap:30px}
 .campo:before{content:"";position:absolute;inset:10px;border:2px solid #ffffff40;border-radius:8px;pointer-events:none}
 .campo:after{content:"";position:absolute;left:50%;top:50%;width:110px;height:110px;margin:-55px;border:2px solid #ffffff40;border-radius:50%;pointer-events:none}
 .campo .linea{display:flex;justify-content:space-evenly;position:relative;z-index:1}
 .panca{display:flex;gap:8px;overflow-x:auto;padding:8px 2px}
+.chip{display:inline-flex;align-items:center;background:#0d0826d9;border:1px solid #ffffff33;border-radius:999px;padding:4px 10px 4px 4px;font-size:13px;white-space:nowrap;box-shadow:0 3px 8px #0007}.chip .ruolo{margin-right:6px}
+.campo .linea{flex-wrap:wrap;gap:6px}
 /* home */
 .hero{border-radius:24px;padding:16px;background:linear-gradient(120deg,#2b1675,#1a0d52);border:1px solid #ffffff1a;display:flex;align-items:center;gap:12px;margin-bottom:18px}
 .hero .t{flex:1;font:800 25px/1.05 var(--cond)}
@@ -489,7 +491,7 @@ async function legaView(){
       <label>Modulo</label><select id="f_mod" onchange="contaForm()">${Object.keys(MODULI).map(m=>`<option ${m===mod?'selected':''}>${m}</option>`).join('')}</select>
       <p id="f_cnt" class="muted"></p><div id="f_campo"></div>
       <p class="muted" style="font-size:12px">Per ogni giocatore scegli <b>Titolare</b>, una posizione in <b>Panchina</b> (P1 entra per primo) o lascialo in tribuna.</p>
-      ${mia.map(r=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span>
+      ${mia.map(r=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span><span style="margin-left:auto;margin-right:8px">${forma5(FVM[r.giocatore_id])}</span>
         <select class="fsel" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" style="width:105px;margin:0" onchange="contaForm()">
         <option value="">Tribuna</option><option value="T" ${stato(r.giocatore_id)==='T'?'selected':''}>Titolare</option>
         ${Array.from({length:nPan},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
@@ -542,10 +544,10 @@ let CONS=null,FVM={},FGM={};
 function disegnaCampo(){const box=document.getElementById('f_campo');if(!box)return;
   const t={P:[],D:[],C:[],A:[]},pan=[];
   document.querySelectorAll('.fsel').forEach(s=>{const g=FGM[s.dataset.g];if(!g)return;if(s.value==='T')t[s.dataset.r].push(g);else if(s.value)pan.push([+s.value.slice(1),g])});
-  const c=g=>cartaG(g,FVM[g.id],66);
+  const c=g=>`<div class="chip">${ruolo(g.ruolo)}<b>${esc(g.nome)}</b></div>`;
   if(!Object.values(t).some(x=>x.length)){box.innerHTML='';return}
   box.innerHTML=`<div class="campo">${['A','C','D','P'].map(R=>`<div class="linea">${t[R].map(c).join('')}</div>`).join('')}</div>
-  ${pan.length?`<h3 style="margin-top:12px">🪑 Panchina</h3><div class="panca">${pan.sort((a,b)=>a[0]-b[0]).map(x=>`<div style="text-align:center"><small class="muted">P${x[0]}</small>${c(x[1])}</div>`).join('')}</div>`:''}`}
+  ${pan.length?`<h3 style="margin-top:12px">🪑 Panchina</h3><div class="panca">${pan.sort((a,b)=>a[0]-b[0]).map(x=>`<div style="text-align:center;flex:0 0 auto"><small class="muted">P${x[0]}</small><br>${c(x[1])}</div>`).join('')}</div>`:''}`}
 function applicaCons(){if(!CONS)return;document.getElementById('f_mod').value=CONS.mod;document.querySelectorAll('.fsel').forEach(s=>s.value=CONS.ass[s.dataset.g]||'');contaForm();toast('Consiglio applicato: ora tocca Salva formazione');document.getElementById('f_mod').scrollIntoView({behavior:'smooth'})}
 function contaForm(){
   const el=document.getElementById('f_cnt');if(!el)return;
@@ -737,7 +739,7 @@ function listaG(){clearTimeout(tG);tG=setTimeout(async()=>{
   const gg=chk(await q);
   const b=document.getElementById('gz_lista');if(!b)return;
   const vm=await votiDi(gg.map(g=>g.id));
-  b.innerHTML=gg.length?`<div class="griglia">${gg.map(g=>`<div style="text-align:center">${cartaG(g,vm[g.id])}<div style="font-size:12px;margin-top:2px">${qv(g).replace(/^Q \d+/,'')}</div></div>`).join('')}</div>`:'<p class="muted">Nessun giocatore.</p>';
+  b.innerHTML=gg.map(g=>`<div class="card row between" style="padding:10px 14px;margin-bottom:8px;flex-wrap:nowrap" onclick="schedaG(${g.id})"><span style="display:flex;align-items:center;min-width:0">${foto(g.foto)}${ruolo(g.ruolo)}<span style="min-width:0"><b>${esc(g.nome)}</b><br><small class="muted">${esc(g.squadra)} · ${qv(g)}</small></span></span>${forma5(vm[g.id])}</div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
 },250)}
 function spiega(r,st,gc){
   if(!st) return null;
@@ -759,6 +761,8 @@ function cartaG(g,fv,w=112){fv=(fv||[]).filter(x=>x!==null&&x!==undefined).map(N
   const fm=fv.length?(fv.reduce((a,b)=>a+b,0)/fv.length).toFixed(1):'–';const col=x=>x>=7?'#16a34a':x>=6?'#eab308':'#e5484d';
   const bars=fv.length?fv.slice(-5).map(x=>`<div class="fb"><small>${+x.toFixed(1)}</small><i style="height:${Math.max(6,Math.min(80,x*6.5))}%;background:${col(x)}"></i></div>`).join(''):'<div class="fnone">nessun<br>voto</div>';
   return `<div class="fcard t-${t}" style="--w:${w}px" onclick="schedaG(${g.id})"><div class="fv">${fm}</div><div class="fr">${g.ruolo}</div><div class="fforma">${bars}<span>ultime 5</span></div><div class="fn">${esc(g.nome)}</div><div class="fs">${esc(g.squadra)} · Q ${q}</div></div>`}
+function forma5(fv){fv=(fv||[]).slice(-5);if(!fv.length)return '<small class="muted">nessun voto</small>';const c=x=>x>=7?'#5dff7a':x>=6?'#ffd447':'#ff6b6b';
+  return `<span title="Ultimi 5 fantavoti: ${fv.join(' · ')}" style="display:flex;align-items:flex-end;gap:2px;height:30px;flex:0 0 auto">${fv.map(x=>`<i style="display:block;width:7px;border-radius:2px;height:${Math.max(4,Math.min(30,x*2.6))}px;background:${c(x)}"></i>`).join('')}</span>`}
 async function votiDi(ids){const m={};if(!ids.length)return m;const vv=chk(await db.from('voti').select('giocatore_id,giornata,fantavoto').in('giocatore_id',ids).not('fantavoto','is',null).order('giornata'));vv.forEach(v=>(m[v.giocatore_id]=m[v.giocatore_id]||[]).push(+v.fantavoto));return m}
 function qv(g){const d=g.var_q||0;return `Q ${g.quotazione}`+(d>0?` <span style="color:#2ecc71">▲${d}</span>`:d<0?` <span style="color:#e74c3c">▼${-d}</span>`:'')}
 async function schedaG(id){
@@ -780,7 +784,7 @@ async function schedaG(id){
     graf=`<div class="card" style="border-color:var(--gold)"><h3>💎 Andamento</h3>${a||'<p class="muted">Il grafico dei voti compare dopo almeno 2 partite giocate.</p>'}${b||'<p class="muted">Il grafico della quotazione compare dopo la prima giornata pubblicata.</p>'}</div>`;
   } else graf='<div class="card" style="border-color:var(--gold)"><p class="muted">💎 Con il Premium vedi i grafici di voti e quotazione giornata per giornata.</p></div>';
   app.innerHTML=`<button onclick="pGiocatori()">← Giocatori</button>
-  <div class="card" style="margin-top:12px"><div class="scheda">${g.foto?`<img src="${esc(g.foto)}" alt="">`:cartaG(g,giocate.map(v=>v.fantavoto),104)}<div><h2 style="margin:0">${esc(g.nome)}</h2>
+  <div class="card" style="margin-top:12px"><div class="scheda">${g.foto?`<img src="${esc(g.foto)}" alt="">`:''}<div><h2 style="margin:0">${esc(g.nome)}</h2>
     <div style="margin-top:6px">${ruolo(g.ruolo)}${esc(g.squadra)} · <b>${qv(g)}</b>${g.var_q?` <small class="muted">(inizio stagione ${g.quot_iniziale})</small>`:''}</div></div></div>
     <div class="stat"><div><b>${giocate.length}</b>Presenze</div><div><b>${media('voto')}</b>Media voto</div><div><b>${media('fantavoto')}</b>Fantamedia</div>
     <div><b>${somma('gol')}</b>Gol</div><div><b>${somma('assist')}</b>Assist</div><div><b>${vv.filter(v=>v.ammonizione).length}/${vv.filter(v=>v.espulsione).length}</b>Amm/Esp</div></div></div>
