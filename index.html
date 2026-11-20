@@ -884,8 +884,8 @@ async function redLista(h){
 }
 async function redApri(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
-  const casa=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('squadra',p.casa).order('nome'));
-  const trasf=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('squadra',p.trasferta).order('nome'));
+  const casa=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('squadra',p.casa).eq('attivo',true).order('nome'));
+  const trasf=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('squadra',p.trasferta).eq('attivo',true).order('nome'));
   const ids=[...casa,...trasf].map(x=>x.id);
   const vv=ids.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',ids)):[];
   const tutti=[...casa.map(x=>({...x,lato:'casa'})),...trasf.map(x=>({...x,lato:'trasferta'}))];
@@ -1124,6 +1124,9 @@ async function pAdmin(){
       <label>Campionato (ID API-Football, Serie A = 135)</label><input id="cf_lega" value="${esc(cfg.lega_api||'135')}">
       <label>Stagione (anno di inizio, es. 2023 = 2023/24)</label><input id="cf_stag" value="${esc(cfg.stagione||'')}">
       <button class="pri" onclick="salvaCfg()">Salva</button></div>
+    <div class="card" style="border-color:var(--gold)"><h3>📅 Importa calendario da testo (senza API)</h3>
+      <p class="muted">Una riga per partita: <b>Giornata;Data;Ora;Casa;Trasferta</b><br>Es: <i>13;29/11/2026;18:00;Inter;Juventus</i><br>Se la partita esiste già (stessa giornata e squadre) viene aggiornata solo la data. I nomi delle squadre devono essere scritti sempre uguali, anche nel listone.</p>
+      <textarea id="cal_txt" rows="7"></textarea><button class="pri" onclick="impCalTesto()">Importa calendario</button></div>
     <div class="card"><h3>1. Calendario</h3><p class="muted">${np||0} partite caricate. Crea anche le giornate del fantacalcio.</p>
       <button class="pri" onclick="impCalendario(this)">Importa calendario</button></div>
     <div class="card"><h3>2. Listone giocatori</h3><p class="muted">${count||0} giocatori. Scarica il listone squadra per squadra con una pausa di 7 secondi tra una richiesta e l'altra (limite del piano gratis): ci vogliono circa 5 minuti, tieni la pagina aperta e lo schermo acceso. Serve prima il calendario.</p>
@@ -1173,7 +1176,12 @@ async function pAdmin(){
   }
 
   if(ad.tab==='giocatori'){
-    h+=`<div class="card"><h3>Cerca e modifica</h3><input id="adg_q" placeholder="Nome giocatore" oninput="adCercaG()"><div id="adg_r"></div></div>
+    h+=`<div class="card" style="border-color:var(--gold)"><h3>📋 Importa listone da testo</h3>
+      <p class="muted">Una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b> (ruolo P, D, C o A)<br>Es: <i>Federico Dimarco;D;Inter;16</i><br>Se il giocatore esiste già (stesso nome e squadra) aggiorna ruolo e quotazione, altrimenti lo crea.</p>
+      <textarea id="lst_txt" rows="7"></textarea>
+      <label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="lst_nuova"> Nuova stagione: prima metti fuori listone tutti i giocatori attuali (restano nello storico)</label>
+      <button class="pri" onclick="impListTesto()">Importa listone</button><p id="lst_msg" class="muted"></p></div>
+    <div class="card"><h3>Cerca e modifica</h3><input id="adg_q" placeholder="Nome giocatore" oninput="adCercaG()"><div id="adg_r"></div></div>
     <div class="card"><h3>Aggiungi a mano</h3><label>Nome</label><input id="ng_n"><label>Ruolo</label><select id="ng_r"><option>P</option><option>D</option><option>C</option><option>A</option></select>
       <label>Squadra</label><input id="ng_s"><label>Quotazione</label><input id="ng_q" type="number" value="1"><button class="pri" onclick="nuovoG()">Aggiungi</button></div>`;
   }
@@ -1273,6 +1281,46 @@ function adCercaG(){clearTimeout(tAd);tAd=setTimeout(async()=>{
     <select id="r_${g.id}" style="width:60px;margin:0">${['P','D','C','A'].map(r=>`<option ${r===g.ruolo?'selected':''}>${r}</option>`).join('')}</select>
     <button class="ok" onclick="salvaG(${g.id})">Salva</button><button class="del" onclick="delRiga('giocatori',${g.id})">Elimina</button></div></div>`).join('')||'<p class="muted">Nessuno.</p>';
 },300)}
+function dataIt(d,o){const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d.trim());const h=/^(\d{1,2})[:.](\d{2})$/.exec((o||'').trim());if(!m||!h)return null;return new Date(+m[3],+m[2]-1,+m[1],+h[1],+h[2]).toISOString()}
+async function impCalTesto(){
+  const righe=val('cal_txt').split('\n').map(r=>r.trim()).filter(Boolean),ok=[],err=[];
+  righe.forEach((r,i)=>{const [g,d,o,c,t]=r.split(';').map(x=>(x||'').trim());const data=dataIt(d,o);
+    if(!+g||!data||!c||!t) err.push(i+1); else ok.push({giornata:+g,data,casa:c,trasferta:t})});
+  if(err.length) return toast('Righe non valide: '+err.join(', '),true);
+  if(!ok.length) return;
+  const gs=[...new Set(ok.map(x=>x.giornata))];
+  const es=chk(await db.from('partite_sa').select('api_id,giornata,casa,trasferta').in('giornata',gs));
+  const mx=chk(await db.from('partite_sa').select('api_id').order('api_id',{ascending:false}).limit(1));
+  let id=Math.max(1000000000,(mx[0]?.api_id||0)+1),nuove=[],agg=0;
+  for(const p of ok){const e=es.find(x=>x.giornata===p.giornata&&x.casa===p.casa&&x.trasferta===p.trasferta);
+    if(e){chk(await db.from('partite_sa').update({data:p.data}).eq('api_id',e.api_id));agg++}
+    else nuove.push({api_id:id++,...p,stato:'NS'})}
+  if(nuove.length) chk(await db.from('partite_sa').insert(nuove));
+  for(const g of gs){const min=ok.filter(x=>x.giornata===g).map(x=>x.data).sort()[0];
+    chk(await db.from('fanta_giornate').upsert({numero:g,scadenza:min},{onConflict:'numero'}))}
+  toast(`${nuove.length} partite nuove, ${agg} aggiornate`);pAdmin();
+}
+async function impListTesto(){
+  const righe=val('lst_txt').split('\n').map(r=>r.trim()).filter(Boolean),ok=[],err=[];
+  righe.forEach((r,i)=>{const [n,ru,sq,q]=r.split(';').map(x=>(x||'').trim());const R=(ru||'').toUpperCase();
+    if(!n||!['P','D','C','A'].includes(R)||!sq) err.push(i+1); else ok.push({nome:n,ruolo:R,squadra:sq,quotazione:Math.max(1,+q||1)})});
+  if(err.length) return toast('Righe non valide: '+err.join(', '),true);
+  if(!ok.length) return;
+  const msg=document.getElementById('lst_msg');msg.textContent='Importo…';
+  if(document.getElementById('lst_nuova').checked){if(!confirm('Mettere fuori listone tutti i giocatori attuali prima di importare?'))return;chk(await db.from('giocatori').update({attivo:false}).eq('attivo',true))}
+  const sq=[...new Set(ok.map(x=>x.squadra))];
+  const es=chk(await db.from('giocatori').select('id,nome,squadra').in('squadra',sq));
+  const k=g=>norm(g.nome)+'|'+g.squadra;const mp={};es.forEach(g=>mp[k(g)]=g.id);
+  const nuovi=[];let agg=0;
+  for(const g of ok){const id=mp[k(g)];
+    if(id){chk(await db.from('giocatori').update({ruolo:g.ruolo,quotazione:g.quotazione,attivo:true}).eq('id',id));agg++}
+    else nuovi.push({...g,attivo:true})}
+  for(let i=0;i<nuovi.length;i+=200) chk(await db.from('giocatori').insert(nuovi.slice(i,i+200)));
+  const cal=chk(await db.from('partite_sa').select('casa,trasferta'));const squadreCal=new Set(cal.flatMap(p=>[p.casa,p.trasferta]));
+  const fuori=sq.filter(x=>!squadreCal.has(x));
+  msg.innerHTML=`✅ ${nuovi.length} nuovi, ${agg} aggiornati.`+(fuori.length?`<br><span style="color:var(--red)">⚠️ Squadre che non compaiono nel calendario: ${fuori.map(esc).join(', ')}. Controlla che i nomi siano scritti uguali.</span>`:'');
+  toast('Listone importato');
+}
 async function salvaG(id){chk(await db.from('giocatori').update({quotazione:+document.getElementById('q_'+id).value||1,ruolo:document.getElementById('r_'+id).value}).eq('id',id));toast('Giocatore aggiornato')}
 async function nuovoG(){
   const n=val('ng_n'),s=val('ng_s');if(!n||!s)return toast('Nome e squadra obbligatori',true);
