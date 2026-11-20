@@ -1241,7 +1241,7 @@ async function pAdmin(){
     const us=chk(await db.from('profili').select('*').order('approvato').order('creato_il',{ascending:false}));
     h+=us.map(u=>`<div class="card row between"><div><b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
       <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
-      ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}<button onclick="regalaGettoni('${u.id}',100)">+100 <span class="pd"></span></button></div>`:''}</div>
+      ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><span class="pd" style="font-size:22px"></span><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
       ${u.id===utente.id?'':`<div class="row">${!u.approvato?`<button class="ok" onclick="approva('${u.id}')">Accetta</button>`:''}
         ${u.approvato?`<button onclick="cambiaRuolo('${u.id}','${u.ruolo==='admin'?'utente':'admin'}')">${u.ruolo==='admin'?'Togli admin':'Rendi admin'}</button>`:''}
         <button class="del" onclick="rifiuta('${u.id}')">${u.approvato?'Elimina':'Rifiuta'}</button></div>`}</div>`).join('');
@@ -1316,6 +1316,10 @@ async function pAdmin(){
 async function salvaRake(){const v=Math.max(0,Math.min(50,+val('rk')||0));chk(await db.from('impostazioni').upsert({chiave:'rake_calcetto',valore:String(v)}));await caricaFeat();toast('Trattenuta: '+v+'%')}
 async function salvaDon(){const v=val('lk_don');if(v&&!/^https:\/\//.test(v))return toast('Il link deve iniziare con https://',true);chk(await db.from('impostazioni').upsert({chiave:'link_donazioni',valore:v}));await caricaFeat();renderNav();toast('Link salvato')}
 async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);chk(await db.from('profili').update({premium_fino:anni?d.toISOString().slice(0,10):null}).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
+async function modGettoni(id,seg){const n=Math.abs(parseInt(document.getElementById('pg_'+id).value));if(!n)return toast('Scrivi quanti palloni dorati',true);
+  const u=chk(await db.from('profili').select('gettoni,username').eq('id',id).single());const nuovo=Math.max(0,u.gettoni+seg*n);
+  if(!confirm(`${seg>0?'Aggiungere':'Togliere'} ${n} palloni dorati a ${u.username}? Saldo: ${u.gettoni} → ${nuovo}`))return;
+  chk(await db.from('profili').update({gettoni:nuovo}).eq('id',id));toast(`${u.username}: ${nuovo} palloni dorati`);pAdmin()}
 async function regalaGettoni(id,n){const u=chk(await db.from('profili').select('gettoni').eq('id',id).single());chk(await db.from('profili').update({gettoni:u.gettoni+n}).eq('id',id));toast('+'+n+' palloni dorati');pAdmin()}
 async function toggleFeat(k,v){chk(await db.from('impostazioni').upsert({chiave:k,valore:v?'1':'0'}));await caricaFeat();toast(v?'Funzione attivata':'Funzione spenta');pAdmin()}
 async function approva(id){chk(await db.from('profili').update({approvato:true}).eq('id',id));toast('Utente accettato');pAdmin()}
