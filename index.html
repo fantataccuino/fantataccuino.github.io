@@ -66,6 +66,7 @@ th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;le
 .auth{max-width:400px;margin:48px auto}
 .logo{text-align:center;font-size:52px;margin-bottom:4px}
 details summary{cursor:pointer;color:var(--muted);margin-top:8px}
+@keyframes pk{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-8px) rotate(-6deg)}}
 tr.mod td{background:#ffd44722}
 /* carte giocatore */
 .fcard{--w:112px;position:relative;width:var(--w);height:calc(var(--w)*1.4);font-size:calc(var(--w)/10);flex:0 0 auto;cursor:pointer;filter:drop-shadow(0 6px 8px #0009);clip-path:polygon(0 6%,6% 0,94% 0,100% 6%,100% 82%,50% 100%,0 82%);border-radius:10px;color:#3a2600}
@@ -154,7 +155,21 @@ async function avvia(session){
   await caricaFeat();
   document.getElementById('top').style.display='block';
   renderNav(); vai(pagina);
+  if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,700);
 }
+function oggiStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function mostraPacchi(){if(document.getElementById('pacchi'))return;const o=document.createElement('div');o.id='pacchi';
+  o.style.cssText='position:fixed;inset:0;z-index:100;background:#0b0628e8;display:flex;align-items:center;justify-content:center;padding:20px';
+  o.innerHTML=`<div class="card" style="max-width:420px;width:100%;text-align:center;margin:0"><p style="font:800 30px var(--cond);margin:0">🎁 Il regalo di oggi!</p><p class="muted">Scegli un pacco: dentro ci sono palloni gratis per i tavoli 🎁 del Calcetto.</p>
+    <div id="pk" style="display:flex;justify-content:space-around;margin:18px 0">${[0,1,2].map(i=>`<div onclick="apriPacco(${i})" style="cursor:pointer;font-size:62px;animation:pk 1.4s ${i*.2}s ease-in-out infinite">🎁</div>`).join('')}</div>
+    <p id="pk_msg" class="muted">Tocca un pacco</p><button id="pk_ok" style="display:none;width:100%" class="pri" onclick="document.getElementById('pacchi').remove()">Grazie!</button></div>`;
+  document.body.appendChild(o)}
+async function apriPacco(i){const box=document.getElementById('pk');if(box.dataset.aperto)return;box.dataset.aperto=1;
+  const {data,error}=await db.rpc('apri_pacco');if(error){document.getElementById('pk_msg').textContent=error.message;document.getElementById('pk_ok').style.display='block';return}
+  const altri=[...data.altri];const v=[0,1,2].map(k=>k===i?data.vinto:altri.shift());
+  box.innerHTML=v.map((x,k)=>`<div style="text-align:center;${k===i?'':'opacity:.45'}"><div style="font-size:${k===i?54:40}px">${k===i?'🎉':'📦'}</div><b style="font:800 ${k===i?30:20}px var(--cond);color:${k===i?'var(--green)':'var(--muted)'}">+${x}</b></div>`).join('');
+  document.getElementById('pk_msg').innerHTML=`Hai vinto <b style="color:var(--green)">${data.vinto} palloni gratis</b>! Torna domani per un altro pacco.`;
+  document.getElementById('pk_ok').style.display='block';profilo.prova=data.saldo;profilo.ultimo_pacco=oggiStr();aggSaldo()}
 
 function schermata(t,m){
   document.getElementById('nav').innerHTML='';
@@ -196,9 +211,8 @@ const PAGINE = {home:'🏠 Home',fanta:'📋 Leghe',sng:'⚽ Calcetto',giocatori
 function navB(v){const i=v.indexOf(' ');return `<span class="ic">${v.slice(0,i)}</span><span>${v.slice(i+1)}</span>`}
 function aggSaldo(){const el=document.getElementById('saldo');if(!el||!profilo)return;
   if(!on('f_sng')){el.style.display='none';return}
-  const prova=!premOk();el.style.display='flex';
-  el.innerHTML=prova?`🎁 <span>${profilo.prova??0}</span>`:`<span class="pd"></span><span>${profilo.gettoni??0}</span>`;
-  el.title=prova?'Palloni dorati di prova':'I tuoi palloni dorati'}
+  el.style.display='flex';
+  el.innerHTML=`<span title="Palloni gratis">🎁 ${profilo.prova??0}</span><span style="opacity:.4">|</span><span title="Palloni Premium" style="display:flex;align-items:center;gap:4px"><span class="pd"></span>${profilo.gettoni??0}</span>`}
 function renderNav(){aggSaldo();
   document.getElementById('nav').innerHTML=Object.entries(PAGINE)
     .filter(([k])=>(k!=='admin'||profilo.ruolo==='admin')&&(k!=='sng'||on('f_sng'))&&(k!=='premium'||on('f_premium')))
@@ -238,7 +252,7 @@ function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;r
 <p><b>1. Il servizio.</b> FantaTaccuino è un gioco di fantacalcio gestito in modo amatoriale. È offerto così com'è: può avere errori, interruzioni o modifiche, e può essere chiuso in qualsiasi momento.</p>
 <p><b>2. Account.</b> Ogni iscrizione viene approvata dall'amministratore. È consentito un solo account per persona. Sei responsabile della tua password e di quello che succede con il tuo account.</p>
 <p><b>3. Voti.</b> I voti sono assegnati dalla redazione di FantaTaccuino.</p>
-<p><b>4. Palloni dorati.</b> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore. Ogni nuovo iscritto riceve 100 palloni dorati di prova per provare il Calcetto anche senza Premium: le vincite delle partite di prova non vengono accreditate e, finiti i palloni di prova, per continuare serve il Premium.</p>
+<p><b>4. Palloni dorati.</b> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore. Ci sono due tipi di palloni dorati: i <b>palloni gratis</b> (100 all'iscrizione più quelli dei pacchi giornalieri), che si usano solo nei tavoli Gratis e le cui vincite non vengono accreditate, e i <b>palloni Premium</b>, assegnati dall'amministratore agli utenti Premium per i tavoli normali.</p>
 <p><b>5. Calcetto.</b> Ai tavoli del Calcetto si partecipa solo con palloni dorati. Una volta iscritto a un tavolo non puoi più uscire. Il banco trattiene una percentuale dei palloni dorati del tavolo; il montepremi è solo in palloni dorati. Se un tavolo viene annullato i palloni dorati vengono restituiti.</p>
 <p><b>6. Premium.</b> Il Premium sblocca funzioni aggiuntive per il periodo indicato. Prezzo, pagamento e diritto di recesso vengono indicati prima dell'acquisto.</p>
 <p><b>7. Comportamento.</b> In chat e nelle leghe sono vietati insulti, contenuti offensivi, spam e trucchi per falsare il gioco (account multipli, uso di errori del sito). L'amministratore può cancellare messaggi e sospendere o eliminare gli account che non rispettano queste regole.</p>
@@ -277,6 +291,8 @@ async function pFanta(){
   app.innerHTML=`<h2>Leghe</h2>
   ${leghe.map(l=>`<div class="card row between"><div><b>${esc(l.nome)}</b><br><small class="muted">${l.creatore_id===utente.id?'Sei il presidente':'Partecipante'} · ${MODALITA[l.modalita]||'Asta'}${l.giornata_da?` · Sprint G${l.giornata_da}–${l.giornata_a||38}`:''}${l.carte?' · 🃏':''}</small></div>
     <button class="pri" onclick="fz.lega=${l.id};fz.tab='classifica';pFanta()">Apri</button></div>`).join('')||'<p class="muted">Non sei ancora in nessuna lega.</p>'}
+  <div class="card" style="border-color:var(--gold)"><h3>🚚 Hai già una lega su un'altra app?</h3><p class="muted">Ce ne occupiamo noi: mandaci regolamento, rose e classifica (bastano gli screenshot) e ti prepariamo la lega qui, con tutte le squadre dentro. Voi entrate e giocate.</p>
+    ${FEAT.wa_premium?`<button class="pri" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei trasferire la mia lega su FantaTaccuino. Il mio nome utente è: '+profilo.username+'. Ti mando regolamento, rose e classifica.'),'_blank')">💬 Chiedi il trasferimento su WhatsApp</button>`:`<p class="muted">Scrivi a <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}</div>
   <div class="card"><h3>Crea una lega</h3>
     <label>Nome lega</label><input id="nl_nome">
     <label>Come si formano le rose</label><select id="nl_mod" onchange="document.getElementById('nl_cr').style.display=this.value==='asta'?'block':'none'">
@@ -287,6 +303,7 @@ async function pFanta(){
     ${on('f_carte')?'<label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="nl_carte"> 🃏 Carte Tattiche (Capitano x2, Muro, Panchina lunga, Scommessa)</label>':''}
     ${on('f_sprint')?`<label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="nl_sprint" onchange="document.getElementById('nl_sp').style.display=this.checked?'block':'none'"> 🏆 Mini-torneo Sprint (solo alcune giornate)</label>
       <div id="nl_sp" style="display:none"><label>Dalla giornata di Serie A</label><input id="nl_da" type="number" min="1" max="38"><label>Alla giornata</label><input id="nl_a" type="number" min="1" max="38"></div>`:''}
+    <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>⚽ Punti 1° gol</label><input id="nl_sg" type="number" step="0.5" value="66"></div><div style="flex:1"><label>Ogni gol in più</label><input id="nl_pg" type="number" step="0.5" value="6"></div></div>
     <details style="margin:8px 0 12px"><summary style="color:var(--txt);font-weight:700">⚙️ Bonus e malus (facoltativo)</summary><div style="margin-top:8px">${campiBonus('nb')}</div></details>
     <button class="pri" onclick="creaLega()">Crea lega</button></div>
   <div class="card"><h3>Entra con codice invito</h3>
@@ -297,7 +314,7 @@ async function pFanta(){
 async function creaLega(){
   const nome=val('nl_nome');if(!nome) return toast('Scrivi il nome della lega',true);
   if(!premOk()){const {count}=await db.from('leghe').select('*',{count:'exact',head:true}).eq('creatore_id',utente.id);if(count>=2)return toast('Senza Premium puoi creare al massimo 2 leghe 💎',true)}
-  const o={nome,crediti:+val('nl_cred')||500,modalita:val('nl_mod'),carte:!!document.getElementById('nl_carte')?.checked,bonus:leggiBonus('nb')};
+  const o={nome,crediti:+val('nl_cred')||500,modalita:val('nl_mod'),carte:!!document.getElementById('nl_carte')?.checked,bonus:leggiBonus('nb'),soglia_gol:+val('nl_sg')||66,passo_gol:+val('nl_pg')||6};
   if(document.getElementById('nl_sprint')?.checked){
     o.giornata_da=+val('nl_da');o.giornata_a=+val('nl_a');
     if(!o.giornata_da||!o.giornata_a||o.giornata_a<o.giornata_da) return toast('Indica le giornate dello Sprint',true);
@@ -320,7 +337,10 @@ const CARTE=[
   {k:'scommessa',n:'🎲 Scommessa',d:'Scegli un giocatore: voto 7 o più = +3, sotto il 6 = -3.',gioc:true}];
 const MODALITA={asta:'Asta',draft:'Draft',ombra:'Lega Ombra'};
 let draftTimer=null;
-function golDa(pt,lega){return pt<lega.soglia_gol?0:Math.floor((pt-lega.soglia_gol)/lega.passo_gol)+1}
+function golDa(pt,lega){const f=((lega.bonus&&lega.bonus.fasce)||[]).map(Number).filter(x=>x>0).sort((a,b)=>a-b);
+  if(f.length){let n=f.filter(x=>pt>=x).length;if(n===f.length){const last=f[f.length-1],step=lega.passo_gol||4;n+=Math.floor((pt-last)/step)}return n}
+  return pt<lega.soglia_gol?0:Math.floor((pt-lega.soglia_gol)/lega.passo_gol)+1}
+function testoFasce(lega){const f=((lega.bonus&&lega.bonus.fasce)||[]);return f.length?`Fasce: ${f.join(' · ')} punti = 1, 2, 3… gol, poi uno ogni ${lega.passo_gol}`:`${lega.soglia_gol} punti = 1 gol, poi +1 ogni ${lega.passo_gol}`}
 function golMatch(i,ris,lega){
   const A=ris[i.giornata]?.[i.casa]||{pt:0},B=ris[i.giornata]?.[i.trasferta]||{pt:0};
   let gc=golDa(A.pt,lega),gt=golDa(B.pt,lega);
@@ -329,15 +349,19 @@ function golMatch(i,ris,lega){
   return [gc,gt,A.pt,B.pt];
 }
 
-const BONUS_DEF={gol_a:3,gol_c:3,gol_d:3,gol_p:3,rig:3,decisivo:0,assist:1,amm:-0.5,esp:-1,gs:-1,rp:3,rs:-3,ag:-2,inviolata:0,gs_dif:0,vittoria:0,novanta:0,moddif:0,modcen:0};
-const BONUS_LAB=[['gol_a','⚽ Gol attaccante'],['gol_c','⚽ Gol centrocampista'],['gol_d','⚽ Gol difensore'],['gol_p','⚽ Gol portiere'],['rig','🎯 Gol su rigore (al posto del gol)'],['decisivo','⭐ Gol decisivo (in più)'],['assist','🅰️ Assist'],['amm','🟨 Ammonizione'],['esp','🟥 Espulsione'],['gs','🥅 Ogni gol subito (portiere)'],['rp','🧤 Rigore parato'],['rs','❌ Rigore sbagliato'],['ag','🙈 Autogol'],['inviolata','🔒 Porta inviolata (portiere)'],['gs_dif','🧱 Difensore: ogni gol subito dalla squadra'],['vittoria','🏆 Vittoria della squadra reale'],['novanta','⏱️ Partita intera (90 minuti)'],['moddif','🛡️ Modificatore difesa (1 = attivo, 0 = spento)'],['modcen','⚙️ Modificatore centrocampo (1 = attivo, 0 = spento)']];
+const BONUS_DEF={gol_a:3,gol_c:3,gol_d:3,gol_p:3,rig:3,decisivo:0,pareggio:0,potm:0,assist:1,amm:-0.5,esp:-1,gs:-1,rp:3,rs:-3,ag:-2,inviolata:0,gs_dif:0,vittoria:0,novanta:0,moddif:0,modcen:0};
+const BONUS_LAB=[['gol_a','⚽ Gol attaccante'],['gol_c','⚽ Gol centrocampista'],['gol_d','⚽ Gol difensore'],['gol_p','⚽ Gol portiere'],['rig','🎯 Gol su rigore (al posto del gol)'],['decisivo','⭐ Gol della vittoria (in più)'],['pareggio','🟰 Gol del pareggio (in più)'],['potm','🏅 Player of the match'],['assist','🅰️ Assist'],['amm','🟨 Ammonizione'],['esp','🟥 Espulsione'],['gs','🥅 Ogni gol subito (portiere)'],['rp','🧤 Rigore parato'],['rs','❌ Rigore sbagliato'],['ag','🙈 Autogol'],['inviolata','🔒 Porta inviolata (portiere)'],['gs_dif','🧱 Difensore: ogni gol subito dalla squadra'],['vittoria','🏆 Vittoria della squadra reale'],['novanta','⏱️ Partita intera (90 minuti)'],['moddif','🛡️ Modificatore difesa (1 = attivo, 0 = spento)'],['modcen','⚙️ Modificatore centrocampo (1 = attivo, 0 = spento)']];
 function fvL(v,ruolo,B,ctx){if(!v||v.voto===null||v.voto===undefined)return null;B={...BONUS_DEF,...(B||{})};const R=(ruolo||'A').toLowerCase();
   const nr=Math.min(+v.rigori_segnati||0,+v.gol||0);
-  let f=+v.voto+((+v.gol||0)-nr)*B['gol_'+R]+nr*B.rig+(+v.gol_decisivi||0)*B.decisivo+((+v.minuti||0)>=90?B.novanta:0)+(ctx&&ctx.res==='V'?B.vittoria:0)+(ctx&&ruolo==='D'?(ctx.gs||0)*B.gs_dif:0)+(+v.assist||0)*B.assist+(v.ammonizione?B.amm:0)+(v.espulsione?B.esp:0)+(+v.gol_subiti||0)*B.gs+(+v.rigori_parati||0)*B.rp+(+v.rigori_sbagliati||0)*B.rs+(+v.autogol||0)*B.ag;
+  let f=+v.voto+((+v.gol||0)-nr)*B['gol_'+R]+nr*B.rig+(+v.gol_decisivi||0)*B.decisivo+(+v.gol_pareggio||0)*B.pareggio+(v.potm?B.potm:0)+((+v.minuti||0)>=90?B.novanta:0)+(ctx&&ctx.res==='V'?B.vittoria:0)+(ctx&&ruolo==='D'?(ctx.gs||0)*B.gs_dif:0)+(+v.assist||0)*B.assist+(v.ammonizione?B.amm:0)+(v.espulsione?B.esp:0)+(+v.gol_subiti||0)*B.gs+(+v.rigori_parati||0)*B.rp+(+v.rigori_sbagliati||0)*B.rs+(+v.autogol||0)*B.ag;
   if(ruolo==='P'&&!(+v.gol_subiti)&&(+v.minuti||0)>0)f+=B.inviolata;return Math.round(f*100)/100}
 function campiBonus(pre,B){B={...BONUS_DEF,...(B||{})};return `<p class="muted" style="font-size:12px">Metti i punti che vuoi (anche con la virgola, es. 0.5). I malus vanno col meno (es. -1). Scrivi <b>0</b> per non usare una voce.<br>🛡️ <b>Modificatore difesa</b>: media voto del portiere e dei 3 migliori difensori in campo (servono almeno 4 difensori): da 6 = +1, da 6,5 = +3, da 7 = +6.<br>⚙️ <b>Modificatore centrocampo</b>: media voto dei centrocampisti in campo: da 6 = +1, da 6,5 = +2, da 7 = +3.</p><div style="display:grid;grid-template-columns:1fr 90px;gap:4px 10px;align-items:center">${BONUS_LAB.map(([k,n])=>`<label style="color:var(--txt);font-size:14px">${n}</label><input id="${pre}_${k}" type="number" step="0.5" value="${B[k]}" style="margin:0;text-align:center">`).join('')}</div>`}
 function leggiBonus(pre){const o={};for(const [k] of BONUS_LAB){const v=parseFloat(document.getElementById(pre+'_'+k).value.replace(',','.'));o[k]=isNaN(v)?0:v}return o}
+function riepRegole(lega){const R=REG(lega);return `<p class="muted" style="font-size:14px;line-height:1.6">Rosa: ${R.rosa.P} P · ${R.rosa.D} D · ${R.rosa.C} C · ${R.rosa.A} A<br>Moduli: ${R.moduli.join(', ')}<br>Panchina: ${R.panca?`${R.panca.P} P · ${R.panca.D} D · ${R.panca.C} C · ${R.panca.A} A`:'libera'} · Sostituzioni: ${R.cambi}${R.sw?' · Switch attivo':''}${R.riserva?` · Riserva d'ufficio ${R.riserva_voto}`:''}<br>Formazione chiusa ${R.timeout?R.timeout+' minuti prima':'all'}'inizio della prima partita · Non schierata: ${R.nonsch==='precedente'?'si recupera la precedente':'0 punti'}</p>`}
 function riepBonus(B){B={...BONUS_DEF,...(B||{})};return BONUS_LAB.map(([k,n])=>`<div class="row between" style="padding:3px 0;border-bottom:1px solid #ffffff14"><span>${n.replace(/ \(1 = attivo, 0 = spento\)/,'')}</span><b style="color:${B[k]>0?'var(--green)':B[k]<0?'var(--red)':'var(--muted)'}">${B[k]===0?'non usato':['moddif','modcen'].includes(k)?'attivo':(B[k]>0?'+':'')+B[k]}</b></div>`).join('')}
+async function nominaPres(lid){const u=val('np_u');if(!u)return toast('Nessun partecipante da nominare',true);const esci=!!document.getElementById('np_esci')?.checked;
+  if(!confirm('Nominare questo partecipante presidente della lega?'+(esci?' Tu uscirai dalla lega.':'')))return;
+  chk(await db.rpc('nomina_presidente',{p_lega:lid,p_utente:u,p_esci:esci}));toast('Presidente nominato');legaView()}
 async function salvaPartenza(lid){const o={};document.querySelectorAll('.pz').forEach(i=>{const v=i.value.replace(',','.');if(v==='')return;(o[i.dataset.u]=o[i.dataset.u]||{})[i.dataset.k]=+v});chk(await db.from('leghe').update({partenza:o}).eq('id',lid));toast('Classifica di partenza salvata');legaView()}
 async function impRoseLega(lid){
   const righe=document.getElementById('tr_rose').value.split('\n').map(x=>x.trim()).filter(Boolean);if(!righe.length)return toast('Incolla le rose',true);
@@ -348,8 +372,13 @@ async function impRoseLega(lid){
   const presi=new Set(chk(await db.from('rose').select('giocatore_id').eq('lega_id',lid)).map(x=>x.giocatore_id));
   const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
   const ins=[],no=[],dubbi=[],conta={};
+  let cur=null;
   for(const riga of righe){
-    const [sq,gn,pr]=riga.split(/[;\t]/).map(x=>(x||'').trim());
+    let sq,gn,pr;
+    const head=membri.find(m=>norm(m.nome_squadra).trim()===norm(riga.replace(/[:\-–]+$/,'').trim()));
+    if(head){cur=head.nome_squadra;continue}
+    if(/[;\t]/.test(riga))[sq,gn,pr]=riga.split(/[;\t]/).map(x=>(x||'').trim());
+    else{const m=riga.match(/^(.*?)[\s,]+(\d+)\s*$/);sq=cur||'';gn=(m?m[1]:riga).replace(/^[PDCA]\s+/,'').trim();pr=m?m[2]:''}
     const mem=membri.find(m=>norm(m.nome_squadra).trim()===norm(sq));
     if(!mem){no.push(`${riga} → squadra "${sq}" non trovata tra i partecipanti`);continue}
     if(!gn){no.push(riga+' → manca il giocatore');continue}
@@ -368,20 +397,38 @@ async function impRoseLega(lid){
     +(no.length?`<div class="card" style="padding:10px;border-color:var(--red)"><b style="color:var(--red)">Da sistemare (${no.length})</b>${no.map(x=>`<div class="muted" style="font-size:13px">• ${esc(x)}</div>`).join('')}<p class="muted" style="font-size:12px">Correggi queste righe e importale di nuovo, senza spuntare "Svuota".</p></div>`:'');
 }
 async function assegnaT(lid,uid,gid,pr,b){const {error}=await db.from('rose').insert({lega_id:lid,utente_id:uid,giocatore_id:gid,prezzo:pr});if(error)return toast(error.message,true);b.parentElement.innerHTML='<span style="color:var(--green)">✅ Aggiunto</span>'}
-async function salvaBonus(lid){if(!confirm('Salvare i nuovi bonus e malus? Tutti i punteggi della lega, anche delle giornate già giocate, verranno ricalcolati.'))return;chk(await db.from('leghe').update({bonus:leggiBonus('lb')}).eq('id',lid));toast('Bonus e malus salvati');legaView()}
+const MOD_ALL=['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'];
+function REG(lega){const b=(lega&&lega.bonus)||{};return {rosa:b.rosa||{P:3,D:8,C:8,A:6},moduli:(b.moduli&&b.moduli.length)?b.moduli:MOD_ALL,panca:b.panca||null,timeout:+b.timeout||0,sw:!!b.sw,cambi:b.cambi??3,riserva:!!b.riserva,riserva_voto:b.riserva_voto??4,nonsch:b.nonsch||'zero'}}
+function campiRegole(lega){const R=REG(lega),n=(id,v,st='1')=>`<input id="${id}" type="number" step="${st}" value="${v}" style="margin:0;text-align:center;padding:8px">`;
+  return `<h3 style="margin-top:6px">👥 Configurazione rosa</h3><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_r'+k,R.rosa[k])}</div>`).join('')}</div>
+  <h3 style="margin-top:16px">📐 Moduli consentiti</h3><div class="row">${MOD_ALL.map(m=>`<label style="color:var(--txt);background:#ffffff12;border-radius:12px;padding:6px 10px"><input type="checkbox" class="rg_mod" value="${m}" ${R.moduli.includes(m)?'checked':''}>${m}</label>`).join('')}</div>
+  <h3 style="margin-top:16px">🪑 Configurazione panchina</h3><p class="muted" style="font-size:12px">Quanti giocatori per ruolo si possono mettere in panchina. Tutti a 0 = panchina libera.</p><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_p'+k,R.panca?R.panca[k]:0)}</div>`).join('')}</div>
+  <h3 style="margin-top:16px">⏰ Timeout formazione</h3><p class="muted" style="font-size:12px">Minuti prima dell'inizio della prima partita in cui si chiude la formazione.</p>${n('rg_to',R.timeout)}
+  <h3 style="margin-top:16px">🔄 Sostituzioni</h3><label>Numero di sostituzioni</label>${n('rg_cambi',R.cambi)}
+  <label style="color:var(--txt);display:block;margin:10px 0"><input type="checkbox" id="rg_sw" ${R.sw?'checked':''}> <b>Switch</b>: se in panchina non c'è un giocatore dello stesso ruolo, entra il primo di un altro ruolo, purché il nuovo modulo sia tra quelli consentiti</label>
+  <label style="color:var(--txt);display:block;margin:10px 0"><input type="checkbox" id="rg_ris" ${R.riserva?'checked':''}> <b>Riserva d'ufficio</b>: chi è senza voto e senza sostituto prende comunque</label><div style="width:120px">${n('rg_risv',R.riserva_voto,'0.5')}</div>
+  <h3 style="margin-top:16px">😱 Formazione non schierata</h3><select id="rg_ns"><option value="zero" ${R.nonsch==='zero'?'selected':''}>0 punti</option><option value="precedente" ${R.nonsch==='precedente'?'selected':''}>Recupera formazione precedente</option></select>
+  <p class="muted" style="font-size:12px">Con "recupera" si usa l'ultima formazione schierata in questa lega; se non ce n'è nessuna, 0 punti.</p>`}
+async function salvaRegole(lid){const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single());const b={...(l.bonus||{})};const g=id=>+document.getElementById(id).value||0;
+  b.rosa={P:g('rg_rP'),D:g('rg_rD'),C:g('rg_rC'),A:g('rg_rA')};b.moduli=[...document.querySelectorAll('.rg_mod:checked')].map(x=>x.value);if(!b.moduli.length)return toast('Scegli almeno un modulo',true);
+  const p={P:g('rg_pP'),D:g('rg_pD'),C:g('rg_pC'),A:g('rg_pA')};b.panca=(p.P+p.D+p.C+p.A)?p:null;b.timeout=g('rg_to');b.cambi=g('rg_cambi');b.sw=document.getElementById('rg_sw').checked;
+  b.riserva=document.getElementById('rg_ris').checked;b.riserva_voto=parseFloat(document.getElementById('rg_risv').value)||0;b.nonsch=val('rg_ns');
+  if(!confirm('Salvare il regolamento? Classifiche e punteggi verranno ricalcolati con le nuove regole.'))return;
+  chk(await db.from('leghe').update({bonus:b}).eq('id',lid));toast('Regolamento salvato');legaView()}
+async function salvaBonus(lid){if(!confirm('Salvare i nuovi bonus e malus? Tutti i punteggi della lega, anche delle giornate già giocate, verranno ricalcolati.'))return;const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single());const nb={...(l.bonus||{}),...leggiBonus('lb')};chk(await db.from('leghe').update({bonus:nb}).eq('id',lid));toast('Bonus e malus salvati');legaView()}
 async function datiLega(lega,membri){
   let pub=chk(await db.from('fanta_giornate').select('numero').eq('pubblicata',true).order('numero')).map(g=>g.numero);
   if(lega.giornata_da) pub=pub.filter(g=>g>=lega.giornata_da&&(!lega.giornata_a||g<=lega.giornata_a));
   const form=chk(await db.from('formazioni').select('utente_id,giornata,giocatore_id,titolare,ordine').eq('lega_id',lega.id));
   const carte=lega.carte?chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id)):[];
   const gids=[...new Set([...form.map(f=>f.giocatore_id),...carte.filter(c=>c.giocatore_id).map(c=>c.giocatore_id)])];
-  const voti=gids.length?chk(await db.from('voti').select('giocatore_id,giornata,voto,minuti,gol,assist,ammonizione,espulsione,gol_subiti,rigori_parati,rigori_sbagliati,autogol,rigori_segnati,gol_decisivi').in('giocatore_id',gids)):[];
+  const voti=gids.length?chk(await db.from('voti').select('giocatore_id,giornata,voto,minuti,gol,assist,ammonizione,espulsione,gol_subiti,rigori_parati,rigori_sbagliati,autogol,rigori_segnati,gol_decisivi,gol_pareggio,potm').in('giocatore_id',gids)):[];
   const partL=pub.length?chk(await db.from('partite_sa').select('giornata,casa,trasferta,gol_casa,gol_trasferta').in('giornata',pub)):[];
   const gioc=gids.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('id',gids)):[];
   const vm={};voti.forEach(v=>vm[v.giocatore_id+'-'+v.giornata]=v);
   const gm={};gioc.forEach(g=>gm[g.id]=g);
   const ctxOf=(sq,g)=>{const p=partL.find(x=>x.giornata===g&&(x.casa===sq||x.trasferta===sq));if(!p||p.gol_casa===null||p.gol_casa===undefined)return null;const mio=p.casa===sq?p.gol_casa:p.gol_trasferta,loro=p.casa===sq?p.gol_trasferta:p.gol_casa;return {res:mio>loro?'V':mio<loro?'P':'N',gs:loro}};
-  const BL={...BONUS_DEF,...(lega.bonus||{})};
+  const BL={...BONUS_DEF,...(lega.bonus||{})},RG=REG(lega);
   voti.forEach(v=>{const gi=gm[v.giocatore_id];v.fantavoto=fvL(v,gi?.ruolo,lega.bonus,ctxOf(gi?.squadra,v.giornata))});
   const cartaDi=(g,u,c)=>carte.find(x=>x.giornata===g&&x.utente_id===u&&x.carta===c);
   const ris={};
@@ -389,12 +436,14 @@ async function datiLega(lega,membri){
     ris[g]={};
     for(const m of membri){
       const uid=m.utente_id;
-      const mie=form.filter(f=>f.utente_id===uid&&f.giornata===g);
+      let mie=form.filter(f=>f.utente_id===uid&&f.giornata===g);let recup=null;
+      if(!mie.length&&RG.nonsch==='precedente'){const prec=form.filter(f=>f.utente_id===uid&&f.giornata<g).map(f=>f.giornata);if(prec.length){recup=Math.max(...prec);mie=form.filter(f=>f.utente_id===uid&&f.giornata===recup)}}
       if(!mie.length){ris[g][uid]={pt:0,righe:[],extra:[],vuota:true,muro:!!cartaDi(g,uid,'muro')};continue}
-      const maxCambi=cartaDi(g,uid,'panchina')?5:3;
+      const maxCambi=(+RG.cambi||0)+(cartaDi(g,uid,'panchina')?2:0);const cnt={D:0,C:0,A:0};
       const tit=mie.filter(f=>f.titolare).sort((a,b)=>ORD[gm[a.giocatore_id]?.ruolo]-ORD[gm[b.giocatore_id]?.ruolo]);
       const pan=mie.filter(f=>!f.titolare).sort((a,b)=>a.ordine-b.ordine);
       const usati=new Set();let cambi=0,pt=0;const righe=[],extra=[],inCampo=new Set();
+      tit.forEach(t=>{const rr=gm[t.giocatore_id]?.ruolo;if(cnt[rr]!==undefined)cnt[rr]++});
       for(const t of tit){
         const gi=gm[t.giocatore_id],v=vm[t.giocatore_id+'-'+g];
         if(v&&v.fantavoto!==null){pt+=Number(v.fantavoto);righe.push({g:gi,fv:Number(v.fantavoto)});inCampo.add(t.giocatore_id);continue}
@@ -405,7 +454,17 @@ async function datiLega(lega,membri){
             const gp=gm[p.giocatore_id],vp=vm[p.giocatore_id+'-'+g];
             if(gp?.ruolo===gi?.ruolo&&vp&&vp.fantavoto!==null){entrato={g:gp,fv:Number(vp.fantavoto)};usati.add(p.giocatore_id);inCampo.add(p.giocatore_id);cambi++;break}
           }
+          if(!entrato&&RG.sw&&gi?.ruolo!=='P'){
+            for(const p of pan){
+              if(usati.has(p.giocatore_id))continue;
+              const gp=gm[p.giocatore_id],vp=vm[p.giocatore_id+'-'+g];
+              if(!gp||gp.ruolo==='P'||gp.ruolo===gi.ruolo||!vp||vp.fantavoto===null)continue;
+              const c2={...cnt};c2[gi.ruolo]--;c2[gp.ruolo]++;
+              if(RG.moduli.includes(`${c2.D}-${c2.C}-${c2.A}`)){entrato={g:gp,fv:Number(vp.fantavoto),sw:true};Object.assign(cnt,c2);usati.add(p.giocatore_id);inCampo.add(p.giocatore_id);cambi++;break}
+            }
+          }
         }
+        if(!entrato&&RG.riserva){pt+=+RG.riserva_voto;righe.push({g:gi,fv:+RG.riserva_voto,uff:true});continue}
         righe.push({g:gi,fv:null,sv:true});
         if(entrato){pt+=entrato.fv;righe.push({...entrato,entra:true})}
       }
@@ -422,6 +481,7 @@ async function datiLega(lega,membri){
         pt+=b;extra.push(`🎲 Scommessa su ${esc(n)} (voto ${v?.voto??'s.v.'}): ${b>0?'+':''}${b}`)}
       if(cartaDi(g,uid,'panchina')) extra.push('🔄 Panchina lunga: fino a 5 cambi');
       const muro=!!cartaDi(g,uid,'muro');if(muro) extra.push('🧱 Muro: annulla un gol avversario');
+      if(recup) extra.unshift(`📋 Formazione non schierata: recuperata quella della giornata ${recup}`);
       ris[g][uid]={pt:Math.round(pt*10)/10,righe,extra,muro};
     }
   }
@@ -461,7 +521,7 @@ async function legaView(){
         const cl=[...membri].sort((a,b)=>tot[b.utente_id].punti-tot[a.utente_id].punti||tot[b.utente_id].pt-tot[a.utente_id].pt);
         h+=`<div class="card" style="overflow-x:auto"><h3>Scontri diretti</h3><table><tr><th>#</th><th>Squadra</th><th>Pt</th><th>G</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th><th>FP</th></tr>
         ${cl.map((m,i)=>{const t=tot[m.utente_id];return `<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b></td><td><b style="color:var(--gold)">${t.punti}</b></td><td>${t.g}</td><td>${t.v}</td><td>${t.n}</td><td>${t.p}</td><td>${t.gf}</td><td>${t.gs}</td><td>${t.pt.toFixed(1)}</td></tr>`}).join('')}</table>
-        <p class="muted" style="font-size:12px">FP = fantapunti totali (primo criterio di spareggio). Gol: ${lega.soglia_gol} punti = 1 gol, poi +1 ogni ${lega.passo_gol}.</p></div>`;
+        <p class="muted" style="font-size:12px">FP = fantapunti totali (primo criterio di spareggio). Gol: ${testoFasce(lega)}.</p></div>`;
       }
       const cl2=[...membri].sort((a,b)=>tot[b.utente_id].pt-tot[a.utente_id].pt);
       h+=`<div class="card"><h3>Classifica a punti totali</h3><table><tr><th>#</th><th>Squadra</th><th>Fantapunti</th></tr>
@@ -474,7 +534,7 @@ async function legaView(){
         const g=+fz.gg;
         h+=`<select onchange="fz.gg=this.value;legaView()">${pub.map(x=>`<option value="${x}" ${x==g?'selected':''}>Giornata ${x}</option>`).join('')}</select>`;
         const box=uid=>{const r=ris[g][uid];if(!r||r.vuota)return '<p class="muted">Formazione non inserita (0 punti)</p>';
-          return r.righe.map(x=>`<div class="row between" style="padding:3px 0;${x.sv?'opacity:.5;text-decoration:line-through':''}"><span>${x.entra?'🔄 ':''}${ruolo(x.g?.ruolo)}${esc(x.g?.nome)}</span><b>${x.sv?'s.v.':x.fv}</b></div>`).join('')
+          return r.righe.map(x=>`<div class="row between" style="padding:3px 0;${x.sv?'opacity:.5;text-decoration:line-through':''}"><span>${x.entra?(x.sw?'🔀 ':'🔄 '):''}${ruolo(x.g?.ruolo)}${esc(x.g?.nome)}${x.uff?' <small class="muted">(riserva d\'ufficio)</small>':''}</span><b>${x.sv?'s.v.':x.fv}</b></div>`).join('')
             +(r.extra.length?`<div style="margin-top:6px">${r.extra.map(e=>`<div class="muted">${e}</div>`).join('')}</div>`:'')};
         const incG=inc.filter(i=>i.giornata===g);
         if(incG.length) h+=incG.map(i=>{const [gc,gt,pc,pt]=golMatch(i,ris,lega);
@@ -510,7 +570,7 @@ async function legaView(){
     const spesi=mia.reduce((s,r)=>s+r.prezzo,0);
     const ombraMia=lega.modalita==='ombra'&&fz.vedi===utente.id;
     h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
-    <div class="card"><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi}</b>`:''}</p>
+    <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi}</b>`:''}</p>
     <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
     if(ombraMia) h+=`<div class="card"><h3>👥 Importa la tua rosa</h3><p class="muted">Copia la rosa dall'altra app (Fantagazzetta, Fantalab…) e incollala qui: un giocatore per riga. Basta il cognome, anche senza accenti (es. "Lautaro Martinez", "Martinez L.", "Dimarco").</p>
       <textarea id="om_t" rows="8"></textarea><button class="pri" onclick="importaOmbra(${lega.id})">Importa</button><div id="om_r" style="margin-top:10px"></div></div>
@@ -518,7 +578,10 @@ async function legaView(){
   }
 
   if(fz.tab==='formazione'){
-    const giorn=chk(await db.from('fanta_giornate').select('*').gt('scadenza',new Date().toISOString()).order('numero').limit(1));
+    const RGf=REG(lega);
+    const giorn=chk(await db.from('fanta_giornate').select('*').gt('scadenza',new Date(Date.now()+RGf.timeout*60000).toISOString()).order('numero').limit(1));
+    if(giorn.length&&RGf.timeout) giorn[0].scadenza=new Date(new Date(giorn[0].scadenza).getTime()-RGf.timeout*60000).toISOString();
+    FREG=RGf;
     const mia=rose.filter(r=>r.utente_id===utente.id).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]||a.giocatori.nome.localeCompare(b.giocatori.nome));
     if(!giorn.length) h+='<p class="muted">Nessuna giornata aperta per la formazione.</p>';
     else if(!mia.length) h+='<p class="muted">La tua rosa è vuota.</p>';
@@ -526,9 +589,9 @@ async function legaView(){
       const g=giorn[0];
       const att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('utente_id',utente.id).eq('giornata',g.numero));
       const sch=chk(await db.from('schieramenti').select('modulo').eq('lega_id',lega.id).eq('utente_id',utente.id).eq('giornata',g.numero).maybeSingle());
-      const mod=sch?.modulo||'3-4-3';
+      const mod=RGf.moduli.includes(sch?.modulo)?sch.modulo:RGf.moduli[0];
       const stato=id=>{const f=att.find(x=>x.giocatore_id===id);return !f?'':f.titolare?'T':'P'+f.ordine};
-      const nPan=Math.max(12,mia.length-11);
+      const nPan=RGf.panca?(RGf.panca.P+RGf.panca.D+RGf.panca.C+RGf.panca.A):Math.max(12,mia.length-11);
       const alr={};FVM=await votiDi(mia.map(r=>r.giocatore_id));FGM={};mia.forEach(r=>FGM[r.giocatore_id]={...r.giocatori,id:r.giocatore_id});
       if(premOk()){
         const pp=chk(await db.from('partite_sa').select('api_id,casa,trasferta').eq('giornata',g.numero));
@@ -542,7 +605,7 @@ async function legaView(){
           const st=!p?'out':!conP.has(p.api_id)?'?':tit.has(r.giocatore_id)?'ok':'no';const m=fm[r.giocatore_id];
           alr[r.giocatore_id]=st;sc[r.giocatore_id]=(st==='ok'?100:st==='?'?50:0)+(m?m.reduce((a,b)=>a+b,0)/m.length:6)});
         let best=null;
-        for(const [nm,md] of Object.entries(MODULI)){const need={P:1,D:md[0],C:md[1],A:md[2]},ass={};let tot=0,ok=true;
+        for(const [nm,md] of Object.entries(MODULI).filter(([k])=>RGf.moduli.includes(k))){const need={P:1,D:md[0],C:md[1],A:md[2]},ass={};let tot=0,ok=true;
           for(const R of ['P','D','C','A']){const l=mia.filter(r=>r.giocatori.ruolo===R).sort((a,b)=>sc[b.giocatore_id]-sc[a.giocatore_id]);
             if(l.length<need[R]){ok=false;break}l.slice(0,need[R]).forEach(r=>{ass[r.giocatore_id]='T';tot+=sc[r.giocatore_id]})}
           if(ok&&(!best||tot>best.tot))best={nm,ass,tot}}
@@ -556,7 +619,7 @@ async function legaView(){
       } else h+=`<div class="card" style="border-color:var(--gold)"><p class="muted">💎 Con il Premium: consiglio formazione e allarme se un tuo titolare non è nelle probabili.</p></div>`;
       const tag=id=>({ok:' <small style="color:var(--green)">✅ probabile</small>',no:' <small style="color:var(--red)">⚠️ non nelle probabili</small>',out:' <small style="color:var(--red)">⛔ non gioca</small>'})[alr[id]]||'';
       h+=`<div class="card"><h3>Giornata ${g.numero}</h3><p class="muted">Scadenza: ${fmt(g.scadenza)}</p>
-      <label>Modulo</label><select id="f_mod" onchange="contaForm()">${Object.keys(MODULI).map(m=>`<option ${m===mod?'selected':''}>${m}</option>`).join('')}</select>
+      <label>Modulo</label><select id="f_mod" onchange="contaForm()">${RGf.moduli.filter(m=>MODULI[m]).map(m=>`<option ${m===mod?'selected':''}>${m}</option>`).join('')}</select>
       <p id="f_cnt" class="muted"></p><div id="f_campo"></div>
       <p class="muted" style="font-size:12px">Per ogni giocatore scegli <b>Titolare</b>, una posizione in <b>Panchina</b> (P1 entra per primo) o lascialo in tribuna.</p>
       ${mia.map(r=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span><span style="margin-left:auto;margin-right:8px">${forma5(FVM[r.giocatore_id])}</span>
@@ -576,12 +639,16 @@ async function legaView(){
     }
   }
 
-  if(fz.tab==='classifica') h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:700">📏 Bonus e malus di questa lega</summary><div style="margin-top:8px">${riepBonus(lega.bonus)}</div></details></div>`;
+  if(fz.tab==='classifica') h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:700">📏 Regolamento di questa lega</summary><div style="margin-top:8px">${riepRegole(lega)}${riepBonus(lega.bonus)}<p class="muted" style="margin-top:8px">⚽ Gol: ${testoFasce(lega)}</p></div></details></div>`;
   if(fz.tab==='gestione'&&pres){
     const PZ=lega.partenza||{};
+    if(profilo.ruolo==='admin') h+=`<div class="card" style="border-color:var(--gold)"><h3>👑 Nomina presidente</h3><p class="muted" style="font-size:13px">Passa la gestione della lega a un partecipante: diventerà lui il presidente.</p>
+      <select id="np_u">${membri.filter(m=>m.utente_id!==lega.creatore_id).map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}</option>`).join('')}</select>
+      ${membri.some(m=>m.utente_id===utente.id)?'<label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="np_esci" checked> Esci dalla lega (togli la mia squadra)</label>':''}
+      <button class="pri" onclick="nominaPres(${lega.id})">Nomina presidente</button></div>`;
     h+=`<div class="card" style="border-color:var(--gold)"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Prima fai entrare tutti con il codice invito, usando gli stessi nomi squadra.</p>
-      <h3>1. Rose</h3><p class="muted" style="font-size:13px">Una riga per giocatore: <b>Squadra;Giocatore;Prezzo</b> (il prezzo si può omettere).<br>Es: <i>${esc(membri[0]?.nome_squadra||'Real Scanga')};Martinez L.;45</i></p>
+      <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
       <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
       <label style="color:var(--txt);display:block;margin:4px 0 10px"><input type="checkbox" id="tr_svuota"> Svuota prima le rose già presenti in questa lega</label>
       <button class="pri" onclick="impRoseLega(${lega.id})">Importa rose</button><div id="tr_ris" style="margin-top:10px"></div>
@@ -589,6 +656,7 @@ async function legaView(){
       <div style="overflow-x:auto"><table><tr><th>Squadra</th><th>Pt</th><th>FP</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th></tr>
       ${membri.map(m=>{const z=PZ[m.utente_id]||{};return `<tr><td style="white-space:nowrap"><b>${esc(m.nome_squadra)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${m.utente_id}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
       <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button></details></div>`;
+    h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">📋 Rose e formazioni · Sostituzioni</summary><div style="margin-top:10px">${campiRegole(lega)}<button class="pri" style="margin-top:12px" onclick="salvaRegole(${lega.id})">Salva regolamento</button></div></details></div>`;
     h+=`<div class="card"><h3>⚙️ Bonus e malus</h3>${campiBonus('lb',lega.bonus)}<button class="pri" style="margin-top:10px" onclick="salvaBonus(${lega.id})">Salva bonus e malus</button></div>`;
     const inc=chk(await db.from('incontri').select('giornata').eq('lega_id',lega.id));
     const gi=[...new Set(inc.map(i=>i.giornata))].sort((a,b)=>a-b);
@@ -602,9 +670,12 @@ async function legaView(){
       <button class="pri" onclick="generaCalendario(${lega.id})">${gi.length?'Rigenera calendario':'Genera calendario'}</button>
       ${gi.length?`<button class="del" onclick="cancellaCalendario(${lega.id})">Elimina calendario</button>`:''}
       <p class="muted" style="font-size:12px">Genera il calendario dopo che sono entrati tutti i partecipanti (${membri.length} ora). Con un numero dispari ogni giornata una squadra riposa.</p></div>
-    <div class="card"><h3>Fasce gol</h3><label>Punti per il primo gol</label><input id="sg" type="number" step="0.5" value="${lega.soglia_gol}">
-      <label>Punti per ogni gol in più</label><input id="pg" type="number" step="0.5" value="${lega.passo_gol}">
-      <button class="pri" onclick="salvaFasce(${lega.id})">Salva</button></div>
+    <div class="card"><h3>⚽ Soglie gol</h3><p class="muted" style="font-size:13px">Quanti fantapunti servono per segnare negli scontri diretti.</p>
+      <label>Punti per il primo gol</label><input id="sg" type="number" step="0.5" value="${lega.soglia_gol}">
+      <label>Punti per ogni gol in più (con le fasce variabili: dopo l'ultima fascia)</label><input id="pg" type="number" step="0.5" value="${lega.passo_gol}">
+      <label>Oppure fasce personalizzate (facoltativo)</label><input id="fsc" placeholder="es. 66, 72, 77, 81, 85" value="${esc(((lega.bonus&&lega.bonus.fasce)||[]).join(', '))}">
+      <p class="muted" style="font-size:12px">Se le scrivi, contano queste: 66 = 1 gol, 72 = 2 gol, 77 = 3 gol… Dopo l'ultima, un gol in più ogni "Punti per ogni gol in più".</p>
+      <button class="pri" onclick="salvaFasce(${lega.id})">Salva soglie gol</button></div>
     <div class="card"><h3>Assegna giocatore${lega.modalita==='asta'?' (asta)':' a mano'}</h3>
       <label>Squadra</label><select id="g_mem">${membri.map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)}</option>`).join('')}</select>
       <label>Cerca giocatore</label><input id="g_cerca" placeholder="Scrivi almeno 2 lettere" oninput="cercaGiocatori(${lega.id})">
@@ -621,7 +692,7 @@ async function legaView(){
   app.innerHTML=h;
   if(fz.tab==='formazione') contaForm();
 }
-let CONS=null,FVM={},FGM={};
+let CONS=null,FVM={},FGM={},FREG=null;
 function disegnaCampo(){const box=document.getElementById('f_campo');if(!box)return;
   const t={P:[],D:[],C:[],A:[]},pan=[];
   document.querySelectorAll('.fsel').forEach(s=>{const g=FGM[s.dataset.g];if(!g)return;if(s.value==='T')t[s.dataset.r].push(g);else if(s.value)pan.push([+s.value.slice(1),g])});
@@ -649,6 +720,7 @@ async function salvaFormazione(lid,gn){
     else{const o=+s.value.slice(1);if(posti.has(o))return toast(`Due giocatori in Panchina ${o}`,true);posti.add(o);righe.push({giocatore_id:+s.dataset.g,titolare:false,ordine:o})}
   }
   if(!(c.P===1&&c.D===mod[0]&&c.C===mod[1]&&c.A===mod[2])) return toast(`I titolari non rispettano il ${modulo} (1 P, ${mod[0]} D, ${mod[1]} C, ${mod[2]} A)`,true);
+  if(FREG&&FREG.panca){const pc={P:0,D:0,C:0,A:0};document.querySelectorAll('.fsel').forEach(x=>{if(x.value&&x.value!=='T')pc[x.dataset.r]++});const tr=['P','D','C','A'].find(k=>pc[k]>FREG.panca[k]);if(tr)return toast(`In panchina al massimo ${FREG.panca[tr]} ${tr}`,true)}
   chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('utente_id',utente.id).eq('giornata',gn));
   chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:utente.id,giornata:gn}))));
   chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:utente.id,giornata:gn,modulo},{onConflict:'lega_id,utente_id,giornata'}));
@@ -688,7 +760,9 @@ async function generaCalendario(lid){
   toast('Calendario generato!');legaView();
 }
 async function cancellaCalendario(lid){if(!confirm('Eliminare il calendario? La lega userà solo la classifica a punti.'))return;chk(await db.from('incontri').delete().eq('lega_id',lid));legaView()}
-async function salvaFasce(lid){chk(await db.from('leghe').update({soglia_gol:+val('sg')||66,passo_gol:+val('pg')||6}).eq('id',lid));toast('Fasce salvate');legaView()}
+async function salvaFasce(lid){const f=val('fsc').split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>x>0).sort((a,b)=>a-b);
+  const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single());const b={...(l.bonus||{})};if(f.length)b.fasce=f;else delete b.fasce;
+  chk(await db.from('leghe').update({soglia_gol:+val('sg')||66,passo_gol:+val('pg')||6,bonus:b}).eq('id',lid));toast('Soglie gol salvate');legaView()}
 async function avviaDraft(lid){
   const membri=chk(await db.from('membri_lega').select('utente_id').eq('lega_id',lid)).map(m=>m.utente_id);
   if(membri.length<2) return toast('Servono almeno 2 partecipanti',true);
@@ -766,6 +840,10 @@ function cercaGiocatori(lid){
   },300);
 }
 async function assegna(lid,gid){
+  const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single()),R=REG(l),u=val('g_mem');
+  const g=chk(await db.from('giocatori').select('ruolo').eq('id',gid).single());
+  const {count}=await db.from('rose').select('id, giocatori!inner(ruolo)',{count:'exact',head:true}).eq('lega_id',lid).eq('utente_id',u).eq('giocatori.ruolo',g.ruolo);
+  if(count>=R.rosa[g.ruolo]&&!confirm(`Questa squadra ha già ${count} ${g.ruolo} (il regolamento ne prevede ${R.rosa[g.ruolo]}). Assegnare lo stesso?`))return;
   chk(await db.from('rose').insert({lega_id:lid,utente_id:val('g_mem'),giocatore_id:gid,prezzo:+val('g_prezzo')||1}));
   toast('Giocatore assegnato!');legaView();
 }
@@ -901,10 +979,10 @@ async function pSng(){
   const {data:pr}=await db.from('profili').select('gettoni,premium_fino,prova').eq('id',utente.id).single();if(pr)Object.assign(profilo,pr);aggSaldo();
   if(sg.tav) return tavoloView();
   const PROVA=!premOk();
-  let h=`<h2>⚽ Calcetto</h2>`+(PROVA?`<div class="card" style="border-color:var(--gold)"><div class="row between"><span>🎁 <b style="font-size:20px;color:var(--gold)">${profilo.prova??0}</b> palloni dorati di prova</span></div>
-    <p class="muted" style="margin:8px 0 0">Hai ricevuto <b>100 palloni dorati di prova</b> per provare il Calcetto. Le vincite delle partite di prova <b>non vengono accreditate</b>: servono solo per conoscere la modalità. Quando i palloni di prova finiscono, per continuare a giocare serve il <b>💎 Premium</b>.</p></div>`
-    :`<div class="card row between"><span><span class="pd"></span> <b style="font-size:20px;color:var(--gold)">${profilo.gettoni}</b> palloni dorati</span></div>`);
-  if(PROVA&&(profilo.prova??0)<=0) h+=boxPremium('Il Calcetto');
+  let h=`<h2>⚽ Calcetto</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="card" style="margin:0;border-color:#5dff7a88"><small class="muted">🎁 Palloni gratis</small><div style="font:800 32px var(--cond);color:var(--green)">${profilo.prova??0}</div><small class="muted">Per i tavoli 🎁 Gratis. Le vincite non vengono accreditate.</small></div>
+    <div class="card" style="margin:0;border-color:#ffd44788"><small class="muted"><span class="pd"></span> Palloni Premium</small><div style="font:800 32px var(--cond);color:var(--gold)">${profilo.gettoni??0}</div><small class="muted">Per i tavoli normali, riservati ai 💎 Premium.</small></div></div>
+    <p class="muted" style="font-size:13px;margin:10px 2px 14px">I palloni gratis: 100 all'iscrizione più quelli dei 🎁 pacchi giornalieri. I palloni Premium li assegna l'amministratore.</p>`;
   h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole'],...(profilo.ruolo==='admin'?[['gestisci','🛠️ Gestisci tavoli']]:[])].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
   if(sg.tab==='lobby'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso'));
@@ -913,9 +991,9 @@ async function pSng(){
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:''}).join(', ');
     if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='gestisci';pSng()">🛠️ Gestisci / crea tavoli (admin)</button>`;
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
-      return `<div class="card"><div class="row between"><b>${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">G${t.giornata}</span></div>
-      <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso <span class="pd"></span> ${t.ingresso} · Montepremi <span class="pd"></span> ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'} · Iscritti <b>${n}/${t.posti}</b></p>
-      ${io?`<span class="badge" style="color:var(--green)">✅ Sei al tavolo</span> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:!PROVA?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:(profilo.prova??0)>=t.ingresso?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso},true)">🎁 Entra in prova</button>`:'<span class="muted">💎 Serve il Premium</span>'}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
+      return `<div class="card" ${t.gratis?'style="border-color:#5dff7a88"':''}><div class="row between"><b>${t.gratis?'🎁 ':''}${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">${t.gratis?'GRATIS · ':''}G${t.giornata}</span></div>
+      <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso ${t.gratis?'🎁':'<span class="pd"></span>'} ${t.ingresso} · ${t.gratis?'Tavolo di prova, vincite non accreditate':`Montepremi <span class="pd"></span> ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'}`} · Iscritti <b>${n}/${t.posti}</b></p>
+      ${io?`<span class="badge" style="color:var(--green)">✅ Sei al tavolo</span> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:t.gratis?((profilo.prova??0)>=t.ingresso?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso},true)">🎁 Entra gratis</button>`:'<span class="muted">🎁 Palloni gratis insufficienti: apri i pacchi giornalieri!</span>'):!PROVA?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:'<span class="muted">💎 Serve il Premium</span>'}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
   }
   if(sg.tab==='gestisci'&&profilo.ruolo==='admin'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').in('stato',['aperto','draft','in_gioco','annullato']).order('id',{ascending:false}).limit(60));
@@ -952,6 +1030,7 @@ async function pSng(){
       <label>Partite del tavolo (solo quelle non ancora iniziate)</label>
       ${pp.map(p=>{const ok=new Date(p.data)>ora;return `<div style="padding:5px 0"><label style="color:${ok?'var(--txt)':'var(--muted)'}"><input type="checkbox" class="cp" value="${p.api_id}" data-d="${p.data}" ${ok?'':'disabled'}> ${esc(p.casa)} – ${esc(p.trasferta)} <small class="muted">${fmt(p.data)}</small></label></div>`}).join('')||'<p class="muted">Nessuna partita.</p>'}
       <label>Nome del tavolo (facoltativo)</label><input id="ct_nome" placeholder="es. Big Match Inter-Juve, Calcetto della domenica">
+      <label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="ct_gratis"> 🎁 <b>Tavoli gratis</b>: si entra con i palloni gratis, aperti a tutti, vincite non accreditate</label>
       <label>Tavoli da creare</label>
       <div class="row">${[[2,10],[4,25],[6,25],[8,50]].map(([p,i])=>`<label style="color:var(--txt)"><input type="checkbox" class="ct" value="${p}" checked> da ${p}</label> <input class="n" type="number" min="0" id="ci_${p}" value="${i}"> <span class="pd"></span>`).join('<br>')}</div>
       <button class="pri" style="width:100%;margin-top:12px" onclick="creaTavoli()">Crea</button></div>`;
@@ -980,7 +1059,7 @@ async function pSng(){
     5. Punti = somma dei fantavoti dei 5 titolari. Il 🃏 Jolly è un titolare. La 🪑 Riserva entra una volta sola, al posto del primo titolare <b>di movimento</b> (D, C, A, jolly compreso) che prende s.v. Il portiere non ha riserva: se prende s.v. vale 0, come vale 0 il posto se anche la riserva è s.v.<br>
     6. Come nel Sit & Go: il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei palloni dorati in gioco, il resto è il montepremi. Tavoli da 2 e 4: montepremi tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
     7. Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i palloni dorati tornano indietro.<br>
-    8. <b>🎁 Prova gratuita</b>: chi non ha il Premium riceve <b>100 palloni dorati di prova</b> per provare il Calcetto. Le vincite delle partite di prova non vengono accreditate e non contano per il "Re del mese". Finiti i palloni di prova, per continuare serve il 💎 Premium.<br><br>
+    8. <b>🎁 Palloni gratis</b>: tutti ricevono <b>100 palloni gratis</b> all'iscrizione e altri ogni giorno con i <b>🎁 pacchi giornalieri</b>. Si usano solo nei <b>tavoli 🎁 Gratis</b>: le vincite non vengono accreditate e non contano per il "Re del mese". I tavoli normali si giocano con i palloni Premium, riservati ai 💎 Premium.<br><br>
     <span class="pd"></span> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore.</p></div>`;
   app.innerHTML=h;
 }
@@ -1014,13 +1093,13 @@ async function creaTavoli(){
   const senza=partite.filter(id=>!prC.some(x=>x.partita_id===id));
   if(senza.length&&!confirm(`${senza.length} partit${senza.length===1?'a non ha':'e non hanno'} le probabili formazioni: le carte saranno prese da tutta la rosa (meno equo). Creare lo stesso?`))return;
   if([...document.querySelectorAll('.ct:checked')].some(x=>+x.value>maxP)) return toast(`Con ${partite.length} partit${partite.length===1?'a':'e'} il tavolo può essere al massimo da ${maxP}`,true);
-  const righe=[...document.querySelectorAll('.ct:checked')].map(x=>({giornata:sg.g,posti:+x.value,ingresso:+document.getElementById('ci_'+x.value).value||0,partite,chiusura,nome}));
+  const righe=[...document.querySelectorAll('.ct:checked')].map(x=>({giornata:sg.g,posti:+x.value,ingresso:+document.getElementById('ci_'+x.value).value||0,partite,chiusura,nome,gratis:!!document.getElementById('ct_gratis')?.checked}));
   if(!righe.length) return toast('Scegli almeno un tipo di tavolo',true);
   chk(await db.from('sng_tavoli').insert(righe));
   toast(righe.length+' tavoli creati');sg.tab=profilo.ruolo==='admin'?'gestisci':'lobby';pSng();
 }
 async function sngEntra(id,ing,prova){
-  if(!confirm(`Entrare al tavolo? Paghi ${ing} palloni dorati${prova?' di prova':''}.${prova?'\n\nÈ una partita di prova: se vinci, le vincite non vengono accreditate.':''}\n\nAttenzione: una volta iscritto non potrai più uscire. I palloni dorati tornano indietro solo se il tavolo non si riempie prima del calcio d'inizio.`))return;
+  if(!confirm(`Entrare al tavolo? Paghi ${ing} palloni ${prova?'gratis 🎁':'dorati Premium'}.${prova?'\n\nÈ un tavolo gratis: se vinci, le vincite non vengono accreditate.':''}\n\nAttenzione: una volta iscritto non potrai più uscire. I palloni dorati tornano indietro solo se il tavolo non si riempie prima del calcio d'inizio.`))return;
   const {data,error}=await db.rpc(prova?'sng_entra_prova':'sng_entra',{p_tavolo:id});if(error)return toast(error.message,true);
   toast(data==='draft'?'Tavolo pieno: il draft è partito!':'Sei al tavolo!');sg.tav=id;pSng();
 }
@@ -1099,7 +1178,7 @@ async function sngScegli(gid){const {error}=await db.rpc('sng_scegli',{p_tavolo:
 // ---------- calendario serie a ----------
 // ---------- redazione ----------
 let red=null; // {g, p, casa:[], trasf:[], righe:[], ris:{casa,trasf}}
-const CAMPI_N=['minuti','gol','assist','gol_subiti','rigori_parati','rigori_sbagliati','autogol','rigori_segnati','gol_decisivi'];
+const CAMPI_N=['minuti','gol','assist','gol_subiti','rigori_parati','rigori_sbagliati','autogol','rigori_segnati','gol_decisivi','gol_pareggio'];
 function votoProposto(r){
   const ev=(+r.gol||0)+(+r.assist||0);
   if((+r.minuti||0)<15&&!ev&&!r.espulsione&&!r.rigori_parati) return null;
@@ -1131,7 +1210,7 @@ async function redApri(id){
   const vv=ids.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',ids)):[];
   const tutti=[...casa.map(x=>({...x,lato:'casa'})),...trasf.map(x=>({...x,lato:'trasferta'}))];
   const righe=vv.map(v=>{const gi=tutti.find(x=>x.id===v.giocatore_id);return {id:v.giocatore_id,nome:gi.nome,ruolo:gi.ruolo,lato:gi.lato,minuti:v.minuti??90,voto:v.voto,
-    gol:v.gol,assist:v.assist,ammonizione:v.ammonizione,espulsione:v.espulsione,gol_subiti:v.gol_subiti,rigori_parati:v.rigori_parati,rigori_sbagliati:v.rigori_sbagliati,autogol:v.autogol,rigori_segnati:v.rigori_segnati||0,gol_decisivi:v.gol_decisivi||0,giudizio:v.giudizio||''}});
+    gol:v.gol,assist:v.assist,ammonizione:v.ammonizione,espulsione:v.espulsione,gol_subiti:v.gol_subiti,rigori_parati:v.rigori_parati,rigori_sbagliati:v.rigori_sbagliati,autogol:v.autogol,rigori_segnati:v.rigori_segnati||0,gol_decisivi:v.gol_decisivi||0,gol_pareggio:v.gol_pareggio||0,potm:!!v.potm,giudizio:v.giudizio||''}});
   red={p,casa,trasf,tutti,righe,ris:{casa:p.gol_casa,trasf:p.gol_trasferta}};
   redRender();
 }
@@ -1148,10 +1227,11 @@ function redRender(){
         <b style="font-size:20px;min-width:54px;text-align:center;border:2px solid ${r.voto===null?'var(--line)':'var(--gold)'};border-radius:8px;padding:2px 6px;color:${r.voto===null?'var(--muted)':'var(--gold)'}">${r.voto??'S.V.'}</b><button onclick="pm(${i},0.5)">+</button>
         <button onclick="setR(${i},'voto',${r.voto===null?6:null})">${r.voto===null?'Dai voto':'Metti s.v.'}</button></div>
       <div class="row" style="margin-top:6px;font-size:13px"><span class="muted">⏱️ Minuti giocati</span>${n('minuti')}<span class="muted">'</span></div>
-      <div class="row" style="margin-top:6px;font-size:13px"><span class="muted">Gol</span>${n('gol')}${r.gol>0?`<span class="muted">🎯 di cui rig.</span>${n('rigori_segnati')}<span class="muted">⭐ decisivi</span>${n('gol_decisivi')}`:''}</div>
+      <div class="row" style="margin-top:6px;font-size:13px"><span class="muted">Gol</span>${n('gol')}${r.gol>0?`<span class="muted">🎯 di cui rig.</span>${n('rigori_segnati')}<span class="muted">⭐ vittoria</span>${n('gol_decisivi')}<span class="muted">🟰 pareggio</span>${n('gol_pareggio')}`:''}</div>
       <div class="row" style="margin-top:6px;font-size:13px"><span class="muted">Ass</span>${n('assist')}
         <label style="color:var(--txt)"><input type="checkbox" ${r.ammonizione?'checked':''} onchange="setR(${i},'ammonizione',this.checked)">🟨</label>
-        <label style="color:var(--txt)"><input type="checkbox" ${r.espulsione?'checked':''} onchange="setR(${i},'espulsione',this.checked)">🟥</label></div>
+        <label style="color:var(--txt)"><input type="checkbox" ${r.espulsione?'checked':''} onchange="setR(${i},'espulsione',this.checked)">🟥</label>
+        <label style="color:var(--txt)"><input type="checkbox" ${r.potm?'checked':''} onchange="setR(${i},'potm',this.checked)">🏅 MVP</label></div>
       <div class="row" style="margin-top:6px;font-size:13px">${r.ruolo==='P'?`<span class="muted">GS</span>${n('gol_subiti')}<span class="muted">RP</span>${n('rigori_parati')}`:''}<span class="muted">Rig. sbagl.</span>${n('rigori_sbagliati')}<span class="muted">AG</span>${n('autogol')}</div>
       <input placeholder="Giudizio (facoltativo)" value="${esc(r.giudizio)}" onchange="setR(${i},'giudizio',this.value)" style="margin:8px 0 0"></div>`};
   app.innerHTML=`<button onclick="red=null;pAdmin()">← Partite della giornata</button>
@@ -1173,7 +1253,7 @@ function associa(i,v){
   const g=red.tutti.find(x=>x.id==v);Object.assign(r,{id:g.id,nome:g.nome,ruolo:g.ruolo});redRender();
 }
 function aggRiga(){const id=+val('red_add');const g=red.tutti.find(x=>x.id===id);if(!g)return;
-  const r={id:g.id,nome:g.nome,ruolo:g.ruolo,lato:g.lato,minuti:90,gol:0,assist:0,ammonizione:false,espulsione:false,gol_subiti:0,rigori_parati:0,rigori_sbagliati:0,autogol:0,rigori_segnati:0,gol_decisivi:0,giudizio:''};
+  const r={id:g.id,nome:g.nome,ruolo:g.ruolo,lato:g.lato,minuti:90,gol:0,assist:0,ammonizione:false,espulsione:false,gol_subiti:0,rigori_parati:0,rigori_sbagliati:0,autogol:0,rigori_segnati:0,gol_decisivi:0,gol_pareggio:0,potm:false,giudizio:''};
   r.voto=votoProposto(r);red.righe.push(r);redRender()}
 function proponi(){if(!confirm('Ricalcolare tutti i voti proposti? I ritocchi fatti a mano verranno persi.'))return;red.righe.forEach(r=>r.voto=votoProposto(r));redRender()}
 function abbina(nome,lato){
@@ -1191,7 +1271,7 @@ function caricaTabellino(d){
     if(g&&red.righe.find(r=>r.id===g.id))continue;
     const r={id:g?.id||null,nome:g?.nome||x.nome||'?',ruolo:g?.ruolo||'C',lato,minuti:+x.minuti||0,gol:+x.gol||0,assist:+x.assist||0,
       ammonizione:!!x.ammonizione,espulsione:!!x.espulsione,gol_subiti:+x.gol_subiti||0,rigori_parati:+x.rigori_parati||0,
-      rigori_sbagliati:+x.rigori_sbagliati||0,autogol:+x.autogol||0,rigori_segnati:+x.rigori_segnati||0,gol_decisivi:+x.gol_decisivi||0,giudizio:''};
+      rigori_sbagliati:+x.rigori_sbagliati||0,autogol:+x.autogol||0,rigori_segnati:+x.rigori_segnati||0,gol_decisivi:+(x.gol_vittoria??x.gol_decisivi)||0,gol_pareggio:+x.gol_pareggio||0,potm:!!(x.potm||x.player_of_the_match),giudizio:''};
     red.righe.push(r);n++;
   }
   // gol subiti al portiere se è l'unico della sua squadra
@@ -1217,7 +1297,7 @@ async function salvaPartita(){
   }
   const righe=red.righe.map(r=>({giocatore_id:r.id,giornata:p.giornata,voto:r.voto,voto_auto:votoProposto(r),minuti:+r.minuti||0,gol:+r.gol||0,assist:+r.assist||0,
     ammonizione:!!r.ammonizione&&!r.espulsione,espulsione:!!r.espulsione,gol_subiti:+r.gol_subiti||0,rigori_parati:+r.rigori_parati||0,
-    rigori_sbagliati:+r.rigori_sbagliati||0,autogol:+r.autogol||0,rigori_segnati:Math.min(+r.rigori_segnati||0,+r.gol||0),gol_decisivi:Math.min(+r.gol_decisivi||0,+r.gol||0),giudizio:r.giudizio||null,corretto:true}));
+    rigori_sbagliati:+r.rigori_sbagliati||0,autogol:+r.autogol||0,rigori_segnati:Math.min(+r.rigori_segnati||0,+r.gol||0),gol_decisivi:Math.min(+r.gol_decisivi||0,+r.gol||0),gol_pareggio:Math.min(+r.gol_pareggio||0,+r.gol||0),potm:!!r.potm,giudizio:r.giudizio||null,corretto:true}));
   const tutti=[...red.casa,...red.trasf].map(x=>x.id),tenuti=new Set(righe.map(r=>r.giocatore_id));
   const via=tutti.filter(id=>!tenuti.has(id));
   if(via.length) chk(await db.from('voti').delete().eq('giornata',p.giornata).in('giocatore_id',via));
@@ -1322,7 +1402,7 @@ async function pAdmin(){
     const us=chk(await db.from('profili').select('*').order('approvato').order('creato_il',{ascending:false}));
     h+=us.map(u=>`<div class="card row between"><div><b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
       <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni} · 🎁 ${u.prova??0}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
-      ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><span class="pd" style="font-size:22px"></span><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
+      ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><select id="pw_${u.id}" style="margin:0;width:auto;padding:8px"><option value="gettoni">Premium</option><option value="prova">🎁 Gratis</option></select><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
       ${u.id===utente.id?'':`<div class="row">${!u.approvato?`<button class="ok" onclick="approva('${u.id}')">Accetta</button>`:''}
         ${u.approvato?`<button onclick="cambiaRuolo('${u.id}','${u.ruolo==='admin'?'utente':'admin'}')">${u.ruolo==='admin'?'Togli admin':'Rendi admin'}</button>`:''}
         <button class="del" onclick="rifiuta('${u.id}')">${u.approvato?'Elimina':'Rifiuta'}</button></div>`}</div>`).join('');
@@ -1399,9 +1479,10 @@ async function salvaWa(){const v=val('wa_num').replace(/[^0-9]/g,'');if(v&&v.len
 async function salvaDon(){const v=val('lk_don');if(v&&!/^https:\/\//.test(v))return toast('Il link deve iniziare con https://',true);chk(await db.from('impostazioni').upsert({chiave:'link_donazioni',valore:v}));await caricaFeat();renderNav();toast('Link salvato')}
 async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);chk(await db.from('profili').update({premium_fino:anni?d.toISOString().slice(0,10):null}).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
 async function modGettoni(id,seg){const n=Math.abs(parseInt(document.getElementById('pg_'+id).value));if(!n)return toast('Scrivi quanti palloni dorati',true);
-  const u=chk(await db.from('profili').select('gettoni,username').eq('id',id).single());const nuovo=Math.max(0,u.gettoni+seg*n);
-  if(!confirm(`${seg>0?'Aggiungere':'Togliere'} ${n} palloni dorati a ${u.username}? Saldo: ${u.gettoni} → ${nuovo}`))return;
-  chk(await db.from('profili').update({gettoni:nuovo}).eq('id',id));toast(`${u.username}: ${nuovo} palloni dorati`);pAdmin()}
+  const w=document.getElementById('pw_'+id).value,lab=w==='prova'?'palloni gratis':'palloni Premium';
+  const u=chk(await db.from('profili').select('gettoni,prova,username').eq('id',id).single());const nuovo=Math.max(0,(u[w]||0)+seg*n);
+  if(!confirm(`${seg>0?'Aggiungere':'Togliere'} ${n} ${lab} a ${u.username}? Saldo: ${u[w]||0} → ${nuovo}`))return;
+  chk(await db.from('profili').update({[w]:nuovo}).eq('id',id));toast(`${u.username}: ${nuovo} ${lab}`);pAdmin()}
 async function regalaGettoni(id,n){const u=chk(await db.from('profili').select('gettoni').eq('id',id).single());chk(await db.from('profili').update({gettoni:u.gettoni+n}).eq('id',id));toast('+'+n+' palloni dorati');pAdmin()}
 async function toggleFeat(k,v){chk(await db.from('impostazioni').upsert({chiave:k,valore:v?'1':'0'}));await caricaFeat();toast(v?'Funzione attivata':'Funzione spenta');pAdmin()}
 async function approva(id){chk(await db.from('profili').update({approvato:true}).eq('id',id));toast('Utente accettato');pAdmin()}
