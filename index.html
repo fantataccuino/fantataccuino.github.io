@@ -116,8 +116,9 @@ function renderAuth(){
     ${modoAuth==='reg'?'<label>Nome utente</label><input id="a_user" maxlength="20">':''}
     <label>Email</label><input id="a_mail" type="email">
     <label>Password (almeno 6 caratteri)</label><input id="a_pass" type="password">
+    ${modoAuth==='reg'?'<label style="display:flex;gap:8px;align-items:flex-start;color:var(--txt);margin:10px 0"><input type="checkbox" id="a_ok" style="width:auto;margin-top:3px"><span>Ho almeno 14 anni e ho letto e accetto <a href="#" onclick="mostraTermini();return false">termini d\'uso e privacy</a></span></label>':''}
     <button class="pri" style="width:100%" onclick="${modoAuth==='login'?'accedi()':'registrati()'}">${modoAuth==='login'?'Entra':'Crea account'}</button>
-  </div></div>`;
+  </div><p style="text-align:center"><a href="#" onclick="mostraTermini();return false">📜 Termini d'uso e privacy</a></p></div>`;
 }
 async function accedi(){
   const {error}=await db.auth.signInWithPassword({email:val('a_mail'),password:val('a_pass')});
@@ -126,14 +127,15 @@ async function accedi(){
 async function registrati(){
   const username=val('a_user');
   if(username.length<3) return toast('Nome utente di almeno 3 caratteri',true);
-  const {error}=await db.auth.signUp({email:val('a_mail'),password:val('a_pass'),options:{data:{username}}});
+  if(!document.getElementById('a_ok').checked) return toast('Devi accettare termini d\'uso e privacy',true);
+  const {error}=await db.auth.signUp({email:val('a_mail'),password:val('a_pass'),options:{data:{username,termini:TERMINI_VER}}});
   if(error) return toast(error.message,true);
   toast('Registrazione inviata!');
 }
 async function esci(){await db.auth.signOut();utente=null;profilo=null;pagina='home';renderAuth()}
 
 // ---------- navigazione ----------
-const PAGINE = {home:'📰 Notizie',fanta:'📋 Fantacalcio',sng:'⚽ Calcetto',giocatori:'🔎 Giocatori',seriea:'📅 Serie A',chat:'💬 Chat',admin:'⚙️ Admin'};
+const PAGINE = {home:'📰 Notizie',fanta:'📋 Fantacalcio',sng:'⚽ Calcetto',giocatori:'🔎 Giocatori',seriea:'📅 Serie A',chat:'💬 Chat',termini:'📜 Termini',admin:'⚙️ Admin'};
 function renderNav(){
   document.getElementById('nav').innerHTML=Object.entries(PAGINE)
     .filter(([k])=>(k!=='admin'||profilo.ruolo==='admin')&&(k!=='sng'||on('f_sng')))
@@ -145,7 +147,42 @@ function vai(p){
   pagina=p; renderNav(); if(typeof draftTimer!=='undefined') clearTimeout(draftTimer); if(typeof sngTimer!=='undefined') clearTimeout(sngTimer); if(typeof sngIv!=='undefined') clearInterval(sngIv);
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
-  ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,admin:pAdmin})[p]();
+  ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,admin:pAdmin})[p]();
+}
+
+
+// ---------- termini e privacy ----------
+const TERMINI_VER='2026-11-20';
+const TITOLARE='Luca Scanga',MAIL_TIT='fantataccuino@gmail.com';
+function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;return `<h2>Termini d'uso e privacy</h2><p class="muted">Ultimo aggiornamento: 20 novembre 2026</p>
+<div class="card"><h3>🔒 Informativa privacy</h3>
+<p><b>Chi tratta i tuoi dati.</b> Il titolare del trattamento è ${TITOLARE}, persona fisica, contattabile a ${m}.</p>
+<p><b>Quali dati.</b> Email e password (la password è salvata cifrata e nessuno può leggerla), nome utente, e i dati che crei giocando: leghe, rose, formazioni, scelte nel Calcetto, gettoni, messaggi in chat, eventuale abbonamento Premium.</p>
+<p><b>Perché.</b> Solo per creare il tuo account e far funzionare il gioco. La base giuridica è l'esecuzione del servizio che chiedi iscrivendoti (art. 6.1.b GDPR). Niente pubblicità, niente profilazione, i dati non vengono venduti né ceduti a nessuno.</p>
+<p><b>A chi li affidiamo.</b> Il sito usa fornitori tecnici che trattano i dati solo per conto del titolare: Supabase (database e accesso), GitHub Pages (ospita le pagine del sito), jsDelivr (librerie del sito). Alcuni hanno sede o server fuori dall'Unione Europea: in quel caso il trasferimento avviene con le garanzie previste dal GDPR, come le clausole contrattuali standard della Commissione Europea.</p>
+<p><b>Cookie.</b> Il sito non usa cookie di profilazione né statistiche. Salva nel browser solo un dato tecnico per tenerti collegato: per questo non serve il banner dei cookie.</p>
+<p><b>Per quanto tempo.</b> Finché il tuo account è attivo. Se lo elimini, i tuoi dati vengono cancellati entro 30 giorni.</p>
+<p><b>I tuoi diritti.</b> Puoi chiedere in qualsiasi momento di vedere, correggere, scaricare o cancellare i tuoi dati, oppure opporti al trattamento, scrivendo a ${m}. Puoi eliminare l'account da solo dalla pagina 📜 Termini, una volta entrato. Se pensi che i tuoi dati siano trattati in modo scorretto puoi fare reclamo al Garante per la protezione dei dati personali (garanteprivacy.it).</p>
+<p><b>Età.</b> Per iscriverti devi avere almeno 14 anni. Il Premium è riservato ai maggiorenni.</p></div>
+<div class="card"><h3>📋 Termini d'uso</h3>
+<p><b>1. Il servizio.</b> FantaTaccuino è un gioco di fantacalcio gestito in modo amatoriale. È offerto così com'è: può avere errori, interruzioni o modifiche, e può essere chiuso in qualsiasi momento.</p>
+<p><b>2. Account.</b> Ogni iscrizione viene approvata dall'amministratore. È consentito un solo account per persona. Sei responsabile della tua password e di quello che succede con il tuo account.</p>
+<p><b>3. Voti.</b> I voti sono assegnati dalla redazione di FantaTaccuino in base al proprio giudizio. Possono essere corretti in caso di errore; una volta pubblicati valgono per classifiche e quotazioni.</p>
+<p><b>4. Gettoni.</b> I gettoni sono virtuali e gratuiti. Non hanno alcun valore economico, non si comprano, non si vendono, non si scambiano e non si convertono mai in denaro, beni o premi. Possono essere modificati o azzerati dall'amministratore.</p>
+<p><b>5. Calcetto.</b> Ai tavoli del Calcetto si partecipa solo con gettoni. Una volta iscritto a un tavolo non puoi più uscire. Il banco trattiene una percentuale dei gettoni del tavolo; il montepremi è solo in gettoni. Se un tavolo viene annullato i gettoni vengono restituiti.</p>
+<p><b>6. Premium.</b> Il Premium sblocca funzioni aggiuntive per il periodo indicato. Prezzo, pagamento e diritto di recesso vengono indicati prima dell'acquisto.</p>
+<p><b>7. Comportamento.</b> In chat e nelle leghe sono vietati insulti, contenuti offensivi, spam e trucchi per falsare il gioco (account multipli, uso di errori del sito). L'amministratore può cancellare messaggi e sospendere o eliminare gli account che non rispettano queste regole.</p>
+<p><b>8. Marchi e nomi.</b> Nomi di calciatori e squadre sono usati solo per descrivere le partite reali. FantaTaccuino non è collegato alla Lega Serie A né alle squadre.</p>
+<p><b>9. Modifiche.</b> Questi termini possono essere aggiornati; le modifiche importanti vengono comunicate sul sito.</p>
+<p><b>10. Legge.</b> Si applica la legge italiana. Per qualsiasi domanda scrivi a ${m}.</p></div>`}
+function mostraTermini(){document.getElementById('top').style.display='none';app.innerHTML=`<button onclick="renderAuth()">← Torna all'accesso</button><div style="margin-top:12px">${testoTermini()}</div>`}
+function pTermini(){app.innerHTML=testoTermini()+`<div class="card" style="border-color:var(--red)"><h3>🗑️ Elimina il mio account</h3><p class="muted">Cancella il tuo account e i tuoi dati. Non si può annullare.</p><button class="del" onclick="eliminaAccount()">Elimina il mio account</button></div>`}
+async function eliminaAccount(){
+  if(!confirm('Eliminare definitivamente il tuo account e i tuoi dati?'))return;
+  if(prompt('Per confermare scrivi ELIMINA')!=='ELIMINA')return toast('Annullato');
+  const {error}=await db.rpc('elimina_account');
+  if(error) return toast(error.message,true);
+  alert('Account eliminato. Ciao!');await esci();
 }
 
 // ---------- notizie ----------
