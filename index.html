@@ -652,6 +652,7 @@ async function schedaG(id){
 
 // ---------- premium / gettoni ----------
 function isPrem(){return profilo&&(profilo.ruolo==='admin'||(profilo.premium_fino&&profilo.premium_fino>=new Date().toISOString().slice(0,10)))}
+function montepremi(t){return Math.floor(t.ingresso*t.posti*(100-(+FEAT.rake_calcetto||0))/100)}
 function premOk(){return !on('f_premium')||isPrem()}
 function boxPremium(cosa){return `<div class="card" style="border-color:var(--gold)"><h3>💎 ${cosa} è per gli utenti Premium</h3><p class="muted">Il Premium FantaTaccuino sblocca il Calcetto, leghe illimitate, voto spiegato e altro. Per attivarlo contatta l'admin.</p></div>`}
 
@@ -673,7 +674,7 @@ async function pSng(){
     if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='crea';pSng()">➕ Crea tavoli (admin)</button>`;
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
       return `<div class="card"><div class="row between"><b>${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">G${t.giornata}</span></div>
-      <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${t.ingresso*t.posti}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'} · Iscritti <b>${n}/${t.posti}</b></p>
+      <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'} · Iscritti <b>${n}/${t.posti}</b></p>
       ${io?`<button class="del" onclick="sngEsci(${t.id})">Esci (rimborso)</button> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:premOk()?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:''}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
   }
   if(sg.tab==='crea'&&profilo.ruolo==='admin'){
@@ -710,7 +711,7 @@ async function pSng(){
     3. A tavolo pieno parte il <b>draft a serpentone</b>: ognuno sceglie <b>5 titolari</b> (1 portiere, almeno 1 difensore, 1 centrocampista, 1 attaccante + 1 jolly di movimento) e poi <b>1 riserva</b> di qualsiasi ruolo. Ogni giocatore lo può avere una sola squadra.<br>
     4. Hai <b>60 secondi</b> per ogni scelta, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude: le scelte mancanti le fa il sito.<br>
     5. Punti = somma dei fantavoti dei 5 titolari. Se un titolare prende s.v. entra la riserva (una volta sola); se anche la riserva è s.v., quel posto vale 0.<br>
-    6. Tavoli da 2 e 4: tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
+    6. Come nel Sit & Go: il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei gettoni in gioco, il resto è il montepremi. Tavoli da 2 e 4: montepremi tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
     7. Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i gettoni tornano indietro.<br><br>
     🪙 I gettoni sono gratuiti, non si comprano e non hanno alcun valore: servono solo per giocare e per la classifica "Re del mese".</p></div>`;
   app.innerHTML=h;
@@ -745,7 +746,7 @@ async function tavoloView(){
   const sec=t.scadenza_scelta?Math.max(0,Math.round((new Date(t.scadenza_scelta)-new Date())/1000)):0;
   const mie=sc.filter(s=>s.utente_id===utente.id);
   let h=`<button onclick="sg.tav=null;pSng()">← Calcetto</button><h2 style="margin-top:12px">${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</h2>
-  <p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${t.ingresso*t.posti}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
+  <p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${montepremi(t)}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
   if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>• ${esc(i.profili?.username)}</div>`).join('')}</div>`;
   if(t.stato==='annullato') h+=`<div class="card"><p>↩️ Tavolo annullato: non si è riempito prima del calcio d'inizio. I gettoni sono stati restituiti.</p></div>`;
   if(t.stato==='draft'){
@@ -987,7 +988,9 @@ async function pAdmin(){
       +F.map(([k,n,d])=>`<div class="card row between"><div style="flex:1"><b>${n}</b><br><small class="muted">${d}</small></div>
         <button class="${on(k)?'ok':'del'}" onclick="toggleFeat('${k}',${!on(k)})">${on(k)?'ATTIVA':'SPENTA'}</button></div>`).join('')
       +`<div class="card"><h3>☕ Donazioni</h3><p class="muted">Link della tua pagina Ko-fi, Buy Me a Coffee o PayPal.me. Se lo lasci vuoto il pulsante "Sostienici" non compare.</p>
-        <input id="lk_don" value="${esc(FEAT.link_donazioni||'')}" placeholder="https://ko-fi.com/..."><button class="pri" onclick="salvaDon()">Salva</button></div>`;
+        <input id="lk_don" value="${esc(FEAT.link_donazioni||'')}" placeholder="https://ko-fi.com/..."><button class="pri" onclick="salvaDon()">Salva</button></div>
+      <div class="card"><h3>⚽ Trattenuta del banco (Calcetto)</h3><p class="muted">Percentuale dei gettoni di ogni tavolo che il banco trattiene. Il resto è il montepremi.</p>
+        <div class="row"><input id="rk" class="n" type="number" min="0" max="50" value="${+FEAT.rake_calcetto||0}"> % <button class="pri" onclick="salvaRake()">Salva</button></div></div>`;
   }
 
   if(ad.tab==='utenti'){
@@ -1070,6 +1073,7 @@ async function pAdmin(){
   }
   app.innerHTML=h;
 }
+async function salvaRake(){const v=Math.max(0,Math.min(50,+val('rk')||0));chk(await db.from('impostazioni').upsert({chiave:'rake_calcetto',valore:String(v)}));await caricaFeat();toast('Trattenuta: '+v+'%')}
 async function salvaDon(){const v=val('lk_don');if(v&&!/^https:\/\//.test(v))return toast('Il link deve iniziare con https://',true);chk(await db.from('impostazioni').upsert({chiave:'link_donazioni',valore:v}));await caricaFeat();renderNav();toast('Link salvato')}
 async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);chk(await db.from('profili').update({premium_fino:anni?d.toISOString().slice(0,10):null}).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
 async function regalaGettoni(id,n){const u=chk(await db.from('profili').select('gettoni').eq('id',id).single());chk(await db.from('profili').update({gettoni:u.gettoni+n}).eq('id',id));toast('+'+n+' gettoni');pAdmin()}
