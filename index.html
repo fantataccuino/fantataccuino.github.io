@@ -657,6 +657,7 @@ function premOk(){return !on('f_premium')||isPrem()}
 function boxPremium(cosa){return `<div class="card" style="border-color:var(--gold)"><h3>💎 ${cosa} è per gli utenti Premium</h3><p class="muted">Il Premium FantaTaccuino sblocca il Calcetto, leghe illimitate, voto spiegato e altro. Per attivarlo contatta l'admin.</p></div>`}
 
 // ---------- calcetto ----------
+const GIRI=['🧤 Portiere','🛡️ Difensore','⚙️ Centrocampista','⚡ Attaccante','🃏 Jolly (D, C o A)','🪑 Riserva (qualsiasi ruolo)'];
 let sg={tab:'lobby',tav:null,g:null,squadre:null,edit:null},sngTimer=null;
 async function pSng(){
   clearTimeout(sngTimer);
@@ -733,8 +734,9 @@ async function pSng(){
   if(sg.tab==='regole') h+=`<div class="card"><h3>Come funziona il Calcetto</h3><p class="muted">
     1. Ogni tavolo vale per <b>una o più partite di Serie A</b> scelte dalla redazione: puoi scegliere solo giocatori di quelle squadre.<br>
     2. Entri pagando l'ingresso in gettoni. Finché il tavolo non è pieno puoi uscire e riavere i gettoni.<br>
-    3. A tavolo pieno parte il <b>draft a serpentone</b>: ognuno sceglie <b>5 titolari</b> (1 portiere, almeno 1 difensore, 1 centrocampista, 1 attaccante + 1 jolly di movimento) e poi <b>1 riserva</b> di qualsiasi ruolo. Ogni giocatore lo può avere una sola squadra.<br>
-    4. Hai <b>60 secondi</b> per ogni scelta, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude: le scelte mancanti le fa il sito.<br>
+    3. A tavolo pieno parte il <b>draft a carte</b>, in 6 giri: 🧤 Portiere, 🛡️ Difensore, ⚙️ Centrocampista, ⚡ Attaccante, 🃏 Jolly (difensore, centrocampista o attaccante, scegli tu) e 🪑 Riserva (qualsiasi ruolo).<br>
+    4. A ogni giro, uno alla volta, ricevi <b>fino a 5 carte</b> e ne scegli una. È <b>equo</b>: i giocatori di quel ruolo sono divisi in fasce di forza (⭐⭐⭐⭐⭐ → ⭐) e ognuno riceve un giocatore diverso da ogni fascia. Ogni giocatore può stare in <b>una sola squadra</b>: le tue carte sono solo tue e chi viene scelto sparisce per tutti.<br>
+    4b. Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
     5. Punti = somma dei fantavoti dei 5 titolari. Se un titolare prende s.v. entra la riserva (una volta sola); se anche la riserva è s.v., quel posto vale 0.<br>
     6. Come nel Sit & Go: il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei gettoni in gioco, il resto è il montepremi. Tavoli da 2 e 4: montepremi tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
     7. Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i gettoni tornano indietro.<br><br>
@@ -746,6 +748,8 @@ async function salvaTavolo(id,vuoto){
   if(!cp.length) return toast('Scegli almeno una partita',true);
   const o={nome:val('mt_nome')||null,partite:cp.map(x=>+x.value),chiusura:cp.map(x=>x.dataset.d).sort()[0]};
   if(vuoto){o.posti=+val('mt_posti');o.ingresso=+val('mt_ing')||0}
+  const maxP=o.partite.length===1?4:o.partite.length===2?6:8;
+  if((o.posti||0)>maxP) return toast(`Con ${o.partite.length} partit${o.partite.length===1?'a':'e'} il tavolo può essere al massimo da ${maxP}`,true);
   chk(await db.from('sng_tavoli').update(o).eq('id',id));
   toast('Tavolo modificato');sg.tab='gestisci';pSng();
 }
@@ -764,6 +768,8 @@ async function creaTavoli(){
   if(!cp.length) return toast('Scegli almeno una partita',true);
   const partite=cp.map(x=>+x.value),chiusura=cp.map(x=>x.dataset.d).sort()[0];
   const nome=val('ct_nome')||null;
+  const maxP=partite.length===1?4:partite.length===2?6:8;
+  if([...document.querySelectorAll('.ct:checked')].some(x=>+x.value>maxP)) return toast(`Con ${partite.length} partit${partite.length===1?'a':'e'} il tavolo può essere al massimo da ${maxP}`,true);
   const righe=[...document.querySelectorAll('.ct:checked')].map(x=>({giornata:sg.g,posti:+x.value,ingresso:+document.getElementById('ci_'+x.value).value||0,partite,chiusura,nome}));
   if(!righe.length) return toast('Scegli almeno un tipo di tavolo',true);
   chk(await db.from('sng_tavoli').insert(righe));
@@ -793,26 +799,37 @@ async function tavoloView(){
   if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>• ${esc(i.profili?.username)}</div>`).join('')}</div>`;
   if(t.stato==='annullato') h+=`<div class="card"><p>↩️ Tavolo annullato: non si è riempito prima del calcio d'inizio. I gettoni sono stati restituiti.</p></div>`;
   if(t.stato==='draft'){
-    const mio=turno===utente.id;
-    h+=`<div class="card" style="border-color:${mio?'var(--gold)':'var(--line)'}"><h3>${mio?'🔥 Tocca a te!':'Tocca a '+nome(turno)}</h3>
-      <p>⏱️ <b id="cd" style="font-size:22px;color:var(--gold)">${sec}</b> secondi · scelta ${sc.length+1} di ${t.posti*6}</p>
-      <p class="muted" style="font-size:12px">Ordine: ${(t.ordine||[]).map(nome).join(' → ')} (poi al contrario)</p>
-      ${mio?`<input id="sg_q" placeholder="Cerca un giocatore (almeno 2 lettere)" oninput="cercaSng()"><div id="sg_r"></div>
-      <p class="muted" style="font-size:12px">${mie.length>=5?'🪑 Ora scegli la <b>riserva</b>: qualsiasi ruolo.':`La tua squadra: ${mie.map(s=>s.giocatori.ruolo).join(' ')||'vuota'} — servono 1 P, 1 D, 1 C, 1 A + 1 jolly di movimento, poi 1 riserva.`}<br>Squadre disponibili: ${sg.squadre.map(esc).join(', ')}</p>`:''}</div>`;
+    const mio=turno===utente.id,m=(t.ordine||[]).length||1,rd=Math.floor(sc.length/m);
+    h+=`<div class="card" style="border-color:${mio?'var(--gold)':'var(--line)'}"><div class="row between"><b>Giro ${rd+1} di 6 · ${GIRI[rd]||''}</b><span>⏱️ <b id="cd" style="font-size:20px;color:var(--gold)">${sec}</b>s</span></div>
+      <h3 style="margin:8px 0">${mio?'🔥 Tocca a te: scegli una carta!':'Tocca a '+nome(turno)+'…'}</h3>
+      <p class="muted" style="font-size:12px">Ordine del giro: ${(t.ordine||[]).map(nome).join(' → ')} (al giro dopo si inverte)</p></div>`;
+    if(mio){
+      const carte=chk(await db.from('sng_carte').select('fascia, giocatori(id,nome,ruolo,squadra,foto,quotazione)').eq('tavolo_id',t.id).eq('utente_id',utente.id).eq('round',rd).order('fascia'));
+      const gids=carte.map(c=>c.giocatori.id);
+      const vv=gids.length?chk(await db.from('voti').select('giocatore_id,fantavoto').in('giocatore_id',gids).not('fantavoto','is',null)):[];
+      const fm=id=>{const x=vv.filter(v=>v.giocatore_id===id);return x.length?(x.reduce((a,v)=>a+Number(v.fantavoto),0)/x.length).toFixed(1):'-'};
+      const COL=['','#f2c14e','#c0c7cf','#cd7f32','#2ecc71','#7f8c8d'];
+      h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${carte.map(c=>{const g=c.giocatori;return `<div class="card" style="text-align:center;border:2px solid ${COL[c.fascia]};margin:0;padding:10px">
+        <div style="color:${COL[c.fascia]};font-size:13px">${'⭐'.repeat(6-c.fascia)}</div>
+        ${g.foto?`<img src="${esc(g.foto)}" alt="" style="width:70px;height:70px;border-radius:50%;background:#fff;object-fit:cover;margin:6px auto;display:block">`:'<div style="font-size:44px">👤</div>'}
+        <b>${esc(g.nome)}</b><div class="muted" style="font-size:12px">${ruolo(g.ruolo)}${esc(g.squadra)}</div>
+        <div style="font-size:12px;margin:4px 0">FM <b>${fm(g.id)}</b> · Q ${g.quotazione}</div>
+        <button class="ok" style="width:100%" onclick="sngScegli(${g.id})">Scegli</button></div>`}).join('')}</div>`;
+    }
   }
   if(['draft','in_gioco','chiuso'].includes(t.stato)){
     const ord=[...isc].sort((a,b)=>(a.posizione||99)-(b.posizione||99));
-    h+=ord.map(i=>{const tutte=sc.filter(x=>x.utente_id===i.utente_id).sort((a,b)=>a.n-b.n);const ris=tutte[5];const s=tutte.slice(0,5).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);if(ris)s.push({...ris,riserva:true});
+    h+=ord.map(i=>{const tutte=sc.filter(x=>x.utente_id===i.utente_id).sort((a,b)=>a.n-b.n);const ris=tutte[5];const s=tutte.slice(0,5).map((x,k)=>({...x,jolly:k===4}));if(ris)s.push({...ris,riserva:true});
       return `<div class="card"><div class="row between"><b>${i.posizione?(i.posizione===1?'🏆 ':i.posizione+'° '):''}${esc(i.profili?.username)}${i.utente_id===utente.id?' (tu)':''}</b>
       <span>${i.punti!==null?`<b style="color:var(--gold)">${Number(i.punti).toFixed(1)}</b> pt`:''}${i.vinti?` <span style="color:var(--green)">+🪙${i.vinti}</span>`:''}</span></div>
-      ${s.map(x=>`<div style="padding:2px 0">${x.riserva?'🪑 ':''}${ruolo(x.giocatori.ruolo)}${esc(x.giocatori.nome)} <small class="muted">${esc(x.giocatori.squadra)}${x.riserva?' · riserva':''}</small></div>`).join('')||'<p class="muted">Nessuna scelta ancora.</p>'}</div>`}).join('');
+      ${s.map(x=>`<div style="padding:2px 0">${x.riserva?'🪑 ':x.jolly?'🃏 ':''}${ruolo(x.giocatori.ruolo)}${esc(x.giocatori.nome)} <small class="muted">${esc(x.giocatori.squadra)}${x.riserva?' · riserva':x.jolly?' · jolly':''}</small></div>`).join('')||'<p class="muted">Nessuna scelta ancora.</p>'}</div>`}).join('');
     if(t.stato==='in_gioco') h+=`<p class="muted">⚽ Draft concluso: il risultato arriva appena la redazione completa i voti delle partite del tavolo.</p>`;
   }
   app.innerHTML=h;
   if(t.stato==='draft'){
     let s=sec;const tick=()=>{const el=document.getElementById('cd');if(!el)return;s=Math.max(0,s-1);el.textContent=s};
     const iv=setInterval(tick,1000);
-    sngTimer=setTimeout(()=>{clearInterval(iv);if(pagina==='sng'&&sg.tav===t.id&&!(document.getElementById('sg_q')?.value))tavoloView();else if(pagina==='sng'&&sg.tav===t.id)sngTimer=setTimeout(tavoloView,8000)},turno===utente.id?Math.min(15000,(sec+1)*1000):4000);
+    sngTimer=setTimeout(()=>{clearInterval(iv);if(pagina==='sng'&&sg.tav===t.id)tavoloView()},turno===utente.id?Math.min(15000,(sec+1)*1000):4000);
   } else if(t.stato==='aperto') sngTimer=setTimeout(()=>{if(pagina==='sng'&&sg.tav===t.id)tavoloView()},6000);
 }
 let tSg;
