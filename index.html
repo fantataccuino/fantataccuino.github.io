@@ -667,7 +667,11 @@ async function legaView(){
       <h3 style="margin-top:18px">2. Classifica di partenza</h3><p class="muted" style="font-size:13px">I numeri che ogni squadra ha già nell'altra app. Le giornate giocate qui si sommano a questi.<br><b>Pt</b> = punti in classifica · <b>FP</b> = fantapunti totali · V N P · GF GS = gol fatti e subiti</p>
       <div style="overflow-x:auto"><table><tr><th>Squadra</th><th>Pt</th><th>FP</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th></tr>
       ${membri.map(m=>{const z=PZ[m.utente_id]||{};return `<tr><td style="white-space:nowrap"><b>${esc(m.nome_squadra)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${m.utente_id}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
-      <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button></details></div>`;
+      <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button>
+      <h3 style="margin-top:18px">3. Calendario dell'altra app</h3><p class="muted" style="font-size:13px">Incolla le giornate del calendario originale: una riga <b>Giornata 1</b>, sotto le partite <b>Squadra A - Squadra B</b>, poi Giornata 2 e così via. Basta il primo giro (es. le giornate 1-11 con 12 squadre): quando finiscono, si ripetono in ordine.</p>
+      <textarea id="ci_txt" rows="7" placeholder="Giornata 1&#10;Squadra A - Squadra B&#10;Squadra C - Squadra D"></textarea>
+      <div class="row" style="gap:8px"><div style="flex:1"><label>La 1ª giornata incollata va sulla giornata di Serie A</label><input id="ci_da" type="number" min="1" max="38" value="${lega.giornata_da||1}"></div><div style="flex:1"><label>Fino alla giornata di Serie A</label><input id="ci_a" type="number" min="1" max="38" value="38"></div></div>
+      <button class="pri" onclick="leggiCalImp(${lega.id})">Leggi calendario</button><div id="ci_map" style="margin-top:10px"></div></details></div>`;
     } else h+=`<div class="card" style="border-color:var(--gold)"><h3>🚚 Vuoi portare qui una lega da un'altra app?</h3><p class="muted">L'importazione di rose e classifica da altre app (es. Leghe Fantacalcio) la fa l'amministratore per te: contattalo e ti prepara tutto.</p>${FEAT.wa_premium?`<button class="pri" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei trasferire la mia lega su FantaTaccuino (lega: ${esc(lega.nome).replace(/'/g,'')}, codice ${lega.codice_invito||''}). Il mio nome utente è: '+profilo.username),'_blank')">💬 Contatta l'amministratore</button>`:`<p class="muted">Scrivi a <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}</div>`;
     h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">📋 Rose e formazioni · Sostituzioni</summary><div style="margin-top:10px">${campiRegole(lega)}<button class="pri" style="margin-top:12px" onclick="salvaRegole(${lega.id})">Salva regolamento</button></div></details></div>`;
     h+=`<div class="card"><h3>⚙️ Bonus e malus</h3>${campiBonus('lb',lega.bonus)}<button class="pri" style="margin-top:10px" onclick="salvaBonus(${lega.id})">Salva bonus e malus</button></div>`;
@@ -771,6 +775,38 @@ async function generaCalendario(lid){
   chk(await db.from('incontri').delete().eq('lega_id',lid));
   chk(await db.from('incontri').insert(righe));
   toast('Calendario generato!');legaView();
+}
+let CI=null;
+const nCI=x=>(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+async function leggiCalImp(lid){
+  const bl=[];let cur=null;
+  val('ci_txt').split('\n').map(l=>l.trim()).filter(Boolean).forEach(l=>{
+    if(/giornata|^\d+\s*[ªa°.)]?$/i.test(l)&&!/\s[-–]\s|\svs\.?\s/i.test(l)){cur=[];bl.push(cur);return}
+    const pz=l.split(/\s+[-–]\s+|\s+vs\.?\s+/i);if(pz.length!==2)return;
+    const pul=t=>t.replace(/^\d+[:.)]\s*/,'').replace(/\s+[\d.,]+$/,'').replace(/^[\d.,]+\s+/,'').trim();
+    if(!cur){cur=[];bl.push(cur)}cur.push([pul(pz[0]),pul(pz[1])]);
+  });
+  const B=bl.filter(b=>b.length);if(!B.length)return toast('Non trovo partite: controlla il formato',true);
+  const mem=chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid));
+  const nomi=[...new Set(B.flat(2))];
+  CI={B,nomi,lid};
+  document.getElementById('ci_map').innerHTML=`<p class="muted" style="font-size:13px">Trovate <b>${B.length}</b> giornate e <b>${nomi.length}</b> squadre. Controlla a quale squadra di questa lega corrisponde ognuna (se non c'è, lascia "ignora").</p>
+    ${nomi.map((n,i)=>{const m=mem.find(x=>nCI(x.nome_squadra)===nCI(n));return `<label>${esc(n)}</label><select class="ci_s" data-i="${i}"><option value="">— ignora —</option>${mem.map(x=>`<option value="${x.utente_id}" ${m&&m.utente_id===x.utente_id?'selected':''}>${esc(x.nome_squadra)}</option>`).join('')}</select>`}).join('')}
+    <button class="pri" style="margin-top:10px" onclick="salvaCalImp()">Crea calendario</button>`;
+}
+async function salvaCalImp(){
+  if(!CI)return;const da=+val('ci_da'),a=+val('ci_a');
+  if(!da||!a||a<da)return toast('Giornate non valide',true);
+  const mp={};document.querySelectorAll('.ci_s').forEach(s=>{if(s.value)mp[CI.nomi[+s.dataset.i]]=s.value});
+  const usati=Object.values(mp);if(new Set(usati).size!==usati.length)return toast('Due squadre puntano alla stessa squadra della lega',true);
+  const righe=[];
+  for(let g=da;g<=a;g++){const k=g-da,b=CI.B[k%CI.B.length],ciclo=Math.floor(k/CI.B.length);
+    b.forEach(([x,y])=>{const X=mp[x],Y=mp[y];if(X&&Y&&X!==Y)righe.push({lega_id:CI.lid,giornata:g,casa:ciclo%2?Y:X,trasferta:ciclo%2?X:Y})})}
+  if(!righe.length)return toast('Nessuna partita tra squadre di questa lega',true);
+  if(!confirm(`Creare ${righe.length} partite dalla giornata ${da} alla ${a}? Il calendario attuale verrà sostituito.`))return;
+  chk(await db.from('incontri').delete().eq('lega_id',CI.lid));
+  chk(await db.from('incontri').insert(righe));
+  toast('Calendario importato!');CI=null;legaView();
 }
 async function cancellaCalendario(lid){if(!confirm('Eliminare il calendario? La lega userà solo la classifica a punti.'))return;chk(await db.from('incontri').delete().eq('lega_id',lid));legaView()}
 async function salvaFasce(lid){const f=val('fsc').split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>x>0).sort((a,b)=>a-b);
