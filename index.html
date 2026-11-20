@@ -39,7 +39,7 @@ button.del{background:transparent;border-color:var(--red);color:var(--red);box-s
 input,select,textarea{background:#1a0d5a;color:#fff;border:2px solid #4f2fd6;border-radius:14px;padding:11px 12px;font-size:16px;width:100%;margin:4px 0 12px;font-family:inherit}
 input::placeholder,textarea::placeholder{color:#9d95d6}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green)}
-input[type=checkbox]{width:auto;margin:0 6px 0 0;accent-color:var(--green)}
+input[type=checkbox]{width:22px;height:22px;padding:0;margin:0 8px 0 0;vertical-align:middle;border-radius:6px;accent-color:var(--green)}
 input.n{width:58px;text-align:center;margin:0}
 label{font-size:13px;font-weight:700;color:var(--muted)}
 .muted{color:var(--muted)}
@@ -226,8 +226,8 @@ function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;r
 <div class="card"><h3>📋 Termini d'uso</h3>
 <p><b>1. Il servizio.</b> FantaTaccuino è un gioco di fantacalcio gestito in modo amatoriale. È offerto così com'è: può avere errori, interruzioni o modifiche, e può essere chiuso in qualsiasi momento.</p>
 <p><b>2. Account.</b> Ogni iscrizione viene approvata dall'amministratore. È consentito un solo account per persona. Sei responsabile della tua password e di quello che succede con il tuo account.</p>
-<p><b>3. Voti.</b> I voti sono assegnati dalla redazione di FantaTaccuino in base al proprio giudizio. Possono essere corretti in caso di errore; una volta pubblicati valgono per classifiche e quotazioni.</p>
-<p><b>4. Palloni dorati.</b> I palloni dorati sono virtuali e gratuiti. Non hanno alcun valore economico, non si comprano, non si vendono, non si scambiano e non si convertono mai in denaro, beni o premi. Possono essere modificati o azzerati dall'amministratore.</p>
+<p><b>3. Voti.</b> I voti sono assegnati dalla redazione di FantaTaccuino.</p>
+<p><b>4. Palloni dorati.</b> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore.</p>
 <p><b>5. Calcetto.</b> Ai tavoli del Calcetto si partecipa solo con palloni dorati. Una volta iscritto a un tavolo non puoi più uscire. Il banco trattiene una percentuale dei palloni dorati del tavolo; il montepremi è solo in palloni dorati. Se un tavolo viene annullato i palloni dorati vengono restituiti.</p>
 <p><b>6. Premium.</b> Il Premium sblocca funzioni aggiuntive per il periodo indicato. Prezzo, pagamento e diritto di recesso vengono indicati prima dell'acquisto.</p>
 <p><b>7. Comportamento.</b> In chat e nelle leghe sono vietati insulti, contenuti offensivi, spam e trucchi per falsare il gioco (account multipli, uso di errori del sito). L'amministratore può cancellare messaggi e sospendere o eliminare gli account che non rispettano queste regole.</p>
@@ -263,7 +263,7 @@ let fz={lega:null,tab:'classifica',vedi:null,gg:null};
 async function pFanta(){
   if(fz.lega) return legaView();
   const leghe=chk(await db.from('leghe').select('*').order('creata_il'));
-  app.innerHTML=`<h2>Fantacalcio</h2>
+  app.innerHTML=`<h2>Leghe</h2>
   ${leghe.map(l=>`<div class="card row between"><div><b>${esc(l.nome)}</b><br><small class="muted">${l.creatore_id===utente.id?'Sei il presidente':'Partecipante'} · ${MODALITA[l.modalita]||'Asta'}${l.giornata_da?` · Sprint G${l.giornata_da}–${l.giornata_a||38}`:''}${l.carte?' · 🃏':''}</small></div>
     <button class="pri" onclick="fz.lega=${l.id};fz.tab='classifica';pFanta()">Apri</button></div>`).join('')||'<p class="muted">Non sei ancora in nessuna lega.</p>'}
   <div class="card"><h3>Crea una lega</h3>
