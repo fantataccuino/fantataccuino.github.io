@@ -752,9 +752,9 @@ function caricaTabellino(d){
   red.righe.forEach(r=>{if(r.voto===undefined)r.voto=votoProposto(r)});
   return n;
 }
-function leggiImg(file){return new Promise((ok,ko)=>{const img=new Image();img.onload=()=>{const s=Math.min(1,2000/Math.max(img.width,img.height));
+function leggiImg(file){return new Promise((ok,ko)=>{const img=new Image();img.onload=()=>{const s=Math.min(1,1600/Math.max(img.width,img.height));
   const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-  URL.revokeObjectURL(img.src);ok(c.toDataURL('image/jpeg',0.85).split(',')[1])};img.onerror=ko;img.src=URL.createObjectURL(file)})}
+  URL.revokeObjectURL(img.src);ok(c.toDataURL('image/jpeg',0.75).split(',')[1])};img.onerror=ko;img.src=URL.createObjectURL(file)})}
 async function importaScreen(){
   const files=[...document.getElementById('red_img').files];if(!files.length)return toast('Scegli almeno uno screenshot',true);
   const b=document.getElementById('red_btn');b.disabled=true;b.textContent='L\'AI sta leggendo… (10-30 secondi)';
@@ -768,13 +768,15 @@ Abbina ogni giocatore alla lista seguente (formato id|nome|ruolo|squadra) e mett
 ${lista}
 Rispondi SOLO con JSON in questo formato:
 {"risultato":{"casa":0,"trasferta":0},"giocatori":[{"id":123,"nome":"...","squadra":"casa","minuti":90,"gol":0,"assist":0,"ammonizione":false,"espulsione":false,"gol_subiti":0,"rigori_parati":0,"rigori_sbagliati":0,"autogol":0}]}`;
-    const key=chk(await db.rpc('chiave_gemini'));
-    const model=FEAT.gemini_model||'gemini-flash-latest';
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',
-      headers:{'Content-Type':'application/json','x-goog-api-key':key},
-      body:JSON.stringify({contents:[{parts:[{text:prompt},...imgs.map(d=>({inline_data:{mime_type:'image/jpeg',data:d}}))]}],generationConfig:{responseMimeType:'application/json',temperature:0}})});
-    const d=await r.json();
-    if(!r.ok) throw new Error(d.error?.message||('Errore Gemini '+r.status));
+    const body={contents:[{parts:[{text:prompt},...imgs.map(d=>({inline_data:{mime_type:'image/jpeg',data:d}}))]}],generationConfig:{responseMimeType:'application/json',temperature:0}};
+    const rid=chk(await db.rpc('avvia_lettura',{p_body:body}));
+    let e=null;
+    for(let i=0;i<60&&!e;i++){await sleep(2000);b.textContent=`L'AI sta leggendo… ${(i+1)*2}s`;e=chk(await db.rpc('esito_lettura',{p_id:rid}))}
+    if(!e) throw new Error('Nessuna risposta dall\'AI, riprova');
+    if(e.timeout) throw new Error('L\'AI ci ha messo troppo: riprova con meno screenshot');
+    if(e.errore) throw new Error(e.errore);
+    let d;try{d=JSON.parse(e.content)}catch(x){throw new Error('Risposta non valida ('+e.status+')')}
+    if(e.status!==200) throw new Error(d.error?.message||('Errore Gemini '+e.status));
     const t=(d.candidates?.[0]?.content?.parts||[]).map(x=>x.text||'').join('').replace(/^```(json)?/,'').replace(/```$/,'').trim();
     const n=caricaTabellino(JSON.parse(t));
     toast(n+' giocatori letti: controlla e correggi');redRender();
