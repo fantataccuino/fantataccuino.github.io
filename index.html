@@ -338,6 +338,36 @@ function fvL(v,ruolo,B,ctx){if(!v||v.voto===null||v.voto===undefined)return null
 function campiBonus(pre,B){B={...BONUS_DEF,...(B||{})};return `<p class="muted" style="font-size:12px">Metti i punti che vuoi (anche con la virgola, es. 0.5). I malus vanno col meno (es. -1). Scrivi <b>0</b> per non usare una voce.<br>🛡️ <b>Modificatore difesa</b>: media voto del portiere e dei 3 migliori difensori in campo (servono almeno 4 difensori): da 6 = +1, da 6,5 = +3, da 7 = +6.<br>⚙️ <b>Modificatore centrocampo</b>: media voto dei centrocampisti in campo: da 6 = +1, da 6,5 = +2, da 7 = +3.</p><div style="display:grid;grid-template-columns:1fr 90px;gap:4px 10px;align-items:center">${BONUS_LAB.map(([k,n])=>`<label style="color:var(--txt);font-size:14px">${n}</label><input id="${pre}_${k}" type="number" step="0.5" value="${B[k]}" style="margin:0;text-align:center">`).join('')}</div>`}
 function leggiBonus(pre){const o={};for(const [k] of BONUS_LAB){const v=parseFloat(document.getElementById(pre+'_'+k).value.replace(',','.'));o[k]=isNaN(v)?0:v}return o}
 function riepBonus(B){B={...BONUS_DEF,...(B||{})};return BONUS_LAB.map(([k,n])=>`<div class="row between" style="padding:3px 0;border-bottom:1px solid #ffffff14"><span>${n.replace(/ \(1 = attivo, 0 = spento\)/,'')}</span><b style="color:${B[k]>0?'var(--green)':B[k]<0?'var(--red)':'var(--muted)'}">${B[k]===0?'non usato':['moddif','modcen'].includes(k)?'attivo':(B[k]>0?'+':'')+B[k]}</b></div>`).join('')}
+async function salvaPartenza(lid){const o={};document.querySelectorAll('.pz').forEach(i=>{const v=i.value.replace(',','.');if(v==='')return;(o[i.dataset.u]=o[i.dataset.u]||{})[i.dataset.k]=+v});chk(await db.from('leghe').update({partenza:o}).eq('id',lid));toast('Classifica di partenza salvata');legaView()}
+async function impRoseLega(lid){
+  const righe=document.getElementById('tr_rose').value.split('\n').map(x=>x.trim()).filter(Boolean);if(!righe.length)return toast('Incolla le rose',true);
+  const box=document.getElementById('tr_ris');box.innerHTML='<p class="muted">Abbino i giocatori…</p>';
+  const membri=chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid));
+  const tutti=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('attivo',true).limit(2000));
+  if(document.getElementById('tr_svuota').checked){if(!confirm('Svuotare tutte le rose di questa lega prima di importare?'))return;chk(await db.from('rose').delete().eq('lega_id',lid))}
+  const presi=new Set(chk(await db.from('rose').select('giocatore_id').eq('lega_id',lid)).map(x=>x.giocatore_id));
+  const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
+  const ins=[],no=[],dubbi=[],conta={};
+  for(const riga of righe){
+    const [sq,gn,pr]=riga.split(/[;\t]/).map(x=>(x||'').trim());
+    const mem=membri.find(m=>norm(m.nome_squadra).trim()===norm(sq));
+    if(!mem){no.push(`${riga} → squadra "${sq}" non trovata tra i partecipanti`);continue}
+    if(!gn){no.push(riga+' → manca il giocatore');continue}
+    const pw=parole(gn);
+    const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;let p=0;for(const w of pw){if(nw.includes(w))p+=3;else if(nw.some(x=>x.length<=2&&x[0]===w[0]))p+=1}return nw.some(x=>pw.includes(x))?p:0};
+    const cand=tutti.map(g=>({g,p:sc(g)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p);
+    if(!cand.length){no.push(riga+' → giocatore non trovato nel listone');continue}
+    const top=cand.filter(x=>x.p===cand[0].p);
+    if(top.length>1){dubbi.push({riga,u:mem.utente_id,pr:+pr||1,c:top.slice(0,6).map(x=>x.g)});continue}
+    const g=cand[0].g;if(presi.has(g.id)){no.push(`${riga} → ${g.nome} è già in un'altra rosa`);continue}
+    presi.add(g.id);ins.push({lega_id:lid,utente_id:mem.utente_id,giocatore_id:g.id,prezzo:+pr||1});conta[mem.nome_squadra]=(conta[mem.nome_squadra]||0)+1;
+  }
+  for(let i=0;i<ins.length;i+=200) chk(await db.from('rose').insert(ins.slice(i,i+200)));
+  box.innerHTML=`<p style="color:var(--green)">✅ Importati ${ins.length} giocatori${Object.keys(conta).length?': '+Object.entries(conta).map(([k,v])=>`${esc(k)} ${v}`).join(' · '):''}</p>`
+    +dubbi.map(d=>`<div class="card" style="padding:10px"><b>❓ "${esc(d.riga)}"</b> – quale intendi?<br>${d.c.map(g=>`<button style="margin:4px 4px 0 0" onclick="assegnaT(${lid},'${d.u}',${g.id},${d.pr},this)">${g.ruolo} · ${esc(g.nome)} (${esc(g.squadra)})</button>`).join('')}</div>`).join('')
+    +(no.length?`<div class="card" style="padding:10px;border-color:var(--red)"><b style="color:var(--red)">Da sistemare (${no.length})</b>${no.map(x=>`<div class="muted" style="font-size:13px">• ${esc(x)}</div>`).join('')}<p class="muted" style="font-size:12px">Correggi queste righe e importale di nuovo, senza spuntare "Svuota".</p></div>`:'');
+}
+async function assegnaT(lid,uid,gid,pr,b){const {error}=await db.from('rose').insert({lega_id:lid,utente_id:uid,giocatore_id:gid,prezzo:pr});if(error)return toast(error.message,true);b.parentElement.innerHTML='<span style="color:var(--green)">✅ Aggiunto</span>'}
 async function salvaBonus(lid){if(!confirm('Salvare i nuovi bonus e malus? Tutti i punteggi della lega, anche delle giornate già giocate, verranno ricalcolati.'))return;chk(await db.from('leghe').update({bonus:leggiBonus('lb')}).eq('id',lid));toast('Bonus e malus salvati');legaView()}
 async function datiLega(lega,membri){
   let pub=chk(await db.from('fanta_giornate').select('numero').eq('pubblicata',true).order('numero')).map(g=>g.numero);
@@ -420,7 +450,7 @@ async function legaView(){
     const {pub,ris}=await datiLega(lega,membri);
     const inc=chk(await db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata'));
     if(fz.tab==='classifica'){
-      const tot={};membri.forEach(m=>tot[m.utente_id]={pt:0,g:0,v:0,n:0,p:0,gf:0,gs:0,punti:0});
+      const tot={},PZ=lega.partenza||{};membri.forEach(m=>{const z=PZ[m.utente_id]||{};tot[m.utente_id]={pt:+z.fp||0,g:(+z.v||0)+(+z.n||0)+(+z.p||0),v:+z.v||0,n:+z.n||0,p:+z.p||0,gf:+z.gf||0,gs:+z.gs||0,punti:+z.punti||0}});
       pub.forEach(g=>membri.forEach(m=>tot[m.utente_id].pt+=ris[g][m.utente_id].pt));
       inc.filter(i=>pub.includes(i.giornata)).forEach(i=>{
         const [gc,gt]=golMatch(i,ris,lega);const A=tot[i.casa],B=tot[i.trasferta];if(!A||!B)return;
@@ -548,6 +578,17 @@ async function legaView(){
 
   if(fz.tab==='classifica') h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:700">📏 Bonus e malus di questa lega</summary><div style="margin-top:8px">${riepBonus(lega.bonus)}</div></details></div>`;
   if(fz.tab==='gestione'&&pres){
+    const PZ=lega.partenza||{};
+    h+=`<div class="card" style="border-color:var(--gold)"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
+      <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Prima fai entrare tutti con il codice invito, usando gli stessi nomi squadra.</p>
+      <h3>1. Rose</h3><p class="muted" style="font-size:13px">Una riga per giocatore: <b>Squadra;Giocatore;Prezzo</b> (il prezzo si può omettere).<br>Es: <i>${esc(membri[0]?.nome_squadra||'Real Scanga')};Martinez L.;45</i></p>
+      <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
+      <label style="color:var(--txt);display:block;margin:4px 0 10px"><input type="checkbox" id="tr_svuota"> Svuota prima le rose già presenti in questa lega</label>
+      <button class="pri" onclick="impRoseLega(${lega.id})">Importa rose</button><div id="tr_ris" style="margin-top:10px"></div>
+      <h3 style="margin-top:18px">2. Classifica di partenza</h3><p class="muted" style="font-size:13px">I numeri che ogni squadra ha già nell'altra app. Le giornate giocate qui si sommano a questi.<br><b>Pt</b> = punti in classifica · <b>FP</b> = fantapunti totali · V N P · GF GS = gol fatti e subiti</p>
+      <div style="overflow-x:auto"><table><tr><th>Squadra</th><th>Pt</th><th>FP</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th></tr>
+      ${membri.map(m=>{const z=PZ[m.utente_id]||{};return `<tr><td style="white-space:nowrap"><b>${esc(m.nome_squadra)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${m.utente_id}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
+      <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button></details></div>`;
     h+=`<div class="card"><h3>⚙️ Bonus e malus</h3>${campiBonus('lb',lega.bonus)}<button class="pri" style="margin-top:10px" onclick="salvaBonus(${lega.id})">Salva bonus e malus</button></div>`;
     const inc=chk(await db.from('incontri').select('giornata').eq('lega_id',lega.id));
     const gi=[...new Set(inc.map(i=>i.giornata))].sort((a,b)=>a-b);
