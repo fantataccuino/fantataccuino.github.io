@@ -187,7 +187,7 @@ async function registrati(){
   if(!document.getElementById('a_ok').checked) return toast('Devi accettare termini d\'uso e privacy',true);
   const {error}=await db.auth.signUp({email:val('a_mail'),password:val('a_pass'),options:{data:{username,termini:TERMINI_VER}}});
   if(error) return toast(error.message,true);
-  toast('Registrazione inviata!');
+  toast('Registrazione completata! Se ti è arrivata una mail di conferma, aprila e poi accedi.');
 }
 async function esci(){await db.auth.signOut();utente=null;profilo=null;pagina='home';renderAuth()}
 
@@ -1231,6 +1231,7 @@ async function pAdmin(){
       ['f_draft','⚡ Draft a serpentone','Le rose si formano scegliendo a turno invece che con l\'asta.'],
       ['f_sprint','🏆 Mini-tornei Sprint','Leghe che valgono solo per alcune giornate: si possono fare anche a campionato iniziato.'],
       ['f_sng','⚽ Calcetto','Tavoli veloci: draft di 5 giocatori + 1 riserva sulle partite scelte da te, con palloni dorati gratuiti.'],
+      ['f_auto','✅ Iscrizione libera','Se attiva: chi si registra entra subito, senza la tua approvazione. Se spenta: devi accettare tu ogni nuovo utente da Utenti.'],
       ['f_premium','💎 Premium','Se attiva: Calcetto, voto spiegato, leghe illimitate, consiglio formazione, allarme probabili, grafici e badge 💎 solo per i Premium. Se spenta: tutto libero per tutti.']];
     h+=`<p class="muted">Accendi o spegni le funzioni per tutto il sito. Le leghe già create con una funzione spenta continuano a funzionare, ma non se ne possono creare di nuove.</p>`
       +F.map(([k,n,d])=>`<div class="card row between"><div style="flex:1"><b>${n}</b><br><small class="muted">${d}</small></div>
