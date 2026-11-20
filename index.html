@@ -1477,7 +1477,8 @@ async function pAdmin(){
 async function salvaRake(){const v=Math.max(0,Math.min(50,+val('rk')||0));chk(await db.from('impostazioni').upsert({chiave:'rake_calcetto',valore:String(v)}));await caricaFeat();toast('Trattenuta: '+v+'%')}
 async function salvaWa(){const v=val('wa_num').replace(/[^0-9]/g,'');if(v&&v.length<10)return toast('Numero troppo corto: metti il prefisso 39 davanti',true);chk(await db.from('impostazioni').upsert({chiave:'wa_premium',valore:v}));await caricaFeat();toast(v?'Numero WhatsApp salvato':'Numero tolto');pAdmin()}
 async function salvaDon(){const v=val('lk_don');if(v&&!/^https:\/\//.test(v))return toast('Il link deve iniziare con https://',true);chk(await db.from('impostazioni').upsert({chiave:'link_donazioni',valore:v}));await caricaFeat();renderNav();toast('Link salvato')}
-async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);chk(await db.from('profili').update({premium_fino:anni?d.toISOString().slice(0,10):null}).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
+async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);const upd={premium_fino:anni?d.toISOString().slice(0,10):null};
+  chk(await db.from('profili').update(upd).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
 async function modGettoni(id,seg){const n=Math.abs(parseInt(document.getElementById('pg_'+id).value));if(!n)return toast('Scrivi quanti palloni dorati',true);
   const w=document.getElementById('pw_'+id).value,lab=w==='prova'?'palloni gratis':'palloni Premium';
   const u=chk(await db.from('profili').select('gettoni,prova,username').eq('id',id).single());const nuovo=Math.max(0,(u[w]||0)+seg*n);
