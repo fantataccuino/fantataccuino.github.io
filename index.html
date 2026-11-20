@@ -826,11 +826,17 @@ async function tavoloView(){
   }
   if(['draft','in_gioco','chiuso'].includes(t.stato)){
     const ord=[...isc].sort((a,b)=>(a.posizione||99)-(b.posizione||99));
+    const VT={};if(t.stato==='chiuso'){const {data:vt}=await db.rpc('sng_voti',{p_tavolo:t.id});(vt||[]).forEach(x=>VT[x.giocatore_id]=x)}
+    const chiuso=t.stato==='chiuso';
     h+=ord.map(i=>{const tutte=sc.filter(x=>x.utente_id===i.utente_id).sort((a,b)=>a.n-b.n);const ris=tutte[5];const s=tutte.slice(0,5).map((x,k)=>({...x,jolly:k===4}));if(ris)s.push({...ris,riserva:true});
+      let sost=null;if(chiuso&&ris&&VT[ris.giocatore_id]?.fantavoto!=null){const sv=s.find(x=>!x.riserva&&VT[x.giocatore_id]?.fantavoto==null);if(sv)sost=sv.giocatore_id}
       return `<div class="card"><div class="row between"><b>${i.posizione?(i.posizione===1?'🏆 ':i.posizione+'° '):''}${esc(i.profili?.username)}${i.utente_id===utente.id?' (tu)':''}</b>
       <span>${i.punti!==null?`<b style="color:var(--gold)">${Number(i.punti).toFixed(1)}</b> pt`:''}${i.vinti?` <span style="color:var(--green)">+🪙${i.vinti}</span>`:''}</span></div>
-      ${s.map(x=>`<div style="padding:2px 0">${x.riserva?'🪑 ':x.jolly?'🃏 ':''}${ruolo(x.giocatori.ruolo)}${esc(x.giocatori.nome)} <small class="muted">${esc(x.giocatori.squadra)}${x.riserva?' · riserva':x.jolly?' · jolly':''}</small></div>`).join('')||'<p class="muted">Nessuna scelta ancora.</p>'}</div>`}).join('');
-    if(t.stato==='in_gioco') h+=`<p class="muted">⚽ Draft concluso: il risultato arriva appena la redazione completa i voti delle partite del tavolo.</p>`;
+      ${s.map(x=>{const v=VT[x.giocatore_id],sv=chiuso&&(v?.fantavoto==null),entra=x.riserva&&sost,fuori=sost===x.giocatore_id,vale=chiuso&&(x.riserva?entra:!sv);
+        return `<div class="row between" style="padding:3px 0;${chiuso&&!vale?'opacity:.5':''}${fuori?';text-decoration:line-through':''}"><span>${x.riserva?(entra?'🔄 ':'🪑 '):x.jolly?'🃏 ':''}${ruolo(x.giocatori.ruolo)}${esc(x.giocatori.nome)} <small class="muted">${esc(x.giocatori.squadra)}${x.riserva?(entra?' · entra dalla panchina':' · riserva'):x.jolly?' · jolly':''}</small></span>
+        ${chiuso?`<span style="white-space:nowrap">${sv?'<b class="muted">s.v.</b>':`<small class="muted">${v.voto}</small> <b style="color:${vale?'var(--gold)':'var(--muted)'}">${v.fantavoto}</b>`}</span>`:''}</div>`}).join('')||'<p class="muted">Nessuna scelta ancora.</p>'}</div>`}).join('');
+    if(t.stato==='in_gioco') h+=`<p class="muted">⚽ Draft concluso: voti e risultato arrivano appena la redazione completa le partite del tavolo.</p>`;
+    if(chiuso) h+=`<p class="muted" style="font-size:12px">Accanto a ogni giocatore: voto (piccolo) e <b style="color:var(--gold)">fantavoto</b>. 🔄 = la riserva è entrata al posto del primo titolare s.v.</p>`;
   }
   app.innerHTML=h;
   if(t.stato==='draft'){
