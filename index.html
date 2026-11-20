@@ -1052,10 +1052,10 @@ async function pSerieA(){
 }
 
 // ---------- admin ----------
-let ad={tab:'redazione',g:null,vsq:null,daPag:1};
+let ad={tab:'redazione',g:null,vsq:null};
 async function pAdmin(){
   if(profilo.ruolo!=='admin') return vai('home');
-  const T=[['redazione','📝 Redazione'],['utenti','Utenti'],['funzioni','Funzioni'],['dati','Dati API'],['giornate','Giornate'],['voti','Voti'],['giocatori','Giocatori'],['articoli','Articoli']];
+  const T=[['redazione','📝 Redazione'],['utenti','Utenti'],['funzioni','Funzioni'],['dati','📅 Calendario'],['giornate','Giornate'],['voti','Voti'],['giocatori','Giocatori'],['articoli','Articoli']];
   let h=`<h2>Admin</h2><div class="tabs">${T.map(([k,v])=>`<button class="${ad.tab===k?'on':''}" onclick="ad.tab='${k}';pAdmin()">${v}</button>`).join('')}</div>`;
 
   if(ad.tab==='redazione'){ if(prb) return probRender(); if(red) return redRender(); app.innerHTML=await redLista(h); return; }
@@ -1088,38 +1088,26 @@ async function pAdmin(){
   }
 
   if(ad.tab==='dati'){
-    const imp=chk(await db.from('impostazioni').select('*'));const cfg=Object.fromEntries(imp.map(r=>[r.chiave,r.valore]));
-    const {count}=await db.from('giocatori').select('*',{count:'exact',head:true});
     const {count:np}=await db.from('partite_sa').select('*',{count:'exact',head:true});
-    h+=`<div class="card"><h3>Impostazioni</h3>
-      <label>Campionato (ID API-Football, Serie A = 135)</label><input id="cf_lega" value="${esc(cfg.lega_api||'135')}">
-      <label>Stagione (anno di inizio, es. 2023 = 2023/24)</label><input id="cf_stag" value="${esc(cfg.stagione||'')}">
-      <button class="pri" onclick="salvaCfg()">Salva</button></div>
-    <div class="card" style="border-color:var(--gold)"><h3>📅 Importa calendario da testo (senza API)</h3>
+    h+=`    <div class="card" style="border-color:var(--gold)"><h3>📅 Importa calendario da testo</h3><p class="muted">${np||0} partite caricate. Mandami il calendario e ti preparo le righe.</p>
       <p class="muted">Una riga per partita: <b>Giornata;Data;Ora;Casa;Trasferta</b><br>Es: <i>13;29/11/2026;18:00;Inter;Juventus</i><br>Se la partita esiste già (stessa giornata e squadre) viene aggiornata solo la data. I nomi delle squadre devono essere scritti sempre uguali, anche nel listone.</p>
-      <textarea id="cal_txt" rows="7"></textarea><button class="pri" onclick="impCalTesto()">Importa calendario</button></div>
-    <div class="card"><h3>1. Calendario</h3><p class="muted">${np||0} partite caricate. Crea anche le giornate del fantacalcio.</p>
-      <button class="pri" onclick="impCalendario(this)">Importa calendario</button></div>
-    <div class="card"><h3>2. Listone giocatori</h3><p class="muted">${count||0} giocatori. Scarica il listone squadra per squadra con una pausa di 7 secondi tra una richiesta e l'altra (limite del piano gratis): ci vogliono circa 5 minuti, tieni la pagina aperta e lo schermo acceso. Serve prima il calendario.</p>
-      <label>Parti dalla squadra n.</label><input id="lp_da" type="number" value="${ad.daPag}" min="1" max="20">
-      <button class="pri" onclick="impListone(this)">Importa listone</button><p id="prog" class="muted"></p></div>`;
+      <textarea id="cal_txt" rows="7"></textarea><button class="pri" onclick="impCalTesto()">Importa calendario</button></div>`;
   }
 
   if(ad.tab==='giornate'){
     const fg=chk(await db.from('fanta_giornate').select('*').order('numero'));
-    if(!fg.length){app.innerHTML=h+'<p class="muted">Importa prima il calendario (scheda Dati API).</p>';return}
+    if(!fg.length){app.innerHTML=h+'<p class="muted">Importa prima il calendario (scheda 📅 Calendario).</p>';return}
     if(!fg.find(g=>g.numero==ad.g)) ad.g=(fg.find(g=>!g.pubblicata)||fg[fg.length-1]).numero;
     const g=fg.find(x=>x.numero==ad.g);
     const pp=chk(await db.from('partite_sa').select('*').eq('giornata',ad.g).order('data'));
     h+=`<select onchange="ad.g=this.value;pAdmin()">${fg.map(x=>`<option value="${x.numero}" ${x.numero==ad.g?'selected':''}>Giornata ${x.numero} ${x.pubblicata?'✅':''}</option>`).join('')}</select>
     <div class="card"><h3>Giornata ${g.numero} ${g.pubblicata?'<span class="badge">Voti pubblicati</span>':'<span class="badge">Voti in bozza</span>'}</h3>
       <label>Scadenza formazioni</label><div class="row"><input id="sc_g" type="datetime-local" value="${toLocal(g.scadenza)}" style="flex:1;margin:0"><button onclick="salvaScad(${g.numero})">Salva</button></div>
-      <div class="row" style="margin-top:12px"><button class="pri" onclick="calcolaTutte(this,[${pp.map(p=>p.api_id)}])">Calcola voti di tutta la giornata</button>
-      <button onclick="ad.tab='voti';pAdmin()">Controlla voti</button>
+      <div class="row" style="margin-top:12px"><button onclick="ad.tab='voti';pAdmin()">Controlla voti</button>
       <button class="${g.pubblicata?'del':'ok'}" onclick="pubblica(${g.numero},${!g.pubblicata})">${g.pubblicata?'Ritira voti':'Pubblica voti'}</button></div>
       <p id="prog" class="muted"></p></div>
     <div class="card">${pp.map(p=>`<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(p.casa)} – ${esc(p.trasferta)} ${p.gol_casa!==null?`<b style="color:var(--gold)">${p.gol_casa}-${p.gol_trasferta}</b>`:''}<br><small class="muted">${fmt(p.data)}</small></span>
-      <button onclick="calcolaUna(this,${p.api_id})">Calcola voti</button></div>`).join('')}</div>`;
+      </div>`).join('')}</div>`;
   }
 
   if(ad.tab==='voti'){
@@ -1174,57 +1162,10 @@ async function approva(id){chk(await db.from('profili').update({approvato:true})
 async function cambiaRuolo(id,r){chk(await db.from('profili').update({ruolo:r}).eq('id',id));pAdmin()}
 async function rifiuta(id){if(!confirm('Sicuro? L\'utente non potrà più entrare.'))return;chk(await db.from('profili').delete().eq('id',id));pAdmin()}
 async function delRiga(t,id){if(!confirm('Eliminare?'))return;chk(await db.from(t).delete().eq('id',id));toast('Eliminato');pAdmin()}
-async function salvaCfg(){
-  chk(await db.from('impostazioni').upsert([{chiave:'lega_api',valore:val('cf_lega')},{chiave:'stagione',valore:val('cf_stag')}]));
-  toast('Impostazioni salvate');
-}
-async function impCalendario(b){
-  b.disabled=true;b.textContent='Importo…';
-  const {data,error}=await db.rpc('importa_calendario');
-  b.disabled=false;b.textContent='Importa calendario';
-  if(error) return toast(error.message,true);
-  toast(data.partite+' partite importate');pAdmin();
-}
-async function impListone(b){
-  const pp=chk(await db.from('partite_sa').select('casa_id,casa'));
-  const sq=[...new Map(pp.map(p=>[p.casa_id,p.casa])).entries()].sort((x,y)=>x[1].localeCompare(y[1]));
-  if(!sq.length) return toast('Importa prima il calendario',true);
-  const box=document.getElementById('prog');b.disabled=true;let n=0,primo=true;
-  for(let i=Math.max(1,+val('lp_da')||1)-1;i<sq.length;i++){
-    const [tid,nome]=sq[i];let p=1,tot=1;
-    while(p<=tot){
-      if(!primo) await sleep(7000);
-      primo=false;
-      box.textContent=`Squadra ${i+1} di ${sq.length}: ${nome} (pagina ${p})… ${n} giocatori finora`;
-      const {data,error}=await db.rpc('importa_giocatori_squadra',{p_team:tid,p_pagina:p});
-      if(error){box.textContent=`Errore su ${nome}: ${error.message}. Riprova partendo dalla squadra n. ${i+1}.`;ad.daPag=i+1;b.disabled=false;return}
-      tot=Math.min(data.totale||1,3);n+=data.importati;p++;
-    }
-  }
-  ad.daPag=1;b.disabled=false;box.textContent=`Fatto: ${n} giocatori importati da ${sq.length} squadre.`;toast('Listone importato');
-}
 async function salvaScad(n){chk(await db.from('fanta_giornate').update({scadenza:new Date(val('sc_g')).toISOString()}).eq('numero',n));toast('Scadenza salvata')}
 async function pubblica(n,stato){
   if(!confirm(stato?'Pubblicare i voti? Diventano visibili, contano per le classifiche e aggiornano le quotazioni (solo la prima volta).':'Ritirare i voti? Torneranno in bozza.'))return;
   chk(await db.from('fanta_giornate').update({pubblicata:stato}).eq('numero',n));toast(stato?'Voti pubblicati':'Voti ritirati');pAdmin();
-}
-async function calcolaUna(b,id){
-  b.disabled=true;b.textContent='…';
-  const {data,error}=await db.rpc('calcola_voti_partita',{p_fixture:id});
-  b.disabled=false;b.textContent='Calcola voti';
-  if(error) return toast(error.message,true);
-  toast(data.voti+' voti calcolati');
-}
-async function calcolaTutte(b,ids){
-  const box=document.getElementById('prog');b.disabled=true;let ok=0;
-  for(let i=0;i<ids.length;i++){
-    box.textContent=`Partita ${i+1} di ${ids.length}…`;
-    const {error}=await db.rpc('calcola_voti_partita',{p_fixture:ids[i]});
-    if(error) box.textContent+=' errore: '+error.message; else ok++;
-    if(i<ids.length-1) await sleep(7000);
-  }
-  b.disabled=false;box.textContent=`Fatto: ${ok} partite su ${ids.length}. Ora controlla i voti e pubblica.`;
-  pAdmin();
 }
 async function salvaCorrezioni(){
   const rows=[...document.querySelectorAll('tr.mod')];
