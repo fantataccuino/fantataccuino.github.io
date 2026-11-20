@@ -18,6 +18,7 @@ header{position:sticky;top:0;z-index:10;background:linear-gradient(#1d0f63ee,#1d
 .brand button{padding:6px 14px;font-size:13px}
 nav{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:20;display:flex;gap:2px;overflow-x:auto;background:#0d0826ee;border:1px solid #ffffff22;border-radius:40px;padding:7px;box-shadow:0 8px 24px #0009;scrollbar-width:none;max-width:800px;margin:0 auto}
 nav::-webkit-scrollbar{display:none}
+nav:empty{display:none}
 nav button{flex:1 0 64px;display:flex;flex-direction:column;align-items:center;gap:1px;background:transparent;border:0;border-radius:26px;padding:6px 4px;font-size:11px;font-weight:700;color:#c9c3ee;box-shadow:none}
 nav button .ic{font-size:21px;line-height:1.15}
 nav button.on{background:#ffffff16;color:var(--green)}
@@ -103,9 +104,9 @@ tr.mod td{background:#ffd44722}
 <body>
 <header id="top" style="display:none">
   <div class="brand"><h1>⚽ Fanta<span>Taccuino</span></h1><button onclick="esci()">Esci</button></div>
-  <nav id="nav"></nav>
 </header>
 <main id="app"></main>
+<nav id="nav"></nav>
 <div id="toast"></div>
 
 <script>
@@ -151,6 +152,7 @@ async function avvia(session){
 }
 
 function schermata(t,m){
+  document.getElementById('nav').innerHTML='';
   document.getElementById('top').style.display='none';
   app.innerHTML=`<div class="auth card"><div class="logo">⚽</div><h2 style="text-align:center">${t}</h2><p class="muted">${m}</p>
   <div class="row"><button onclick="location.reload()">Riprova</button><button onclick="esci()">Esci</button></div></div>`;
@@ -158,6 +160,7 @@ function schermata(t,m){
 
 let modoAuth='login';
 function renderAuth(){
+  document.getElementById('nav').innerHTML='';
   app.innerHTML=`<div class="auth"><div class="logo">⚽</div><h2 style="text-align:center">FantaTaccuino</h2>
   <div class="card"><div class="tabs">
     <button class="${modoAuth==='login'?'on':''}" onclick="modoAuth='login';renderAuth()">Accedi</button>
@@ -225,7 +228,7 @@ function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;r
 <p><b>8. Marchi e nomi.</b> Nomi di calciatori e squadre sono usati solo per descrivere le partite reali. FantaTaccuino non è collegato alla Lega Serie A né alle squadre.</p>
 <p><b>9. Modifiche.</b> Questi termini possono essere aggiornati; le modifiche importanti vengono comunicate sul sito.</p>
 <p><b>10. Legge.</b> Si applica la legge italiana. Per qualsiasi domanda scrivi a ${m}.</p></div>`}
-function mostraTermini(){document.getElementById('top').style.display='none';app.innerHTML=`<button onclick="renderAuth()">← Torna all'accesso</button><div style="margin-top:12px">${testoTermini()}</div>`}
+function mostraTermini(){document.getElementById('nav').innerHTML='';document.getElementById('top').style.display='none';app.innerHTML=`<button onclick="renderAuth()">← Torna all'accesso</button><div style="margin-top:12px">${testoTermini()}</div>`}
 function pTermini(){app.innerHTML=testoTermini()+`<div class="card" style="border-color:var(--red)"><h3>🗑️ Elimina il mio account</h3><p class="muted">Cancella il tuo account e i tuoi dati. Non si può annullare.</p><button class="del" onclick="eliminaAccount()">Elimina il mio account</button></div>`}
 async function eliminaAccount(){
   if(!confirm('Eliminare definitivamente il tuo account e i tuoi dati?'))return;
