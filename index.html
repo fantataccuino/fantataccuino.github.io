@@ -17,7 +17,9 @@ body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Seg
 a{color:var(--gold)}
 header{position:sticky;top:0;z-index:10;background:linear-gradient(#1d0f63ee,#1d0f6300);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .brand{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;max-width:820px;margin:0 auto}
-.brand h1{margin:0;font:800 25px var(--cond);letter-spacing:.2px}
+.brand h1{margin:0;font:800 25px var(--cond);letter-spacing:.2px;white-space:nowrap;display:flex;align-items:center}
+#saldo{white-space:nowrap}
+@media(max-width:430px){.brand h1{font-size:0}.brand h1 img{font-size:16px}}
 .brand h1 span{color:var(--green)}
 .brand button{padding:6px 14px;font-size:13px}
 nav{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:20;display:flex;gap:2px;overflow-x:auto;background:#0d0826ee;border:1px solid #ffffff22;border-radius:40px;padding:7px;box-shadow:0 8px 24px #0009;scrollbar-width:none;max-width:800px;margin:0 auto}
@@ -404,10 +406,13 @@ async function impRoseLega(lid){
 }
 async function assegnaT(lid,uid,gid,pr,b){const {error}=await db.from('rose').insert({lega_id:lid,utente_id:uid,giocatore_id:gid,prezzo:pr});if(error)return toast(error.message,true);b.parentElement.innerHTML='<span style="color:var(--green)">✅ Aggiunto</span>'}
 const MOD_ALL=['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'];
+const MOD_EXTRA=['2-1-7','2-7-1','2-2-6','2-6-2','2-3-5','2-5-3','2-4-4','3-1-6','3-6-1','3-2-5','3-3-4','4-1-5','4-2-4','5-2-3','5-1-4','6-2-2','6-3-1','6-1-3'];
+MOD_EXTRA.forEach(m=>{MODULI[m]=m.split('-').map(Number)});
 function REG(lega){const b=(lega&&lega.bonus)||{};return {rosa:b.rosa||{P:3,D:8,C:8,A:6},moduli:(b.moduli&&b.moduli.length)?b.moduli:MOD_ALL,panca:b.panca||null,timeout:+b.timeout||0,sw:!!b.sw,cambi:b.cambi??3,riserva:!!b.riserva,riserva_voto:b.riserva_voto??4,nonsch:b.nonsch||'zero'}}
 function campiRegole(lega){const R=REG(lega),n=(id,v,st='1')=>`<input id="${id}" type="number" step="${st}" value="${v}" style="margin:0;text-align:center;padding:8px">`;
   return `<h3 style="margin-top:6px">👥 Configurazione rosa</h3><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_r'+k,R.rosa[k])}</div>`).join('')}</div>
   <h3 style="margin-top:16px">📐 Moduli consentiti</h3><div class="row">${MOD_ALL.map(m=>`<label style="color:var(--txt);background:#ffffff12;border-radius:12px;padding:6px 10px"><input type="checkbox" class="rg_mod" value="${m}" ${R.moduli.includes(m)?'checked':''}>${m}</label>`).join('')}</div>
+  <details style="margin-top:8px"><summary style="color:var(--txt);font-weight:700">Moduli extra</summary><div class="row" style="margin-top:8px">${MOD_EXTRA.map(m=>`<label style="color:var(--txt);background:#ffffff12;border-radius:12px;padding:6px 10px"><input type="checkbox" class="rg_mod" value="${m}" ${R.moduli.includes(m)?'checked':''}>${m}</label>`).join('')}</div></details>
   <h3 style="margin-top:16px">🪑 Configurazione panchina</h3><p class="muted" style="font-size:12px">Quanti giocatori per ruolo si possono mettere in panchina. Tutti a 0 = panchina libera.</p><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_p'+k,R.panca?R.panca[k]:0)}</div>`).join('')}</div>
   <h3 style="margin-top:16px">⏰ Timeout formazione</h3><p class="muted" style="font-size:12px">Minuti prima dell'inizio della prima partita in cui si chiude la formazione.</p>${n('rg_to',R.timeout)}
   <h3 style="margin-top:16px">🔄 Sostituzioni</h3><label>Numero di sostituzioni</label>${n('rg_cambi',R.cambi)}
@@ -532,7 +537,7 @@ async function legaView(){
       const cl2=[...membri].sort((a,b)=>tot[b.utente_id].pt-tot[a.utente_id].pt);
       h+=`<div class="card"><h3>Classifica a punti totali</h3><table><tr><th>#</th><th>Squadra</th><th>Fantapunti</th></tr>
         ${cl2.map((m,i)=>`<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b><br><small class="muted">${un(m.profili)}</small></td><td><b>${tot[m.utente_id].pt.toFixed(1)}</b></td></tr>`).join('')}</table>
-        <p class="muted" style="font-size:12px">Contano solo le giornate con voti pubblicati${lega.giornata_da?` dalla ${lega.giornata_da} alla ${lega.giornata_a||38}`:''}. Sostituzioni automatiche: massimo 3, stesso ruolo, in ordine di panchina.</p></div>`;
+        <p class="muted" style="font-size:12px">Contano solo le giornate con voti pubblicati${lega.giornata_da?` dalla ${lega.giornata_da} alla ${lega.giornata_a||38}`:''}. Sostituzioni automatiche: massimo ${REG(lega).cambi}, stesso ruolo${REG(lega).sw?" (con switch)":""}, in ordine di panchina.</p></div>`;
     } else {
       if(!pub.length){h+='<p class="muted">Nessuna giornata con voti pubblicati.</p>'}
       else{
@@ -652,6 +657,7 @@ async function legaView(){
       <select id="np_u">${membri.filter(m=>m.utente_id!==lega.creatore_id).map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}</option>`).join('')}</select>
       ${membri.some(m=>m.utente_id===utente.id)?'<label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="np_esci" checked> Esci dalla lega (togli la mia squadra)</label>':''}
       <button class="pri" onclick="nominaPres(${lega.id})">Nomina presidente</button></div>`;
+    if(profilo.ruolo==='admin'){
     h+=`<div class="card" style="border-color:var(--gold)"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Prima fai entrare tutti con il codice invito, usando gli stessi nomi squadra.</p>
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
@@ -662,6 +668,7 @@ async function legaView(){
       <div style="overflow-x:auto"><table><tr><th>Squadra</th><th>Pt</th><th>FP</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th></tr>
       ${membri.map(m=>{const z=PZ[m.utente_id]||{};return `<tr><td style="white-space:nowrap"><b>${esc(m.nome_squadra)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${m.utente_id}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
       <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button></details></div>`;
+    } else h+=`<div class="card" style="border-color:var(--gold)"><h3>🚚 Vuoi portare qui una lega da un'altra app?</h3><p class="muted">L'importazione di rose e classifica da altre app (es. Leghe Fantacalcio) la fa l'amministratore per te: contattalo e ti prepara tutto.</p>${FEAT.wa_premium?`<button class="pri" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei trasferire la mia lega su FantaTaccuino (lega: ${esc(lega.nome).replace(/'/g,'')}, codice ${lega.codice_invito||''}). Il mio nome utente è: '+profilo.username),'_blank')">💬 Contatta l'amministratore</button>`:`<p class="muted">Scrivi a <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}</div>`;
     h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">📋 Rose e formazioni · Sostituzioni</summary><div style="margin-top:10px">${campiRegole(lega)}<button class="pri" style="margin-top:12px" onclick="salvaRegole(${lega.id})">Salva regolamento</button></div></details></div>`;
     h+=`<div class="card"><h3>⚙️ Bonus e malus</h3>${campiBonus('lb',lega.bonus)}<button class="pri" style="margin-top:10px" onclick="salvaBonus(${lega.id})">Salva bonus e malus</button></div>`;
     const inc=chk(await db.from('incontri').select('giornata').eq('lega_id',lega.id));
