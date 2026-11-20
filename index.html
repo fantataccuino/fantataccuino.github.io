@@ -707,7 +707,8 @@ function redRender(){
   <div class="card"><label>Risultato</label><div class="row"><input class="n" type="number" min="0" value="${red.ris.casa??''}" onchange="red.ris.casa=this.value===''?null:+this.value"> –
     <input class="n" type="number" min="0" value="${red.ris.trasf??''}" onchange="red.ris.trasf=this.value===''?null:+this.value"></div></div>
   <div class="card"><h3>📷 Importa da screenshot</h3><p class="muted">Carica gli screenshot della partita (formazioni con i cambi ed eventi: gol, assist, cartellini). L'AI compila il tabellino, poi controlli tu.</p>
-    <input type="file" id="red_img" accept="image/*" multiple><button class="pri" id="red_btn" onclick="importaScreen()">Leggi screenshot</button>
+    <input type="file" id="red_img" accept="image/*" multiple><button class="pri" id="red_btn" onclick="importaScreen()">Leggi screenshot</button><p id="red_err" style="color:var(--red)"></p>
+    <p class="muted" style="font-size:12px">Consiglio: 2-3 screenshot (formazioni con cambi + eventi) bastano e l'AI risponde prima.</p>
     <details><summary>📋 Importa da testo (riserva)</summary><p class="muted">Incolla il tabellino in formato JSON (per esempio quello che ti prepara Claude dagli screenshot).</p><textarea id="red_txt" rows="5"></textarea><button onclick="importaTesto()">Importa testo</button></details></div>
   ${red.righe.length?`<div class="row between"><h3>${esc(p.casa)}</h3><button onclick="proponi()">🔄 Ricalcola voti proposti</button></div>${lato('casa').map(riga).join('')}
   <h3>${esc(p.trasferta)}</h3>${lato('trasferta').map(riga).join('')}`:'<p class="muted">Nessun giocatore ancora: importa gli screenshot o aggiungili a mano.</p>'}
@@ -771,7 +772,7 @@ Rispondi SOLO con JSON in questo formato:
     const body={contents:[{parts:[{text:prompt},...imgs.map(d=>({inline_data:{mime_type:'image/jpeg',data:d}}))]}],generationConfig:{responseMimeType:'application/json',temperature:0}};
     const rid=chk(await db.rpc('avvia_lettura',{p_body:body}));
     let e=null;
-    for(let i=0;i<60&&!e;i++){await sleep(2000);b.textContent=`L'AI sta leggendo… ${(i+1)*2}s`;e=chk(await db.rpc('esito_lettura',{p_id:rid}))}
+    for(let i=0;i<100&&!e;i++){await sleep(2000);b.textContent=`L'AI sta leggendo… ${(i+1)*2}s`;e=chk(await db.rpc('esito_lettura',{p_id:rid}))}
     if(!e) throw new Error('Nessuna risposta dall\'AI, riprova');
     if(e.timeout) throw new Error('L\'AI ci ha messo troppo: riprova con meno screenshot');
     if(e.errore) throw new Error(e.errore);
@@ -780,7 +781,7 @@ Rispondi SOLO con JSON in questo formato:
     const t=(d.candidates?.[0]?.content?.parts||[]).map(x=>x.text||'').join('').replace(/^```(json)?/,'').replace(/```$/,'').trim();
     const n=caricaTabellino(JSON.parse(t));
     toast(n+' giocatori letti: controlla e correggi');redRender();
-  }catch(e){toast('Errore: '+e.message,true);b.disabled=false;b.textContent='Leggi screenshot'}
+  }catch(e){toast('Errore: '+e.message,true);const er=document.getElementById('red_err');if(er)er.textContent='❌ '+e.message;b.disabled=false;b.textContent='Leggi screenshot'}
 }
 function importaTesto(){
   try{const t=val('red_txt').replace(/^```(json)?/,'').replace(/```$/,'').trim();const n=caricaTabellino(JSON.parse(t));toast(n+' giocatori importati');redRender()}
