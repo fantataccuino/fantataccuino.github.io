@@ -142,7 +142,7 @@ function renderNav(){
     +(FEAT.link_donazioni?`<button onclick="window.open('${esc(FEAT.link_donazioni)}','_blank')">☕ Sostienici</button>`:'');
 }
 function vai(p){
-  pagina=p; renderNav(); if(typeof draftTimer!=='undefined') clearTimeout(draftTimer); if(typeof sngTimer!=='undefined') clearTimeout(sngTimer);
+  pagina=p; renderNav(); if(typeof draftTimer!=='undefined') clearTimeout(draftTimer); if(typeof sngTimer!=='undefined') clearTimeout(sngTimer); if(typeof sngIv!=='undefined') clearInterval(sngIv);
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
   ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,admin:pAdmin})[p]();
@@ -734,8 +734,9 @@ async function pSng(){
   if(sg.tab==='regole') h+=`<div class="card"><h3>Come funziona il Calcetto</h3><p class="muted">
     1. Ogni tavolo vale per <b>una o più partite di Serie A</b> scelte dalla redazione: puoi scegliere solo giocatori di quelle squadre.<br>
     2. Entri pagando l'ingresso in gettoni. <b>Una volta iscritto non puoi più uscire</b>, come nel Sit & Go del poker.<br>
-    3. A tavolo pieno parte il <b>draft a carte</b>, in 6 giri: 🧤 Portiere, 🛡️ Difensore, ⚙️ Centrocampista, ⚡ Attaccante, 🃏 Jolly (difensore, centrocampista o attaccante, scegli tu) e 🪑 Riserva (qualsiasi ruolo).<br>
-    4. A ogni giro, uno alla volta, ricevi <b>fino a 5 carte</b> e ne scegli una. È <b>equo</b>: i giocatori di quel ruolo sono divisi in fasce di forza (⭐⭐⭐⭐⭐ → ⭐) e ognuno riceve un giocatore diverso da ogni fascia. Ogni giocatore può stare in <b>una sola squadra</b>: le tue carte sono solo tue e chi viene scelto sparisce per tutti.<br>
+    3. A tavolo pieno parte il <b>draft a carte</b>, in 6 giri: 🧤 Portiere, 🛡️ Difensore, ⚙️ Centrocampista, ⚡ Attaccante, 🃏 Jolly (difensore, centrocampista o attaccante) e 🪑 Riserva (qualsiasi ruolo).<br>
+    4. Le carte sono i <b>titolari probabili</b> delle partite del tavolo, uguali per tutti. Si sceglie uno alla volta: chi prende un giocatore lo toglie agli altri.<br>
+    4a. È <b>equo</b> grazie al <b>serpentone</b>: chi sceglie per primo in un giro sceglie per ultimo in quello dopo. Chi si prende il più forte in un ruolo paga nel ruolo successivo.<br>
     4b. Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
     5. Punti = somma dei fantavoti dei 5 titolari. Se un titolare prende s.v. entra la riserva (una volta sola); se anche la riserva è s.v., quel posto vale 0.<br>
     6. Come nel Sit & Go: il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei gettoni in gioco, il resto è il montepremi. Tavoli da 2 e 4: montepremi tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
@@ -748,7 +749,7 @@ async function salvaTavolo(id,vuoto){
   if(!cp.length) return toast('Scegli almeno una partita',true);
   const o={nome:val('mt_nome')||null,partite:cp.map(x=>+x.value),chiusura:cp.map(x=>x.dataset.d).sort()[0]};
   if(vuoto){o.posti=+val('mt_posti');o.ingresso=+val('mt_ing')||0}
-  const maxP=o.partite.length===1?4:o.partite.length===2?6:8;
+  const maxP=o.partite.length===1?2:o.partite.length===2?4:o.partite.length===3?6:8;
   if((o.posti||0)>maxP) return toast(`Con ${o.partite.length} partit${o.partite.length===1?'a':'e'} il tavolo può essere al massimo da ${maxP}`,true);
   chk(await db.from('sng_tavoli').update(o).eq('id',id));
   toast('Tavolo modificato');sg.tab='gestisci';pSng();
@@ -768,7 +769,10 @@ async function creaTavoli(){
   if(!cp.length) return toast('Scegli almeno una partita',true);
   const partite=cp.map(x=>+x.value),chiusura=cp.map(x=>x.dataset.d).sort()[0];
   const nome=val('ct_nome')||null;
-  const maxP=partite.length===1?4:partite.length===2?6:8;
+  const maxP=partite.length===1?2:partite.length===2?4:partite.length===3?6:8;
+  const prC=chk(await db.from('probabili').select('partita_id').in('partita_id',partite));
+  const senza=partite.filter(id=>!prC.some(x=>x.partita_id===id));
+  if(senza.length&&!confirm(`${senza.length} partit${senza.length===1?'a non ha':'e non hanno'} le probabili formazioni: le carte saranno prese da tutta la rosa (meno equo). Creare lo stesso?`))return;
   if([...document.querySelectorAll('.ct:checked')].some(x=>+x.value>maxP)) return toast(`Con ${partite.length} partit${partite.length===1?'a':'e'} il tavolo può essere al massimo da ${maxP}`,true);
   const righe=[...document.querySelectorAll('.ct:checked')].map(x=>({giornata:sg.g,posti:+x.value,ingresso:+document.getElementById('ci_'+x.value).value||0,partite,chiusura,nome}));
   if(!righe.length) return toast('Scegli almeno un tipo di tavolo',true);
@@ -781,9 +785,10 @@ async function sngEntra(id,ing){
   toast(data==='draft'?'Tavolo pieno: il draft è partito!':'Sei al tavolo!');sg.tav=id;pSng();
 }
 async function sngEsci(id){const {error}=await db.rpc('sng_esci',{p_tavolo:id});if(error)return toast(error.message,true);toast('Sei uscito, gettoni rimborsati');pSng()}
+let sngIv=null;
 async function tavoloView(){
-  clearTimeout(sngTimer);
-  await db.rpc('sng_avanza',{p_tavolo:sg.tav});
+  clearTimeout(sngTimer);clearInterval(sngIv);
+  const {error:errAv}=await db.rpc('sng_avanza',{p_tavolo:sg.tav});
   const t=chk(await db.from('sng_tavoli').select('*').eq('id',sg.tav).single());
   const isc=chk(await db.from('sng_iscritti').select('*, profili(username)').eq('tavolo_id',t.id));
   const sc=chk(await db.from('sng_scelte').select('*, giocatori(id,nome,ruolo,squadra)').eq('tavolo_id',t.id).order('n'));
@@ -795,7 +800,7 @@ async function tavoloView(){
   const sec=t.scadenza_scelta?Math.max(0,Math.round((new Date(t.scadenza_scelta)-new Date())/1000)):0;
   const mie=sc.filter(s=>s.utente_id===utente.id);
   let h=`<button onclick="sg.tav=null;pSng()">← Calcetto</button><h2 style="margin-top:12px">${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</h2>
-  <p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${montepremi(t)}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
+  ${errAv?`<p style="color:var(--red)">❌ ${esc(errAv.message)}</p>`:''}<p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso 🪙 ${t.ingresso} · Montepremi 🪙 ${montepremi(t)}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
   if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>• ${esc(i.profili?.username)}</div>`).join('')}</div>`;
   if(t.stato==='annullato') h+=`<div class="card"><p>↩️ Tavolo annullato: non si è riempito prima del calcio d'inizio. I gettoni sono stati restituiti.</p></div>`;
   if(t.stato==='draft'){
@@ -803,19 +808,21 @@ async function tavoloView(){
     h+=`<div class="card" style="border-color:${mio?'var(--gold)':'var(--line)'}"><div class="row between"><b>Giro ${rd+1} di 6 · ${GIRI[rd]||''}</b><span>⏱️ <b id="cd" style="font-size:20px;color:var(--gold)">${sec}</b>s</span></div>
       <h3 style="margin:8px 0">${mio?'🔥 Tocca a te: scegli una carta!':'Tocca a '+nome(turno)+'…'}</h3>
       <p class="muted" style="font-size:12px">Ordine del giro: ${(t.ordine||[]).map(nome).join(' → ')} (al giro dopo si inverte)</p></div>`;
-    if(mio){
-      const carte=chk(await db.from('sng_carte').select('fascia, giocatori(id,nome,ruolo,squadra,foto,quotazione)').eq('tavolo_id',t.id).eq('utente_id',utente.id).eq('round',rd).order('fascia'));
-      const gids=carte.map(c=>c.giocatori.id);
-      const vv=gids.length?chk(await db.from('voti').select('giocatore_id,fantavoto').in('giocatore_id',gids).not('fantavoto','is',null)):[];
-      const fm=id=>{const x=vv.filter(v=>v.giocatore_id===id);return x.length?(x.reduce((a,v)=>a+Number(v.fantavoto),0)/x.length).toFixed(1):'-'};
-      const COL=['','#f2c14e','#c0c7cf','#cd7f32','#2ecc71','#7f8c8d'];
-      h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${carte.map(c=>{const g=c.giocatori;return `<div class="card" style="text-align:center;border:2px solid ${COL[c.fascia]};margin:0;padding:10px">
-        <div style="color:${COL[c.fascia]};font-size:13px">${'⭐'.repeat(6-c.fascia)}</div>
-        ${g.foto?`<img src="${esc(g.foto)}" alt="" style="width:70px;height:70px;border-radius:50%;background:#fff;object-fit:cover;margin:6px auto;display:block">`:'<div style="font-size:44px">👤</div>'}
-        <b>${esc(g.nome)}</b><div class="muted" style="font-size:12px">${ruolo(g.ruolo)}${esc(g.squadra)}</div>
-        <div style="font-size:12px;margin:4px 0">FM <b>${fm(g.id)}</b> · Q ${g.quotazione}</div>
-        <button class="ok" style="width:100%" onclick="sngScegli(${g.id})">Scegli</button></div>`}).join('')}</div>`;
-    }
+    const RU=[['P'],['D'],['C'],['A'],['D','C','A'],['P','D','C','A']][rd]||[];
+    const prob=t.partite?.length?chk(await db.from('probabili').select('giocatore_id').in('partita_id',t.partite)).map(x=>x.giocatore_id):[];
+    let pool=prob.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto,quotazione').in('id',prob)):chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto,quotazione').in('squadra',sg.squadre).eq('attivo',true));
+    pool=pool.filter(g=>RU.includes(g.ruolo));
+    const presi={};sc.forEach(x=>presi[x.giocatore_id]=x.utente_id);
+    const gids=pool.map(g=>g.id);
+    const vv=gids.length?chk(await db.from('voti').select('giocatore_id,fantavoto').in('giocatore_id',gids).not('fantavoto','is',null)):[];
+    const fmN=id=>{const x=vv.filter(v=>v.giocatore_id===id);return x.length?x.reduce((a,v)=>a+Number(v.fantavoto),0)/x.length:0};
+    pool.sort((a,b)=>(!!presi[a.id])-(!!presi[b.id])||b.quotazione-a.quotazione||fmN(b.id)-fmN(a.id));
+    h+=`<p class="muted" style="font-size:12px">${prob.length?'Carte: i titolari probabili':'⚠️ Probabili formazioni non impostate: carte da tutta la rosa'} · ${pool.filter(g=>!presi[g.id]).length} disponibili</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${pool.map(g=>{const pr=presi[g.id];return `<div class="card" style="text-align:center;margin:0;padding:10px;${pr?'opacity:.35':'border:2px solid var(--gold)'}">
+      ${g.foto?`<img src="${esc(g.foto)}" alt="" style="width:64px;height:64px;border-radius:50%;background:#fff;object-fit:cover;margin:4px auto;display:block">`:'<div style="font-size:40px">👤</div>'}
+      <b>${esc(g.nome)}</b><div class="muted" style="font-size:12px">${ruolo(g.ruolo)}${esc(g.squadra)}</div>
+      <div style="font-size:12px;margin:4px 0">FM <b>${fmN(g.id)?fmN(g.id).toFixed(1):'-'}</b> · Q ${g.quotazione}</div>
+      ${pr?`<small>preso da <b>${nome(pr)}</b></small>`:mio?`<button class="ok" style="width:100%" onclick="sngScegli(${g.id})">Scegli</button>`:''}</div>`}).join('')}</div>`;
   }
   if(['draft','in_gioco','chiuso'].includes(t.stato)){
     const ord=[...isc].sort((a,b)=>(a.posizione||99)-(b.posizione||99));
@@ -828,8 +835,8 @@ async function tavoloView(){
   app.innerHTML=h;
   if(t.stato==='draft'){
     let s=sec;const tick=()=>{const el=document.getElementById('cd');if(!el)return;s=Math.max(0,s-1);el.textContent=s};
-    const iv=setInterval(tick,1000);
-    sngTimer=setTimeout(()=>{clearInterval(iv);if(pagina==='sng'&&sg.tav===t.id)tavoloView()},turno===utente.id?Math.min(15000,(sec+1)*1000):4000);
+    sngIv=setInterval(tick,1000);
+    sngTimer=setTimeout(()=>{clearInterval(sngIv);if(pagina==='sng'&&sg.tav===t.id)tavoloView()},turno===utente.id?Math.min(15000,(sec+1)*1000):4000);
   } else if(t.stato==='aperto') sngTimer=setTimeout(()=>{if(pagina==='sng'&&sg.tav===t.id)tavoloView()},6000);
 }
 let tSg;
@@ -867,7 +874,7 @@ async function redLista(h){
     <button class="${g.pubblicata?'del':'ok'}" onclick="pubblica(${g.numero},${!g.pubblicata})">${g.pubblicata?'Ritira voti':'Pubblica la giornata'}</button></div>
   ${pp.map(p=>`<div class="card row between" style="padding:10px"><span><b>${esc(p.casa)} – ${esc(p.trasferta)}</b> ${p.gol_casa!==null?`<b style="color:var(--gold)">${p.gol_casa}-${p.gol_trasferta}</b>`:''}<br>
     <small class="muted">${fmt(p.data)}</small> ${p.stato_red==='pronta'?'<span class="badge" style="color:var(--green)">✅ Pronta</span>':'<span class="badge">Da fare</span>'}</span>
-    <button class="pri" onclick="redApri(${p.api_id})">Apri</button></div>`).join('')}`;
+    <div class="row"><button onclick="probApri(${p.api_id})">📋 Probabili</button><button class="pri" onclick="redApri(${p.api_id})">Voti</button></div></div>`).join('')}`;
 }
 async function redApri(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
@@ -1004,17 +1011,57 @@ async function salvaPartita(){
   toast('Partita salvata ✅');red=null;pAdmin();
 }
 
+// ---------- probabili formazioni (redazione) ----------
+let prb=null;
+async function probApri(id){
+  const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
+  const gg=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('squadra',[p.casa,p.trasferta]).eq('attivo',true));
+  const ex=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
+  let sel=new Set(ex),proposta=false;
+  if(!ex.length){
+    const vv=chk(await db.from('voti').select('giocatore_id,minuti,giornata').in('giocatore_id',gg.map(g=>g.id)).lt('giornata',p.giornata).gte('giornata',p.giornata-3));
+    const min={};vv.forEach(v=>min[v.giocatore_id]=(min[v.giocatore_id]||0)+(v.minuti||0));
+    for(const sq of [p.casa,p.trasferta]){
+      const t=gg.filter(g=>g.squadra===sq&&min[g.id]).sort((a,b)=>min[b.id]-min[a.id]);
+      const P=t.filter(g=>g.ruolo==='P').slice(0,1),A=t.filter(g=>g.ruolo!=='P').slice(0,10);
+      [...P,...A].forEach(g=>sel.add(g.id));
+    }
+    proposta=sel.size>0;
+  }
+  prb={p,gg,sel,proposta};probRender();
+}
+function probRender(){
+  const {p,gg,sel,proposta}=prb;
+  const blocco=sq=>{const l=gg.filter(g=>g.squadra===sq).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome));
+    const n=l.filter(g=>sel.has(g.id)).length,np=l.filter(g=>sel.has(g.id)&&g.ruolo==='P').length;
+    return `<div class="card"><div class="row between"><h3 style="margin:0">${esc(sq)}</h3><span class="badge" style="color:${n===11&&np===1?'var(--green)':'var(--red)'}">${n}/11 · P ${np}/1</span></div>
+    ${l.map(g=>`<div style="padding:4px 0"><label style="color:var(--txt)"><input type="checkbox" ${sel.has(g.id)?'checked':''} onchange="probTog(${g.id},this.checked)"> ${ruolo(g.ruolo)}${esc(g.nome)}</label></div>`).join('')}</div>`};
+  app.innerHTML=`<button onclick="prb=null;pAdmin()">← Partite della giornata</button><h2 style="margin-top:12px">📋 Probabili: ${esc(p.casa)} – ${esc(p.trasferta)}</h2>
+  <p class="muted">${proposta?'💡 Proposta automatica in base ai minuti delle ultime giornate: correggi e salva.':'Spunta gli 11 titolari probabili di ogni squadra (1 portiere).'} Le vedono anche gli utenti nella pagina della partita.</p>
+  ${blocco(p.casa)}${blocco(p.trasferta)}
+  <button class="pri" style="width:100%;margin-bottom:20px" onclick="probSalva()">💾 Salva probabili formazioni</button>`;
+}
+function probTog(id,v){v?prb.sel.add(id):prb.sel.delete(id);probRender()}
+async function probSalva(){
+  const id=prb.p.api_id;
+  chk(await db.from('probabili').delete().eq('partita_id',id));
+  if(prb.sel.size) chk(await db.from('probabili').insert([...prb.sel].map(g=>({partita_id:id,giocatore_id:g}))));
+  toast('Probabili formazioni salvate');prb=null;pAdmin();
+}
+
 // ---------- pagelle (utenti) ----------
 async function pagelle(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
   const gg=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto').in('squadra',[p.casa,p.trasferta]));
   const vv=gg.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',gg.map(g=>g.id))):[];
+  const pr=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
+  const probHtml=pr.length&&!vv.length?`<div class="card"><h3>📋 Probabili formazioni</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${[p.casa,p.trasferta].map(sq=>`<div><b>${esc(sq)}</b>${gg.filter(g=>g.squadra===sq&&pr.includes(g.id)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(g=>`<div style="font-size:13px;padding:2px 0">${ruolo(g.ruolo)}${esc(g.nome)}</div>`).join('')}</div>`).join('')}</div></div>`:'';
   const blocco=sq=>{const r=vv.map(v=>({...v,g:gg.find(x=>x.id===v.giocatore_id)})).filter(v=>v.g.squadra===sq).sort((a,b)=>ORD[a.g.ruolo]-ORD[b.g.ruolo]||(b.minuti-a.minuti));
     return `<div class="card"><h3>${esc(sq)}</h3>${r.map(v=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row between"><span>${ruolo(v.g.ruolo)}<b>${esc(v.g.nome)}</b> <small class="muted">${v.minuti??''}'</small></span>
       <span><b style="font-size:18px">${v.voto??'s.v.'}</b> <small class="muted">fv</small> <b style="color:var(--gold)">${v.fantavoto??'-'}</b></span></div>
       ${bonusRighe(v).length?`<small class="muted">${bonusRighe(v).join(' · ')}</small>`:''}${v.giudizio?`<div style="font-style:italic;margin-top:3px">"${esc(v.giudizio)}"</div>`:''}</div>`).join('')||'<p class="muted">Voti non ancora pubblicati.</p>'}</div>`};
-  app.innerHTML=`<button onclick="pSerieA()">← Serie A</button><h2 style="margin-top:12px">Pagelle FantaTaccuino</h2>
-  <div class="card row between"><b>${esc(p.casa)}</b><span class="ris">${p.gol_casa??''} - ${p.gol_trasferta??''}</span><b>${esc(p.trasferta)}</b></div>${blocco(p.casa)}${blocco(p.trasferta)}`;
+  app.innerHTML=`<button onclick="pSerieA()">← Serie A</button><h2 style="margin-top:12px">${vv.length?'Pagelle FantaTaccuino':'La partita'}</h2>
+  <div class="card row between"><b>${esc(p.casa)}</b><span class="ris">${p.gol_casa??''} - ${p.gol_trasferta??''}</span><b>${esc(p.trasferta)}</b></div>${probHtml}${vv.length?blocco(p.casa)+blocco(p.trasferta):(probHtml?'':'<p class="muted">Probabili formazioni e pagelle non ancora disponibili.</p>')}`;
 }
 
 let sa={g:null};
@@ -1034,7 +1081,7 @@ async function pAdmin(){
   const T=[['redazione','📝 Redazione'],['utenti','Utenti'],['funzioni','Funzioni'],['dati','Dati API'],['giornate','Giornate'],['voti','Voti'],['giocatori','Giocatori'],['articoli','Articoli']];
   let h=`<h2>Admin</h2><div class="tabs">${T.map(([k,v])=>`<button class="${ad.tab===k?'on':''}" onclick="ad.tab='${k}';pAdmin()">${v}</button>`).join('')}</div>`;
 
-  if(ad.tab==='redazione'){ if(red) return redRender(); app.innerHTML=await redLista(h); return; }
+  if(ad.tab==='redazione'){ if(prb) return probRender(); if(red) return redRender(); app.innerHTML=await redLista(h); return; }
   if(ad.tab==='funzioni'){
     await caricaFeat();
     const F=[['f_ombra','👥 Lega Ombra','Chi gioca su altre app importa la sua rosa e gioca un campionato parallelo con i voti FantaTaccuino.'],
