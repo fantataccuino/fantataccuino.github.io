@@ -2,563 +2,494 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#123524">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="FantaTaccuino">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FantaTaccuino</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{
-  --bg:#123524; --bg2:#0c2619; --paper:#f7f1e1; --paper2:#efe6cf; --ink:#1f2421;
-  --muted:#6b6b5f; --line:#cddbe8; --red:#d94a2b; --green:#2f7d4f; --gold:#e0b341;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--paper);font-family:Inter,system-ui,sans-serif;font-size:15px}
-body{background:radial-gradient(circle at 50% -20%,#1d4d35 0,var(--bg) 55%,var(--bg2) 100%) fixed;min-height:100vh}
-a{color:inherit;text-decoration:none}
-main{max-width:720px;margin:0 auto;padding:14px 14px 90px}
-.hand{font-family:Caveat,cursive;font-size:34px;margin:6px 0 4px;line-height:1}
-h3{margin:22px 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#b9cdbf}
-small,.muted{color:var(--muted)}
-main>p.muted,main>.muted{color:#a9bfb1}
-
-/* header */
-.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:12px 14px;padding-top:max(12px,env(safe-area-inset-top));background:rgba(12,38,25,.92);backdrop-filter:blur(8px);border-bottom:1px solid #ffffff14}
-.logo{font-family:Caveat,cursive;font-size:28px;flex:1}
-.back{font-size:30px;line-height:1;padding:0 6px}
-
-/* paper */
-.card{border-radius:14px;margin-bottom:10px}
-.paper{background:var(--paper);color:var(--ink);padding:14px;
-  background-image:linear-gradient(90deg,transparent 30px,#e9a3a3 30px,#e9a3a3 31.5px,transparent 31.5px),
-  repeating-linear-gradient(var(--paper) 0 27px,var(--line) 27px 28px);
-  box-shadow:0 6px 18px #0005}
-.paper.plain{background-image:none}
-.lega{display:flex;align-items:center;gap:10px;background:var(--paper);color:var(--ink);padding:14px 14px 14px 42px;position:relative;box-shadow:0 4px 12px #0004}
-.lega:before{content:"";position:absolute;left:30px;top:0;bottom:0;width:1.5px;background:#e9a3a3}
-.lega div{flex:1}.lega b{display:block;font-size:17px}.lega small{display:block;margin-top:3px}
-.tag{background:var(--gold);color:#3a2b00;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px}
-
-/* buttons/forms */
-.btn{display:inline-flex;justify-content:center;align-items:center;gap:6px;border:0;border-radius:12px;padding:13px 16px;font:600 15px Inter;background:var(--red);color:#fff;cursor:pointer;width:100%;text-align:center}
-.btn.alt{background:var(--paper);color:var(--ink)}
-.btn.green{background:var(--green)}
-.btn:disabled{opacity:.5}
-.btn.sm{width:auto;padding:7px 11px;font-size:13px;border-radius:9px}
-.ghost{background:none;border:1px solid #ffffff40;color:var(--paper);border-radius:9px;padding:6px 10px;font:600 13px Inter}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
-label{display:block;font-size:13px;font-weight:600;margin:10px 0;color:var(--ink)}
-input,select{display:block;width:100%;margin-top:5px;padding:12px;border-radius:10px;border:1.5px solid #d6cdb3;background:#fffdf6;font:15px Inter;color:var(--ink)}
-input:focus,select:focus{outline:none;border-color:var(--green)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
-
-/* auth */
-.auth{max-width:420px;margin:0 auto;padding:40px 16px}
-.brand{text-align:center;margin-bottom:18px}.brand .big{font-size:54px}
-.brand h1{font-family:Caveat,cursive;font-size:52px;margin:0}.brand p{margin:0;color:#b9cdbf}
-.tabs{display:flex;background:var(--paper2);border-radius:11px;padding:4px;margin-bottom:6px}
-.tabs button{flex:1;border:0;background:none;padding:10px;border-radius:8px;font:600 14px Inter;color:var(--muted)}
-.tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px #0002}
-
-/* lega */
-.lega-head small{color:#b9cdbf}
-.tabbar{display:flex;gap:6px;overflow-x:auto;margin:12px -14px 14px;padding:0 14px;scrollbar-width:none}
-.tabbar::-webkit-scrollbar{display:none}
-.tabbar a{flex:none;padding:9px 14px;border-radius:20px;background:#ffffff12;font-weight:600;font-size:14px}
-.tabbar a.on{background:var(--paper);color:var(--ink)}
-table.tab{width:100%;border-collapse:collapse;font-size:14px}
-.tab th{font-size:11px;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 4px}
-.tab td{padding:9px 4px;border-top:1px solid #0000000f}
-.tab td.n,.tab th.n{text-align:right}
-.tab .me td{font-weight:800}
-.pl{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #00000010}
-.pl:first-child{border-top:0}
-.pl .info{flex:1;min-width:0}.pl .info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pl .info small{display:block}
-.r{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff}
-.rP{background:#e0a100}.rD{background:#2f7d4f}.rC{background:#2a6fb0}.rA{background:#c0392b}
-.sec{font-family:Caveat,cursive;font-size:24px;margin:10px 0 2px;display:flex;justify-content:space-between;align-items:baseline}
-.sec small{font-family:Inter;font-size:12px}
-.chips{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
-.chip{border:1.5px solid #d6cdb3;background:#fffdf6;border-radius:20px;padding:6px 12px;font:600 13px Inter;color:var(--ink)}
-.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.pill{font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;background:#0000000d;color:var(--muted)}
-.pill.t{background:var(--green);color:#fff}.pill.p{background:var(--gold);color:#3a2b00}
-.pl.sel-t{background:#2f7d4f14;border-radius:8px}.pl.sel-p{background:#e0b34122;border-radius:8px}
-.loading{padding:40px;text-align:center;color:#b9cdbf}
-.sticky-save{position:fixed;left:0;right:0;bottom:0;padding:12px 14px;padding-bottom:max(12px,env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg2) 35%);z-index:4}
-.sticky-save .btn{max-width:692px;margin:0 auto;display:flex}
-.box{background:#fff8;border:1.5px dashed #c8bc99;border-radius:12px;padding:12px;margin:10px 0}
-.code{font:800 28px ui-monospace,monospace;letter-spacing:.15em;text-align:center;padding:8px}
-.fv{font-weight:800;font-size:16px;min-width:38px;text-align:right}
-details summary{cursor:pointer;font-weight:600;padding:6px 0}
-#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;transition:.25s;z-index:20;max-width:90vw;text-align:center;box-shadow:0 6px 20px #0006}
-#toast.show{transform:translateX(-50%) translateY(0)}
-#toast.err{background:var(--red)}
+:root{--bg:#0b1a12;--card:#12281c;--card2:#18352a;--line:#24493a;--txt:#eaf4ee;--muted:#93b3a2;--gold:#f2c14e;--green:#2ecc71;--red:#e74c3c}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);padding-bottom:40px}
+header{position:sticky;top:0;z-index:10;background:#081209;border-bottom:2px solid var(--gold)}
+.brand{display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
+.brand h1{margin:0;font-size:20px;letter-spacing:.5px}
+.brand h1 span{color:var(--gold)}
+nav{display:flex;gap:6px;overflow-x:auto;padding:0 10px 10px}
+nav button{flex:0 0 auto}
+main{max-width:820px;margin:0 auto;padding:14px}
+h2{margin:6px 0 14px;color:var(--gold)}
+h3{margin:4px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.card img{width:100%;border-radius:8px;margin-bottom:8px}
+button{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer}
+button.on,button.pri{background:var(--gold);color:#1a1300;border-color:var(--gold);font-weight:600}
+button.del{background:transparent;border-color:var(--red);color:var(--red)}
+button.ok{background:var(--green);border-color:var(--green);color:#04210f;font-weight:600}
+input,select,textarea{background:#0d2016;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px;font-size:15px;width:100%;margin:4px 0 10px}
+input[type=checkbox]{width:auto;margin:0 6px 0 0}
+input.n{width:56px;text-align:center;margin:0}
+label{font-size:13px;color:var(--muted)}
+.muted{color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 5px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:500}
+.ris{font-size:20px;font-weight:700;color:var(--gold)}
+.pt{display:inline-block;padding:2px 8px;border-radius:10px;background:var(--card2);font-weight:700}
+.pt3{background:var(--green);color:#04210f}.pt1{background:var(--gold);color:#1a1300}
+.badge{font-size:11px;padding:2px 6px;border-radius:6px;background:var(--card2);color:var(--muted)}
+.ruolo{display:inline-block;width:22px;text-align:center;border-radius:5px;font-weight:700;font-size:12px;padding:2px 0;margin-right:6px}
+.rP{background:#f39c12;color:#000}.rD{background:#27ae60}.rC{background:#2980b9}.rA{background:#c0392b}
+#chatbox{height:55vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+.msg{margin-bottom:8px}.msg b{color:var(--gold)}.msg small{color:var(--muted);margin-left:6px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--green);color:#04210f;padding:10px 16px;border-radius:10px;font-weight:600;display:none;z-index:99;max-width:90%}
+#toast.err{background:var(--red);color:#fff}
+.auth{max-width:380px;margin:40px auto}
+.logo{text-align:center;font-size:44px;margin-bottom:4px}
+details summary{cursor:pointer;color:var(--muted);margin-top:8px}
 </style>
 </head>
 <body>
-<div id="app"><div class="loading">Caricamento…</div></div>
+<header id="top" style="display:none">
+  <div class="brand"><h1>⚽ Fanta<span>Taccuino</span></h1><button onclick="esci()">Esci</button></div>
+  <nav id="nav"></nav>
+</header>
+<main id="app"></main>
 <div id="toast"></div>
 
 <script>
-const SUPABASE_URL = 'https://oyjgurfrdnfkottzkedi.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_59f3y_F2MPelHN2E13bHKA_DWhVnHia';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = 'https://smavbegqdltpoicnhycf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PXBoq1C1uLT-9ZFk8a12jQ_xMCWuu2h';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const RUOLI = {P:'Portieri', D:'Difensori', C:'Centrocampisti', A:'Attaccanti'};
-const MODULI = {'3-4-3':[3,4,3],'3-5-2':[3,5,2],'4-3-3':[4,3,3],'4-4-2':[4,4,2],'4-5-1':[4,5,1],'5-3-2':[5,3,2],'5-4-1':[5,4,1]};
-const REGOLE = [['gol','Gol'],['assist','Assist'],['ammonizione','Ammonizione'],['espulsione','Espulsione'],
-  ['rigore_sbagliato','Rigore sbagliato'],['rigore_parato','Rigore parato'],['gol_subito','Gol subito (portiere)'],
-  ['autogol','Autogol'],['porta_inviolata','Porta inviolata (portiere)'],['soglia_gol','Soglia 1° gol'],['fascia_gol','Ampiezza fascia gol']];
+const app = document.getElementById('app');
+let utente = null, profilo = null, pagina = 'home', chatCanale = null;
 
-let me = null, profilo = null, CTX = null;
-let invito = new URLSearchParams(location.search).get('invito');
+// ---------- utilità ----------
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className=err?'err':'';t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3000)}
+function chk(r){if(r.error){toast(r.error.message,true);throw r.error}return r.data}
+function fmt(iso){return new Date(iso).toLocaleString('it-IT',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+function val(id){return document.getElementById(id).value.trim()}
+const ORD = {P:0,D:1,C:2,A:3};
+function ruolo(r){return `<span class="ruolo r${r}">${r}</span>`}
 
-function toast(msg, err) {
-  const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
-  clearTimeout(t._t); t._t = setTimeout(() => t.className = '', 3200);
-}
-function traduci(m) {
-  m = m || '';
-  if (m.includes('Invalid login')) return 'Email o password errati';
-  if (m.includes('already registered')) return 'Questa email è già registrata';
-  if (m.includes('Password should')) return 'La password deve avere almeno 6 caratteri';
-  return m;
-}
-const dataIt = d => d ? new Date(d).toLocaleString('it-IT', {weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) : '—';
+// ---------- accesso ----------
+db.auth.onAuthStateChange((ev,session)=>{
+  if(ev==='TOKEN_REFRESHED') return;
+  if(session && utente && session.user.id===utente.id && profilo) return;
+  setTimeout(()=>avvia(session),0);
+});
 
-async function logout() { await sb.auth.signOut(); location.hash = ''; }
-
-async function init() {
-  const { data: { session } } = await sb.auth.getSession();
-  me = session?.user || null;
-  sb.auth.onAuthStateChange((_e, s) => { const prev = me?.id; me = s?.user || null; if (prev !== me?.id) route(); });
-  window.addEventListener('hashchange', route);
-  route();
+async function avvia(session){
+  utente = session?.user || null;
+  if(!utente){profilo=null;document.getElementById('top').style.display='none';renderAuth();return}
+  const {data} = await db.from('profili').select('*').eq('id',utente.id).maybeSingle();
+  profilo = data;
+  if(!profilo) return schermata('Account non attivo','Il tuo account non è stato accettato.');
+  if(!profilo.approvato) return schermata('In attesa di approvazione','La tua registrazione è arrivata. Un admin deve accettarla prima che tu possa entrare: riprova più tardi.');
+  document.getElementById('top').style.display='block';
+  renderNav(); vai(pagina);
 }
 
-async function route() {
-  if (!me) return viewAuth();
-  if (!profilo || profilo.id !== me.id) {
-    const { data } = await sb.from('profili').select('*').eq('id', me.id).maybeSingle();
-    profilo = data || { id: me.id, username: me.email.split('@')[0] };
+function schermata(t,m){
+  document.getElementById('top').style.display='none';
+  app.innerHTML=`<div class="auth card"><div class="logo">⚽</div><h2 style="text-align:center">${t}</h2><p class="muted">${m}</p>
+  <div class="row"><button onclick="location.reload()">Riprova</button><button onclick="esci()">Esci</button></div></div>`;
+}
+
+let modoAuth='login';
+function renderAuth(){
+  app.innerHTML=`<div class="auth"><div class="logo">⚽</div><h2 style="text-align:center">FantaTaccuino</h2>
+  <div class="card"><div class="tabs">
+    <button class="${modoAuth==='login'?'on':''}" onclick="modoAuth='login';renderAuth()">Accedi</button>
+    <button class="${modoAuth==='reg'?'on':''}" onclick="modoAuth='reg';renderAuth()">Registrati</button></div>
+    ${modoAuth==='reg'?'<label>Nome utente</label><input id="a_user" maxlength="20">':''}
+    <label>Email</label><input id="a_mail" type="email">
+    <label>Password (almeno 6 caratteri)</label><input id="a_pass" type="password">
+    <button class="pri" style="width:100%" onclick="${modoAuth==='login'?'accedi()':'registrati()'}">${modoAuth==='login'?'Entra':'Crea account'}</button>
+  </div></div>`;
+}
+async function accedi(){
+  const {error}=await db.auth.signInWithPassword({email:val('a_mail'),password:val('a_pass')});
+  if(error) toast('Email o password errati',true);
+}
+async function registrati(){
+  const username=val('a_user');
+  if(username.length<3) return toast('Nome utente di almeno 3 caratteri',true);
+  const {error}=await db.auth.signUp({email:val('a_mail'),password:val('a_pass'),options:{data:{username}}});
+  if(error) return toast(error.message,true);
+  toast('Registrazione inviata!');
+}
+async function esci(){await db.auth.signOut();utente=null;profilo=null;pagina='home';renderAuth()}
+
+// ---------- navigazione ----------
+const PAGINE = {home:'📰 Notizie',pronostici:'🎯 Pronostici',fanta:'📋 Fantacalcio',chat:'💬 Chat',admin:'⚙️ Admin'};
+function renderNav(){
+  document.getElementById('nav').innerHTML=Object.entries(PAGINE)
+    .filter(([k])=>k!=='admin'||profilo.ruolo==='admin')
+    .map(([k,v])=>`<button class="${k===pagina?'on':''}" onclick="vai('${k}')">${v}</button>`).join('');
+}
+function vai(p){
+  pagina=p; renderNav();
+  if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
+  app.innerHTML='<p class="muted">Caricamento…</p>';
+  ({home:pHome,pronostici:pPronostici,fanta:pFanta,chat:pChat,admin:pAdmin})[p]();
+}
+
+// ---------- notizie ----------
+async function pHome(){
+  const art=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
+  app.innerHTML=`<h2>Notizie</h2>`+(art.length?art.map(a=>`<article class="card">
+    ${a.immagine_url?`<img src="${esc(a.immagine_url)}" alt="">`:''}
+    <h3>${esc(a.titolo)}</h3><small class="muted">${fmt(a.pubblicato_il)}</small>
+    <p>${esc(a.testo).replace(/\n/g,'<br>')}</p></article>`).join(''):'<p class="muted">Nessun articolo ancora.</p>');
+}
+
+// ---------- pronostici ----------
+let pr={camp:null,gior:null,tab:'gioca'};
+async function pPronostici(){
+  const camps=chk(await db.from('campionati').select('*').eq('attivo',true).order('id'));
+  if(!camps.length){app.innerHTML='<h2>Pronostici</h2><p class="muted">Nessun campionato attivo per ora.</p>';return}
+  if(!camps.find(c=>c.id==pr.camp)) pr.camp=camps[0].id;
+  const giors=chk(await db.from('giornate').select('*').eq('campionato_id',pr.camp).order('numero'));
+  if(giors.length && !giors.find(g=>g.id==pr.gior)) pr.gior=giors[giors.length-1].id;
+
+  let h=`<h2>Pronostici</h2>
+  <select onchange="pr.camp=this.value;pr.gior=null;pPronostici()">${camps.map(c=>`<option value="${c.id}" ${c.id==pr.camp?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
+  <div class="tabs"><button class="${pr.tab==='gioca'?'on':''}" onclick="pr.tab='gioca';pPronostici()">Gioca</button>
+  <button class="${pr.tab==='classifica'?'on':''}" onclick="pr.tab='classifica';pPronostici()">Classifica</button></div>`;
+
+  if(pr.tab==='classifica'){
+    const cl=chk(await db.from('classifica_pronostici').select('*').eq('campionato_id',pr.camp).order('punti',{ascending:false}).order('esatti',{ascending:false}));
+    h+=`<div class="card"><table><tr><th>#</th><th>Utente</th><th>Esatti</th><th>Punti</th></tr>
+      ${cl.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.username)}</td><td>${r.esatti}</td><td><b>${r.punti}</b></td></tr>`).join('')||'<tr><td colspan="4" class="muted">Ancora nessun punto.</td></tr>'}</table>
+      <p class="muted" style="font-size:12px">Risultato esatto 3 punti · Segno giusto 1 punto</p></div>`;
+    app.innerHTML=h;return;
   }
-  const parts = (location.hash.slice(1) || '/').split('/').filter(Boolean);
-  if (invito && !parts.length) return viewEntra(invito);
-  if (parts[0] === 'lega' && parts[1]) return viewLega(parts[1], parts[2] || 'squadre');
-  if (parts[0] === 'crea') return viewCrea();
-  if (parts[0] === 'entra') return viewEntra();
-  viewHome();
-}
+  if(!giors.length){app.innerHTML=h+'<p class="muted">Nessuna giornata ancora.</p>';return}
+  h+=`<select onchange="pr.gior=this.value;pPronostici()">${giors.map(g=>`<option value="${g.id}" ${g.id==pr.gior?'selected':''}>Giornata ${g.numero}</option>`).join('')}</select>`;
 
-function shell(inner, back) {
-  $('#app').innerHTML = `<header class="top">${back ? `<a href="${back}" class="back">‹</a>` : ''}
-    <div class="logo">📒 FantaTaccuino</div><button class="ghost" onclick="logout()">Esci</button></header>
-    <main>${inner}</main>`;
+  const partite=chk(await db.from('partite').select('*').eq('giornata_id',pr.gior).order('inizio'));
+  const ids=partite.map(p=>p.id);
+  const prono=ids.length?chk(await db.from('pronostici').select('*, profili(username)').in('partita_id',ids)):[];
+  const ora=new Date();
+  let aperte=0;
+  h+=partite.map(p=>{
+    const mio=prono.find(x=>x.partita_id===p.id&&x.utente_id===utente.id);
+    const iniziata=new Date(p.inizio)<=ora;
+    const altri=prono.filter(x=>x.partita_id===p.id);
+    const finita=p.gol_casa!==null&&p.gol_trasferta!==null;
+    if(!iniziata) aperte++;
+    return `<div class="card"><div class="row between"><b>${esc(p.casa)} – ${esc(p.trasferta)}</b>${finita?`<span class="ris">${p.gol_casa}-${p.gol_trasferta}</span>`:''}</div>
+      <small class="muted">${fmt(p.inizio)} ${iniziata&&!finita?'· in corso / da aggiornare':''}</small>
+      ${!iniziata?`<div class="row" style="margin-top:8px"><span class="muted">Il tuo pronostico:</span>
+        <input class="n" type="number" min="0" id="pc_${p.id}" value="${mio?mio.gol_casa:''}"> – <input class="n" type="number" min="0" id="pt_${p.id}" value="${mio?mio.gol_trasferta:''}"></div>`
+      :`<div style="margin-top:8px">Il tuo pronostico: <b>${mio?mio.gol_casa+'-'+mio.gol_trasferta:'—'}</b> ${mio&&mio.punti!==null?`<span class="pt pt${mio.punti}">${mio.punti} pt</span>`:''}</div>
+        <details><summary>Pronostici di tutti (${altri.length})</summary>${altri.map(x=>`<div>${esc(x.profili?.username)}: <b>${x.gol_casa}-${x.gol_trasferta}</b> ${x.punti!==null?`<span class="pt pt${x.punti}">${x.punti}</span>`:''}</div>`).join('')}</details>`}
+    </div>`}).join('')||'<p class="muted">Nessuna partita in questa giornata.</p>';
+  if(aperte) h+=`<button class="pri" style="width:100%" onclick="salvaPronostici([${partite.filter(p=>new Date(p.inizio)>ora).map(p=>p.id)}])">Salva pronostici</button>
+    <p class="muted" style="font-size:12px">Puoi modificarli fino al calcio d'inizio.</p>`;
+  app.innerHTML=h;
 }
-
-/* ---------- ACCESSO ---------- */
-function viewAuth(mode = 'login') {
-  $('#app').innerHTML = `<div class="auth">
-    <div class="brand"><div class="big">📒</div><h1>FantaTaccuino</h1><p>Il taccuino del tuo fantacalcio</p></div>
-    <div class="card paper plain">
-      <div class="tabs"><button class="${mode==='login'?'on':''}" onclick="viewAuth('login')">Accedi</button>
-      <button class="${mode==='signup'?'on':''}" onclick="viewAuth('signup')">Registrati</button></div>
-      <form id="fa">
-        ${mode==='signup' ? '<label>Nome utente<input name="username" required minlength="3" maxlength="20"></label>' : ''}
-        <label>Email<input name="email" type="email" required autocomplete="email"></label>
-        <label>Password<input name="password" type="password" required minlength="6" autocomplete="${mode==='login'?'current-password':'new-password'}"></label>
-        <button class="btn" type="submit">${mode==='login' ? 'Entra' : 'Crea account'}</button>
-      </form>
-      ${invito ? '<p class="muted" style="font-size:13px">Hai un invito a una lega: accedi o registrati per entrare.</p>' : ''}
-    </div></div>`;
-  $('#fa').onsubmit = async e => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target)), b = e.target.querySelector('button');
-    b.disabled = true;
-    const r = mode === 'login'
-      ? await sb.auth.signInWithPassword({ email: f.email, password: f.password })
-      : await sb.auth.signUp({ email: f.email, password: f.password, options: { data: { username: f.username.trim() } } });
-    b.disabled = false;
-    if (r.error) return toast(traduci(r.error.message), true);
-    if (mode === 'signup' && !r.data.session) toast('Controlla la tua email per confermare');
-  };
-}
-
-/* ---------- HOME ---------- */
-async function viewHome() {
-  shell('<div class="loading">Caricamento…</div>');
-  const { data, error } = await sb.from('membri_lega')
-    .select('nome_squadra, leghe(id,nome,tipo_mercato,formato,admin_id)').eq('utente_id', me.id).order('entrato_il');
-  if (error) return toast(error.message, true);
-  shell(`<h2 class="hand">Ciao ${esc(profilo.username)} 👋</h2>
-    <div class="row2"><a class="btn" href="#/crea">+ Crea lega</a><a class="btn alt" href="#/entra">Entra con codice</a></div>
-    <h3>Le mie leghe</h3>
-    ${data.length ? data.map(m => `<a class="card lega" href="#/lega/${m.leghe.id}"><div><b>${esc(m.leghe.nome)}</b>
-      <small>${esc(m.nome_squadra)} · ${m.leghe.tipo_mercato==='asta'?'Asta':'Listone'} · ${m.leghe.formato==='classifica'?'Classifica':'Scontri diretti'}</small></div>
-      ${m.leghe.admin_id===me.id ? '<span class="tag">ADMIN</span>' : ''}</a>`).join('')
-    : '<p class="muted">Non sei ancora in nessuna lega. Creane una o entra con il codice invito che ti ha mandato un amico.</p>'}`);
-}
-
-function viewCrea() {
-  shell(`<h2 class="hand">Nuova lega</h2>
-    <form id="fc" class="card paper plain">
-      <label>Nome della lega<input name="nome" required maxlength="40"></label>
-      <label>Nome della tua squadra<input name="squadra" required maxlength="30"></label>
-      <label>Mercato<select name="tipo"><option value="asta">Asta (giocatori esclusivi, li assegna l'admin)</option>
-        <option value="listone">Listone a prezzi fissi (stile Fantalab)</option></select></label>
-      <label>Formato<select name="formato"><option value="scontri_diretti">Scontri diretti (calendario)</option>
-        <option value="classifica">Classifica a punti totali</option></select></label>
-      <div class="grid2"><label>Crediti<input name="crediti" type="number" value="500" min="50" max="5000"></label>
-      <label>Max squadre<input name="max" type="number" value="10" min="2" max="20"></label></div>
-      <button class="btn" type="submit">Crea lega</button>
-    </form>`, '#/');
-  $('#fc').onsubmit = async e => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target));
-    const { data, error } = await sb.rpc('crea_lega', { p_nome: f.nome.trim(), p_nome_squadra: f.squadra.trim(),
-      p_tipo_mercato: f.tipo, p_formato: f.formato, p_crediti: +f.crediti, p_max_squadre: +f.max });
-    if (error) return toast(error.message, true);
-    toast('Lega creata! 🎉'); location.hash = '#/lega/' + data + '/admin';
-  };
-}
-
-function viewEntra(codice = '') {
-  shell(`<h2 class="hand">Entra in una lega</h2>
-    <form id="fe" class="card paper plain">
-      <label>Codice invito<input name="codice" required maxlength="6" value="${esc(codice)}" style="text-transform:uppercase;letter-spacing:.15em;font-weight:800"></label>
-      <label>Nome della tua squadra<input name="squadra" required maxlength="30"></label>
-      <button class="btn" type="submit">Entra</button>
-    </form>`, '#/');
-  $('#fe').onsubmit = async e => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target));
-    const { data, error } = await sb.rpc('unisciti_lega', { p_codice: f.codice, p_nome_squadra: f.squadra.trim() });
-    if (error) return toast(error.message, true);
-    invito = null; history.replaceState(null, '', location.pathname);
-    toast('Benvenuto nella lega! ⚽'); location.hash = '#/lega/' + data;
-  };
-}
-
-/* ---------- LEGA ---------- */
-async function viewLega(id, tab) {
-  shell('<div class="loading">Caricamento…</div>', '#/');
-  const [{ data: lega }, { data: membri }] = await Promise.all([
-    sb.from('leghe').select('*').eq('id', id).maybeSingle(),
-    sb.from('membri_lega').select('*, profili(username)').eq('lega_id', id).order('entrato_il')
-  ]);
-  if (!lega) return shell('<p class="muted">Lega non trovata o non sei iscritto.</p>', '#/');
-  CTX = { lega, membri: membri || [], admin: lega.admin_id === me.id, io: (membri || []).find(m => m.utente_id === me.id) };
-  const tabs = [['squadre','Classifica'],['rosa','Rose'],['mercato','Mercato'],['formazione','Formazione'],['voti','Voti']];
-  if (CTX.admin) tabs.push(['admin','⚙️ Admin']);
-  shell(`<div class="lega-head"><h2 class="hand">${esc(lega.nome)}</h2>
-    <small>${lega.tipo_mercato==='asta'?'Asta':'Listone'} · ${lega.formato==='classifica'?'Classifica':'Scontri diretti'} · ${CTX.membri.length}/${lega.max_squadre} squadre · ${CTX.io?.crediti_residui ?? '-'} crediti</small></div>
-    <nav class="tabbar">${tabs.map(([k, l]) => `<a href="#/lega/${id}/${k}" class="${k===tab?'on':''}">${l}</a>`).join('')}</nav>
-    <div id="tab"><div class="loading">Caricamento…</div></div>`, '#/');
-  ({ squadre: tabSquadre, rosa: tabRosa, mercato: tabMercato, formazione: tabFormazione, voti: tabVoti, admin: tabAdmin }[tab] || tabSquadre)();
-}
-const nomeSq = uid => esc(CTX.membri.find(m => m.utente_id === uid)?.nome_squadra || '—');
-const totRosa = () => Object.values(CTX.lega.regole.rosa || {}).reduce((a, b) => a + b, 0);
-
-/* Classifica */
-async function tabSquadre() {
-  const id = CTX.lega.id, scontri = CTX.lega.formato === 'scontri_diretti';
-  const [{ data: ris }, { data: cal }, { data: rose }] = await Promise.all([
-    sb.from('risultati').select('*').eq('lega_id', id),
-    sb.from('calendario').select('*').eq('lega_id', id).order('giornata'),
-    sb.from('rose').select('utente_id').eq('lega_id', id)]);
-  const st = {};
-  CTX.membri.forEach(m => st[m.utente_id] = { m, pt: 0, fp: 0, g: 0, rosa: 0 });
-  (rose || []).forEach(r => st[r.utente_id] && st[r.utente_id].rosa++);
-  const R = {};
-  (ris || []).forEach(r => { R[r.giornata + '|' + r.utente_id] = r; if (st[r.utente_id]) st[r.utente_id].fp += +r.punti; });
-  if (scontri) (cal || []).forEach(c => {
-    const a = R[c.giornata + '|' + c.casa_id], b = R[c.giornata + '|' + c.trasferta_id], A = st[c.casa_id], B = st[c.trasferta_id];
-    if (!a || !b || !A || !B) return;
-    A.g++; B.g++;
-    if (a.gol > b.gol) A.pt += 3; else if (a.gol < b.gol) B.pt += 3; else { A.pt++; B.pt++; }
-  });
-  const list = Object.values(st).sort((x, y) => scontri ? (y.pt - x.pt) || (y.fp - x.fp) : (y.fp - x.fp));
-  const miei = scontri ? (cal || []).filter(c => c.casa_id === me.id || c.trasferta_id === me.id) : [];
-  $('#tab').innerHTML = `<div class="card paper plain"><table class="tab"><thead><tr><th>#</th><th>Squadra</th>
-    ${scontri ? '<th class="n">G</th><th class="n">Pt</th>' : ''}<th class="n">FP</th><th class="n">Rosa</th></tr></thead><tbody>
-    ${list.map((s, i) => `<tr class="${s.m.utente_id===me.id?'me':''}"><td>${i+1}</td>
-      <td>${esc(s.m.nome_squadra)}<br><small>${esc(s.m.profili?.username)}</small></td>
-      ${scontri ? `<td class="n">${s.g}</td><td class="n"><b>${s.pt}</b></td>` : ''}
-      <td class="n">${s.fp.toFixed(1)}</td><td class="n">${s.rosa}/${totRosa()}</td></tr>`).join('')}
-    </tbody></table></div>
-    ${scontri ? `<div class="card paper plain"><details><summary>📅 Il mio calendario</summary>
-      ${miei.length ? miei.map(c => { const a = R[c.giornata+'|'+c.casa_id], b = R[c.giornata+'|'+c.trasferta_id];
-        return `<div class="pl"><span class="pill">G${c.giornata}</span><div class="info"><b>${nomeSq(c.casa_id)} – ${nomeSq(c.trasferta_id)}</b></div>
-        <b>${a && b ? a.gol + ' - ' + b.gol : ''}</b></div>`; }).join('')
-      : '<p class="muted">Il calendario non è ancora stato generato dall\'admin.</p>'}</details></div>` : ''}`;
-}
-
-/* Rose */
-async function tabRosa(uid) {
-  uid = uid || me.id;
-  const { data } = await sb.from('rose').select('prezzo, giocatore_id, giocatori(nome,squadra,ruolo,quotazione)')
-    .eq('lega_id', CTX.lega.id).eq('utente_id', uid);
-  const m = CTX.membri.find(x => x.utente_id === uid);
-  const puo = CTX.admin || (uid === me.id && CTX.lega.tipo_mercato === 'listone');
-  const lim = CTX.lega.regole.rosa || {};
-  const rosa = (data || []).sort((a, b) => 'PDCA'.indexOf(a.giocatori.ruolo) - 'PDCA'.indexOf(b.giocatori.ruolo) || b.prezzo - a.prezzo);
-  $('#tab').innerHTML = `<div class="card paper plain">
-    <label>Squadra<select onchange="tabRosa(this.value)">${CTX.membri.map(x =>
-      `<option value="${x.utente_id}" ${x.utente_id===uid?'selected':''}>${esc(x.nome_squadra)} (${esc(x.profili?.username)})</option>`).join('')}</select></label>
-    <p style="margin:4px 0"><b>${m.crediti_residui}</b> crediti residui · ${rosa.length}/${totRosa()} giocatori</p>
-    ${Object.keys(RUOLI).map(r => { const g = rosa.filter(x => x.giocatori.ruolo === r);
-      return `<div class="sec">${RUOLI[r]}<small>${g.length}/${lim[r] ?? '-'}</small></div>
-      ${g.map(x => `<div class="pl"><span class="r r${r}">${r}</span><div class="info"><b>${esc(x.giocatori.nome)}</b>
-        <small>${esc(x.giocatori.squadra)} · pagato ${x.prezzo}</small></div>
-        ${puo ? `<button class="btn alt sm" onclick="svincola(${x.giocatore_id},'${uid}')">Svincola</button>` : ''}</div>`).join('')
-        || '<small>Nessuno</small>'}`; }).join('')}
-  </div>`;
-}
-async function svincola(gid, uid) {
-  if (!confirm('Svincolare il giocatore? I crediti tornano alla squadra.')) return;
-  const { error } = await sb.rpc('svincola_giocatore', { p_lega: CTX.lega.id, p_utente: uid, p_giocatore: gid });
-  if (error) return toast(error.message, true);
-  toast('Giocatore svincolato'); refreshCtx(() => tabRosa(uid));
-}
-async function refreshCtx(then) {
-  const { data } = await sb.from('membri_lega').select('*, profili(username)').eq('lega_id', CTX.lega.id).order('entrato_il');
-  CTX.membri = data || []; CTX.io = CTX.membri.find(m => m.utente_id === me.id);
-  const s = document.querySelector('.lega-head small');
-  if (s) s.innerHTML = s.innerHTML.replace(/[\d-]+ crediti$/, (CTX.io?.crediti_residui ?? '-') + ' crediti');
-  then && then();
-}
-
-/* Mercato */
-let MK = { q: '', ruolo: '', owners: {} };
-async function tabMercato() {
-  const { data } = await sb.from('rose').select('giocatore_id, utente_id').eq('lega_id', CTX.lega.id);
-  MK.owners = {};
-  (data || []).forEach(r => (MK.owners[r.giocatore_id] = MK.owners[r.giocatore_id] || []).push(r.utente_id));
-  const listone = CTX.lega.tipo_mercato === 'listone';
-  $('#tab').innerHTML = `<div class="card paper plain">
-    <p style="margin:0 0 6px;font-size:13px" class="muted">${listone
-      ? 'Listone a prezzi fissi: compri al prezzo della quotazione, finché hai crediti e posti in rosa.'
-      : CTX.admin ? 'Asta: dopo ogni chiamata assegna il giocatore alla squadra con il prezzo di aggiudicazione.' : 'Asta: i giocatori li assegna l\'admin durante l\'asta.'}</p>
-    <input id="mq" placeholder="🔎 Cerca giocatore o squadra" value="${esc(MK.q)}">
-    <div class="chips">${[['','Tutti'],['P','P'],['D','D'],['C','C'],['A','A']].map(([k, l]) =>
-      `<button class="chip ${MK.ruolo===k?'on':''}" onclick="MK.ruolo='${k}';tabMercato()">${l}</button>`).join('')}</div>
-    <div id="lista"><div class="loading" style="color:var(--muted)">Caricamento…</div></div></div>`;
-  let t; $('#mq').oninput = e => { clearTimeout(t); t = setTimeout(() => { MK.q = e.target.value; caricaLista(); }, 300); };
-  caricaLista();
-}
-async function caricaLista() {
-  let q = sb.from('giocatori').select('*').eq('attivo', true).order('quotazione', { ascending: false }).limit(60);
-  if (MK.ruolo) q = q.eq('ruolo', MK.ruolo);
-  if (MK.q.trim()) q = q.or(`nome.ilike.%${MK.q.trim()}%,squadra.ilike.%${MK.q.trim()}%`);
-  const { data, error } = await q;
-  if (error) return toast(error.message, true);
-  if (!data.length) return $('#lista').innerHTML = MK.q || MK.ruolo
-    ? '<p class="muted">Nessun giocatore trovato.</p>'
-    : '<p class="muted">Il listone giocatori non è ancora stato caricato.</p>';
-  const listone = CTX.lega.tipo_mercato === 'listone';
-  $('#lista').innerHTML = data.map(g => {
-    const own = MK.owners[g.id] || [], mio = own.includes(me.id);
-    let az = '';
-    if (listone) az = mio ? '<span class="pill t">In rosa</span>'
-      : `<button class="btn sm" onclick="compra(${g.id},${g.quotazione})" ${CTX.io.crediti_residui < g.quotazione ? 'disabled' : ''}>Compra</button>`;
-    else if (own.length) az = `<span class="pill">${nomeSq(own[0])}</span>`;
-    else if (CTX.admin) az = `<button class="btn sm" onclick="apriAssegna(${g.id})">Assegna</button>`;
-    else az = '<span class="pill">Libero</span>';
-    return `<div class="pl" id="g${g.id}"><span class="r r${g.ruolo}">${g.ruolo}</span><div class="info"><b>${esc(g.nome)}</b>
-      <small>${esc(g.squadra)} · Q ${g.quotazione}</small></div>${az}</div><div id="as${g.id}"></div>`;
-  }).join('');
-}
-async function compra(gid, q) {
-  if (!confirm(`Comprare il giocatore per ${q} crediti?`)) return;
-  const { error } = await sb.rpc('compra_giocatore', { p_lega: CTX.lega.id, p_utente: me.id, p_giocatore: gid });
-  if (error) return toast(error.message, true);
-  toast('Acquistato! ✅'); refreshCtx(tabMercato);
-}
-function apriAssegna(gid) {
-  $('#as' + gid).innerHTML = `<div class="box"><div class="grid2">
-    <label>Squadra<select id="asq${gid}">${CTX.membri.map(m => `<option value="${m.utente_id}">${esc(m.nome_squadra)} (${m.crediti_residui})</option>`).join('')}</select></label>
-    <label>Prezzo<input id="asp${gid}" type="number" min="1" value="1"></label></div>
-    <button class="btn green" onclick="assegna(${gid})">Conferma assegnazione</button></div>`;
-}
-async function assegna(gid) {
-  const uid = $('#asq' + gid).value, prezzo = +$('#asp' + gid).value;
-  const { error } = await sb.rpc('compra_giocatore', { p_lega: CTX.lega.id, p_utente: uid, p_giocatore: gid, p_prezzo: prezzo });
-  if (error) return toast(error.message, true);
-  toast('Assegnato a ' + CTX.membri.find(m => m.utente_id === uid).nome_squadra); refreshCtx(tabMercato);
-}
-
-/* Formazione */
-let FM = null;
-async function tabFormazione() {
-  const { data: gs } = await sb.from('giornate').select('*').or('inizio.is.null,inizio.gt.' + new Date().toISOString()).order('numero').limit(1);
-  const g = gs && gs[0];
-  if (!g) return $('#tab').innerHTML = '<div class="card paper plain"><p class="muted">Nessuna giornata in programma al momento.</p></div>';
-  const [{ data: rosa }, { data: f }] = await Promise.all([
-    sb.from('rose').select('giocatore_id, giocatori(nome,squadra,ruolo)').eq('lega_id', CTX.lega.id).eq('utente_id', me.id),
-    sb.from('formazioni').select('*, formazione_giocatori(*)').eq('lega_id', CTX.lega.id).eq('utente_id', me.id).eq('giornata', g.numero).maybeSingle()]);
-  FM = { g, rosa: (rosa || []).sort((a, b) => 'PDCA'.indexOf(a.giocatori.ruolo) - 'PDCA'.indexOf(b.giocatori.ruolo)),
-    modulo: f?.modulo || '3-4-3', tit: [], pan: [] };
-  if (f) {
-    const fg = [...f.formazione_giocatori].sort((a, b) => a.ordine - b.ordine);
-    FM.tit = fg.filter(x => x.titolare).map(x => x.giocatore_id);
-    FM.pan = fg.filter(x => !x.titolare).map(x => x.giocatore_id);
+async function salvaPronostici(ids){
+  const righe=[];
+  for(const id of ids){
+    const c=document.getElementById('pc_'+id).value,t=document.getElementById('pt_'+id).value;
+    if(c!==''&&t!=='') righe.push({partita_id:id,utente_id:utente.id,gol_casa:+c,gol_trasferta:+t,inserito_il:new Date().toISOString()});
   }
-  renderForm();
-}
-function slot() { const [d, c, a] = MODULI[FM.modulo]; return { P: 1, D: d, C: c, A: a }; }
-function ruoloDi(id) { return FM.rosa.find(x => x.giocatore_id === id)?.giocatori.ruolo; }
-function renderForm() {
-  const s = slot();
-  const cnt = r => FM.tit.filter(id => ruoloDi(id) === r).length;
-  if (!FM.rosa.length) return $('#tab').innerHTML = '<div class="card paper plain"><p class="muted">La tua rosa è vuota: prima completa il mercato.</p></div>';
-  $('#tab').innerHTML = `<div class="card paper plain">
-    <p style="margin:0"><b>Giornata ${FM.g.numero}</b> · scadenza ${dataIt(FM.g.inizio)}</p>
-    <label>Modulo<select onchange="FM.modulo=this.value;FM.tit=[];renderForm()">${Object.keys(MODULI).map(m =>
-      `<option ${m===FM.modulo?'selected':''}>${m}</option>`).join('')}</select></label>
-    <p class="muted" style="font-size:13px;margin:4px 0">Tocca un giocatore: 1 volta = titolare, 2 volte = panchina (in ordine), 3 volte = fuori.</p>
-    ${Object.keys(RUOLI).map(r => `<div class="sec">${RUOLI[r]}<small>titolari ${cnt(r)}/${s[r]}</small></div>
-      ${FM.rosa.filter(x => x.giocatori.ruolo === r).map(x => { const id = x.giocatore_id, t = FM.tit.includes(id), p = FM.pan.indexOf(id);
-        return `<div class="pl ${t?'sel-t':p>=0?'sel-p':''}" onclick="tocca(${id})" style="cursor:pointer;padding-left:6px;padding-right:6px">
-          <span class="r r${r}">${r}</span><div class="info"><b>${esc(x.giocatori.nome)}</b><small>${esc(x.giocatori.squadra)}</small></div>
-          ${t ? '<span class="pill t">Titolare</span>' : p >= 0 ? `<span class="pill p">Panchina ${p+1}</span>` : ''}</div>`; }).join('')}`).join('')}
-  </div><div class="sticky-save"><button class="btn" onclick="salvaForm()">Salva formazione (${FM.tit.length}/11)</button></div>`;
-}
-function tocca(id) {
-  const r = ruoloDi(id), s = slot();
-  if (FM.tit.includes(id)) { FM.tit = FM.tit.filter(x => x !== id); FM.pan.push(id); }
-  else if (FM.pan.includes(id)) FM.pan = FM.pan.filter(x => x !== id);
-  else if (FM.tit.filter(x => ruoloDi(x) === r).length < s[r]) FM.tit.push(id);
-  else FM.pan.push(id);
-  renderForm();
-}
-async function salvaForm() {
-  if (FM.tit.length !== 11) return toast('Servono 11 titolari per il modulo ' + FM.modulo, true);
-  const { data: f, error } = await sb.from('formazioni').upsert({ lega_id: CTX.lega.id, utente_id: me.id, giornata: FM.g.numero,
-    modulo: FM.modulo, aggiornata_il: new Date().toISOString() }, { onConflict: 'lega_id,utente_id,giornata' }).select().single();
-  if (error) return toast(error.message, true);
-  await sb.from('formazione_giocatori').delete().eq('formazione_id', f.id);
-  const rows = [...FM.tit.map((id, i) => ({ formazione_id: f.id, giocatore_id: id, titolare: true, ordine: i })),
-                ...FM.pan.map((id, i) => ({ formazione_id: f.id, giocatore_id: id, titolare: false, ordine: i }))];
-  const { error: e2 } = await sb.from('formazione_giocatori').insert(rows);
-  if (e2) return toast(e2.message, true);
-  toast('Formazione salvata ✅');
+  if(!righe.length) return toast('Inserisci almeno un pronostico',true);
+  chk(await db.from('pronostici').upsert(righe,{onConflict:'partita_id,utente_id'}));
+  toast('Pronostici salvati!');pPronostici();
 }
 
-/* Voti */
-function fantavoto(v, ruolo, R) {
-  if (v.voto == null) return null;
-  let fv = +v.voto + v.gol * R.gol + v.assist * R.assist + v.autogol * R.autogol
-    + (v.ammonizione ? R.ammonizione : 0) + (v.espulsione ? R.espulsione : 0)
-    + v.rigori_sbagliati * R.rigore_sbagliato + v.rigori_parati * R.rigore_parato;
-  if (ruolo === 'P') fv += v.gol_subiti * R.gol_subito + (v.gol_subiti === 0 && v.minuti > 0 ? R.porta_inviolata : 0);
-  return fv;
+// ---------- fantacalcio ----------
+let fz={lega:null,tab:'classifica',vedi:null};
+async function pFanta(){
+  if(fz.lega) return legaView();
+  const leghe=chk(await db.from('leghe').select('*').order('creata_il'));
+  app.innerHTML=`<h2>Fantacalcio</h2>
+  ${leghe.map(l=>`<div class="card row between"><div><b>${esc(l.nome)}</b><br><small class="muted">${l.creatore_id===utente.id?'Sei il presidente':'Partecipante'}</small></div>
+    <button class="pri" onclick="fz.lega=${l.id};fz.tab='classifica';pFanta()">Apri</button></div>`).join('')||'<p class="muted">Non sei ancora in nessuna lega.</p>'}
+  <div class="card"><h3>Crea una lega</h3>
+    <label>Nome lega</label><input id="nl_nome">
+    <label>Crediti per squadra</label><input id="nl_cred" type="number" value="500">
+    <button class="pri" onclick="creaLega()">Crea lega</button></div>
+  <div class="card"><h3>Entra con codice invito</h3>
+    <label>Codice</label><input id="el_cod">
+    <label>Nome della tua squadra</label><input id="el_sq">
+    <button class="pri" onclick="entraLega()">Entra</button></div>`;
 }
-async function tabVoti(num) {
-  const { data: gs } = await sb.from('giornate').select('numero,stato').neq('stato', 'da_giocare').order('numero', { ascending: false });
-  if (!gs || !gs.length) return $('#tab').innerHTML = '<div class="card paper plain"><p class="muted">Ancora nessuna giornata con i voti.</p></div>';
-  num = num || gs[0].numero;
-  const { data: rosa } = await sb.from('rose').select('giocatore_id, giocatori(nome,squadra,ruolo)').eq('lega_id', CTX.lega.id).eq('utente_id', me.id);
-  const ids = (rosa || []).map(r => r.giocatore_id);
-  const { data: voti } = ids.length ? await sb.from('voti').select('*').eq('giornata', num).in('giocatore_id', ids) : { data: [] };
-  const V = {}; (voti || []).forEach(v => V[v.giocatore_id] = v);
-  const R = CTX.lega.regole;
-  $('#tab').innerHTML = `<div class="card paper plain">
-    <label>Giornata<select onchange="tabVoti(+this.value)">${gs.map(g => `<option value="${g.numero}" ${g.numero===num?'selected':''}>Giornata ${g.numero}${g.stato==='in_corso'?' (in corso)':''}</option>`).join('')}</select></label>
-    ${(rosa || []).sort((a, b) => 'PDCA'.indexOf(a.giocatori.ruolo) - 'PDCA'.indexOf(b.giocatori.ruolo)).map(x => {
-      const v = V[x.giocatore_id], fv = v ? fantavoto(v, x.giocatori.ruolo, R) : null;
-      const ev = v ? [v.gol && '⚽'.repeat(v.gol), v.assist && '👟'.repeat(v.assist), v.ammonizione && '🟨', v.espulsione && '🟥',
-        v.rigori_parati && '🧤'.repeat(v.rigori_parati), v.autogol && '🔴'].filter(Boolean).join(' ') : '';
-      return `<div class="pl"><span class="r r${x.giocatori.ruolo}">${x.giocatori.ruolo}</span><div class="info"><b>${esc(x.giocatori.nome)}</b>
-        <small>${v?.voto != null ? 'voto ' + v.voto : 'S.V.'} ${ev}</small></div><span class="fv">${fv != null ? fv.toFixed(1) : '–'}</span></div>`; }).join('')
-      || '<p class="muted">La tua rosa è vuota.</p>'}</div>`;
+async function creaLega(){
+  const nome=val('nl_nome');if(!nome) return toast('Scrivi il nome della lega',true);
+  const l=chk(await db.from('leghe').insert({nome,crediti:+val('nl_cred')||500}).select().single());
+  toast('Lega creata!');fz.lega=l.id;pFanta();
+}
+async function entraLega(){
+  const cod=val('el_cod'),sq=val('el_sq');if(!cod||!sq) return toast('Inserisci codice e nome squadra',true);
+  const id=chk(await db.rpc('entra_lega',{p_codice:cod,p_nome_squadra:sq}));
+  toast('Sei entrato nella lega!');fz.lega=id;pFanta();
 }
 
-/* Admin */
-function linkInvito() { return location.origin + location.pathname + '?invito=' + CTX.lega.codice_invito; }
-function tabAdmin() {
-  const L = CTX.lega, R = L.regole, lim = R.rosa || {};
-  const msg = encodeURIComponent(`Entra nella mia lega "${L.nome}" su FantaTaccuino! 📒⚽\n${linkInvito()}\nCodice: ${L.codice_invito}`);
-  $('#tab').innerHTML = `<div class="card paper plain">
-    <div class="sec">Invita gli amici</div>
-    <div class="box"><div class="code">${L.codice_invito}</div></div>
-    <div class="row2"><a class="btn green" href="https://wa.me/?text=${msg}" target="_blank">WhatsApp</a>
-    <button class="btn alt" onclick="navigator.clipboard.writeText(linkInvito());toast('Link copiato')">Copia link</button></div>
-  </div>
-  <form id="fr" class="card paper plain">
-    <div class="sec">Impostazioni</div>
-    <label>Nome lega<input name="nome" value="${esc(L.nome)}" required></label>
-    <label>Max squadre<input name="max_squadre" type="number" min="${CTX.membri.length}" max="20" value="${L.max_squadre}"></label>
-    <div class="sec">Composizione rosa</div>
-    <div class="grid2">${Object.keys(RUOLI).map(r => `<label>${RUOLI[r]}<input name="rosa_${r}" type="number" min="1" max="15" value="${lim[r] ?? ''}"></label>`).join('')}</div>
-    <div class="sec">Bonus e malus</div>
-    <div class="grid2">${REGOLE.map(([k, l]) => `<label>${l}<input name="r_${k}" type="number" step="0.5" value="${R[k] ?? 0}"></label>`).join('')}</div>
-    <button class="btn" type="submit">Salva impostazioni</button>
-  </form>
-  ${L.formato === 'scontri_diretti' ? `<div class="card paper plain"><div class="sec">Calendario</div>
-    <p class="muted" style="font-size:13px">Genera gli scontri diretti dalla giornata di Serie A scelta fino alla 38ª. Rigenerarlo cancella quello vecchio.</p>
-    <label>Dalla giornata<input id="cg" type="number" min="1" max="38" value="1"></label>
-    <button class="btn green" onclick="generaCalendario()">Genera calendario</button></div>` : ''}
-  <div class="card paper plain"><div class="sec">Squadre</div>
-    ${CTX.membri.map(m => `<div class="pl"><div class="info"><b>${esc(m.nome_squadra)}</b><small>${esc(m.profili?.username)} · ${m.crediti_residui} crediti</small></div>
-      ${m.utente_id !== me.id ? `<button class="btn alt sm" onclick="rimuovi('${m.utente_id}')">Rimuovi</button>` : '<span class="tag">ADMIN</span>'}</div>`).join('')}
-  </div>
-  <button class="btn alt" style="margin-top:6px" onclick="eliminaLega()">🗑️ Elimina lega</button>`;
-  $('#fr').onsubmit = async e => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target)), regole = { ...R, rosa: {} };
-    REGOLE.forEach(([k]) => regole[k] = +f['r_' + k]);
-    Object.keys(RUOLI).forEach(r => regole.rosa[r] = +f['rosa_' + r]);
-    const { error } = await sb.from('leghe').update({ nome: f.nome.trim(), max_squadre: +f.max_squadre, regole }).eq('id', L.id);
-    if (error) return toast(error.message, true);
-    toast('Impostazioni salvate ✅'); route();
-  };
-}
-function roundRobin(ids) {
-  const t = [...ids]; if (t.length % 2) t.push(null);
-  const n = t.length, rounds = [];
-  for (let r = 0; r < n - 1; r++) {
-    const m = [];
-    for (let i = 0; i < n / 2; i++) { const a = t[i], b = t[n - 1 - i]; if (a && b) m.push(r % 2 ? [b, a] : [a, b]); }
-    rounds.push(m); t.splice(1, 0, t.pop());
+async function legaView(){
+  const lega=chk(await db.from('leghe').select('*').eq('id',fz.lega).maybeSingle());
+  if(!lega){fz.lega=null;return pFanta()}
+  const pres=lega.creatore_id===utente.id||profilo.ruolo==='admin';
+  const membri=chk(await db.from('membri_lega').select('*, profili(username)').eq('lega_id',lega.id));
+  const tabs=[['classifica','Classifica'],['rosa','Rose'],['formazione','Formazione']];
+  if(pres) tabs.push(['gestione','Gestione']);
+  let h=`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
+  <h2 style="margin-top:12px">${esc(lega.nome)}</h2>
+  <p class="muted">Codice invito: <b style="color:var(--gold)">${esc(lega.codice_invito)}</b> · ${lega.crediti} crediti</p>
+  <div class="tabs">${tabs.map(([k,v])=>`<button class="${fz.tab===k?'on':''}" onclick="fz.tab='${k}';legaView()">${v}</button>`).join('')}</div>`;
+  const rose=chk(await db.from('rose').select('*, giocatori(*)').eq('lega_id',lega.id));
+
+  if(fz.tab==='classifica'){
+    const form=chk(await db.from('formazioni').select('utente_id,giornata,giocatore_id').eq('lega_id',lega.id).eq('titolare',true));
+    const gids=[...new Set(form.map(f=>f.giocatore_id))];
+    const voti=gids.length?chk(await db.from('voti').select('giocatore_id,giornata,fantavoto').in('giocatore_id',gids)):[];
+    const vm={};voti.forEach(v=>vm[v.giocatore_id+'-'+v.giornata]=Number(v.fantavoto)||0);
+    const tot={};membri.forEach(m=>tot[m.utente_id]=0);
+    form.forEach(f=>{tot[f.utente_id]=(tot[f.utente_id]||0)+(vm[f.giocatore_id+'-'+f.giornata]||0)});
+    const cl=[...membri].sort((a,b)=>tot[b.utente_id]-tot[a.utente_id]);
+    h+=`<div class="card"><table><tr><th>#</th><th>Squadra</th><th>Punti</th></tr>
+      ${cl.map((m,i)=>`<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b><br><small class="muted">${esc(m.profili?.username)}</small></td><td><b>${tot[m.utente_id].toFixed(1)}</b></td></tr>`).join('')}</table>
+      <p class="muted" style="font-size:12px">Somma dei fantavoti dei titolari schierati in ogni giornata.</p></div>`;
   }
-  return rounds;
-}
-async function generaCalendario() {
-  if (CTX.membri.length < 2) return toast('Servono almeno 2 squadre', true);
-  const start = +$('#cg').value;
-  if (!confirm(`Generare il calendario dalla giornata ${start} alla 38 con ${CTX.membri.length} squadre?`)) return;
-  const rounds = roundRobin(CTX.membri.map(m => m.utente_id)), rows = [];
-  for (let g = start; g <= 38; g++) {
-    const k = g - start, ciclo = Math.floor(k / rounds.length);
-    rounds[k % rounds.length].forEach(([a, b]) => rows.push({ lega_id: CTX.lega.id, giornata: g,
-      casa_id: ciclo % 2 ? b : a, trasferta_id: ciclo % 2 ? a : b }));
-  }
-  await sb.from('calendario').delete().eq('lega_id', CTX.lega.id);
-  const { error } = await sb.from('calendario').insert(rows);
-  if (error) return toast(error.message, true);
-  toast('Calendario generato 📅');
-}
-async function rimuovi(uid) {
-  if (!confirm('Rimuovere questa squadra dalla lega? Perde rosa e formazioni.')) return;
-  const { error } = await sb.from('membri_lega').delete().eq('lega_id', CTX.lega.id).eq('utente_id', uid);
-  if (error) return toast(error.message, true);
-  toast('Squadra rimossa'); route();
-}
-async function eliminaLega() {
-  if (!confirm('Eliminare DEFINITIVAMENTE la lega con tutte le squadre?')) return;
-  const { error } = await sb.from('leghe').delete().eq('id', CTX.lega.id);
-  if (error) return toast(error.message, true);
-  toast('Lega eliminata'); location.hash = '#/';
-}
 
-init();
+  if(fz.tab==='rosa'){
+    if(!fz.vedi||!membri.find(m=>m.utente_id===fz.vedi)) fz.vedi=utente.id;
+    const mia=rose.filter(r=>r.utente_id===fz.vedi).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
+    const spesi=mia.reduce((s,r)=>s+r.prezzo,0);
+    h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
+    <div class="card"><p class="muted">${mia.length} giocatori · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi}</b></p>
+    <table>${mia.map(r=>`<tr><td>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${r.prezzo}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota: la compila il presidente dopo l\'asta.</td></tr>'}</table></div>`;
+  }
+
+  if(fz.tab==='formazione'){
+    const giorn=chk(await db.from('fanta_giornate').select('*').gt('scadenza',new Date().toISOString()).order('numero').limit(1));
+    const mia=rose.filter(r=>r.utente_id===utente.id).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
+    if(!giorn.length) h+='<p class="muted">Nessuna giornata aperta per la formazione.</p>';
+    else if(!mia.length) h+='<p class="muted">La tua rosa è vuota.</p>';
+    else{
+      const g=giorn[0];
+      const att=chk(await db.from('formazioni').select('giocatore_id').eq('lega_id',lega.id).eq('utente_id',utente.id).eq('giornata',g.numero).eq('titolare',true)).map(x=>x.giocatore_id);
+      h+=`<div class="card"><h3>Giornata ${g.numero}</h3><p class="muted">Scadenza: ${fmt(g.scadenza)} · scegli 11 titolari (<span id="cnt">${att.length}</span>/11)</p>
+      ${mia.map(r=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)"><label style="color:var(--txt);font-size:15px"><input type="checkbox" class="tit" value="${r.giocatore_id}" ${att.includes(r.giocatore_id)?'checked':''} onchange="document.getElementById('cnt').textContent=document.querySelectorAll('.tit:checked').length">
+        ${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} <span class="muted">${esc(r.giocatori.squadra)}</span></label></div>`).join('')}
+      <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione</button></div>`;
+    }
+  }
+
+  if(fz.tab==='gestione'&&pres){
+    h+=`<div class="card"><h3>Assegna giocatore (asta)</h3>
+      <label>Squadra</label><select id="g_mem">${membri.map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)}</option>`).join('')}</select>
+      <label>Cerca giocatore</label><input id="g_cerca" placeholder="Scrivi almeno 2 lettere" oninput="cercaGiocatori(${lega.id})">
+      <label>Prezzo</label><input id="g_prezzo" type="number" value="1" min="1">
+      <div id="g_ris"></div></div>
+    <div class="card"><h3>Rose assegnate</h3>
+      ${membri.map(m=>{const rr=rose.filter(r=>r.utente_id===m.utente_id).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
+        return `<details><summary>${esc(m.nome_squadra)} (${rr.length})</summary>${rr.map(r=>`<div class="row between" style="padding:4px 0"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} · ${r.prezzo}</span><button class="del" onclick="togliGiocatore(${r.id})">Togli</button></div>`).join('')}</details>`}).join('')}
+    </div>
+    <div class="card"><h3>Partecipanti</h3>${membri.map(m=>`<div class="row between" style="padding:4px 0"><span>${esc(m.nome_squadra)} <span class="muted">${esc(m.profili?.username)}</span></span>
+      ${m.utente_id!==lega.creatore_id?`<button class="del" onclick="togliMembro(${lega.id},'${m.utente_id}')">Rimuovi</button>`:'<span class="badge">Presidente</span>'}</div>`).join('')}
+      <button class="del" style="margin-top:14px" onclick="eliminaLega(${lega.id})">Elimina lega</button></div>`;
+  }
+  app.innerHTML=h;
+}
+async function salvaFormazione(lid,gn){
+  const sel=[...document.querySelectorAll('.tit:checked')].map(x=>+x.value);
+  if(sel.length!==11) return toast('Devi scegliere esattamente 11 titolari',true);
+  chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('utente_id',utente.id).eq('giornata',gn));
+  chk(await db.from('formazioni').insert(sel.map((g,i)=>({lega_id:lid,utente_id:utente.id,giornata:gn,giocatore_id:g,titolare:true,ordine:i}))));
+  toast('Formazione salvata!');
+}
+let tCerca;
+function cercaGiocatori(lid){
+  clearTimeout(tCerca);tCerca=setTimeout(async()=>{
+    const q=val('g_cerca');const box=document.getElementById('g_ris');
+    if(q.length<2){box.innerHTML='';return}
+    const gg=chk(await db.from('giocatori').select('*').ilike('nome','%'+q+'%').order('nome').limit(20));
+    const presi=chk(await db.from('rose').select('giocatore_id').eq('lega_id',lid)).map(x=>x.giocatore_id);
+    box.innerHTML=gg.map(g=>`<div class="row between" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${ruolo(g.ruolo)}${esc(g.nome)} <span class="muted">${esc(g.squadra)} · Q${g.quotazione}</span></span>
+      ${presi.includes(g.id)?'<span class="badge">Già preso</span>':`<button class="ok" onclick="assegna(${lid},${g.id})">Assegna</button>`}</div>`).join('')||'<p class="muted">Nessun giocatore trovato.</p>';
+  },300);
+}
+async function assegna(lid,gid){
+  chk(await db.from('rose').insert({lega_id:lid,utente_id:val('g_mem'),giocatore_id:gid,prezzo:+val('g_prezzo')||1}));
+  toast('Giocatore assegnato!');legaView();
+}
+async function togliGiocatore(id){if(!confirm('Togliere il giocatore dalla rosa?'))return;chk(await db.from('rose').delete().eq('id',id));legaView()}
+async function togliMembro(lid,uid){if(!confirm('Rimuovere questo partecipante?'))return;chk(await db.from('membri_lega').delete().eq('lega_id',lid).eq('utente_id',uid));chk(await db.from('rose').delete().eq('lega_id',lid).eq('utente_id',uid));legaView()}
+async function eliminaLega(lid){if(!confirm('Eliminare definitivamente la lega?'))return;chk(await db.from('leghe').delete().eq('id',lid));fz.lega=null;pFanta()}
+
+// ---------- chat ----------
+let nomi={};
+async function pChat(){
+  const pp=chk(await db.from('profili').select('id,username'));nomi={};pp.forEach(p=>nomi[p.id]=p.username);
+  const msg=chk(await db.from('messaggi').select('*').eq('canale','generale').order('inviato_il',{ascending:false}).limit(100)).reverse();
+  app.innerHTML=`<h2>Chat</h2><div id="chatbox">${msg.map(rigaMsg).join('')}</div>
+    <div class="row"><input id="c_txt" maxlength="500" placeholder="Scrivi un messaggio…" style="flex:1;margin:0" onkeydown="if(event.key==='Enter')invia()"><button class="pri" onclick="invia()">Invia</button></div>`;
+  const box=document.getElementById('chatbox');box.scrollTop=box.scrollHeight;
+  chatCanale=db.channel('chat-generale').on('postgres_changes',{event:'INSERT',schema:'public',table:'messaggi',filter:'canale=eq.generale'},p=>{
+    const b=document.getElementById('chatbox');if(!b)return;b.insertAdjacentHTML('beforeend',rigaMsg(p.new));b.scrollTop=b.scrollHeight;
+  }).subscribe();
+}
+function rigaMsg(m){
+  const mio=m.utente_id===utente.id||profilo.ruolo==='admin';
+  return `<div class="msg" id="m${m.id}"><b>${esc(nomi[m.utente_id]||'utente')}</b><small>${fmt(m.inviato_il)}</small>${mio?` <a href="#" onclick="delMsg(${m.id});return false" style="color:var(--red);font-size:11px">elimina</a>`:''}<div>${esc(m.testo)}</div></div>`;
+}
+async function invia(){
+  const t=val('c_txt');if(!t)return;
+  document.getElementById('c_txt').value='';
+  chk(await db.from('messaggi').insert({testo:t,canale:'generale'}));
+}
+async function delMsg(id){chk(await db.from('messaggi').delete().eq('id',id));document.getElementById('m'+id)?.remove()}
+
+// ---------- admin ----------
+let ad={tab:'utenti',camp:null,gior:null,vg:null,vsq:null};
+async function pAdmin(){
+  if(profilo.ruolo!=='admin') return vai('home');
+  const T=[['utenti','Utenti'],['partite','Partite'],['giocatori','Giocatori'],['voti','Voti'],['articoli','Articoli']];
+  let h=`<h2>Admin</h2><div class="tabs">${T.map(([k,v])=>`<button class="${ad.tab===k?'on':''}" onclick="ad.tab='${k}';pAdmin()">${v}</button>`).join('')}</div>`;
+
+  if(ad.tab==='utenti'){
+    const us=chk(await db.from('profili').select('*').order('approvato').order('creato_il',{ascending:false}));
+    h+=us.map(u=>`<div class="card row between"><div><b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
+      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)}</small></div>
+      ${u.id===utente.id?'':`<div class="row">${!u.approvato?`<button class="ok" onclick="approva('${u.id}')">Accetta</button>`:''}
+        ${u.approvato?`<button onclick="cambiaRuolo('${u.id}','${u.ruolo==='admin'?'utente':'admin'}')">${u.ruolo==='admin'?'Togli admin':'Rendi admin'}</button>`:''}
+        <button class="del" onclick="rifiuta('${u.id}')">${u.approvato?'Elimina':'Rifiuta'}</button></div>`}</div>`).join('');
+  }
+
+  if(ad.tab==='partite'){
+    const camps=chk(await db.from('campionati').select('*').order('id'));
+    if(camps.length&&!camps.find(c=>c.id==ad.camp)) ad.camp=camps[0].id;
+    h+=`<div class="card"><h3>Campionati</h3>${camps.map(c=>`<div class="row between" style="padding:4px 0"><span>${esc(c.nome)} ${c.attivo?'':'<span class="badge">nascosto</span>'}</span>
+      <div class="row"><button onclick="toggleCamp(${c.id},${!c.attivo})">${c.attivo?'Nascondi':'Mostra'}</button><button class="del" onclick="delRiga('campionati',${c.id})">Elimina</button></div></div>`).join('')}
+      <label>Nuovo campionato (es. Serie A, Premier League, Champions League)</label><input id="ac_nome"><button class="pri" onclick="nuovoCamp()">Aggiungi</button></div>`;
+    if(camps.length){
+      const giors=chk(await db.from('giornate').select('*').eq('campionato_id',ad.camp).order('numero'));
+      if(giors.length&&!giors.find(g=>g.id==ad.gior)) ad.gior=giors[giors.length-1].id;
+      h+=`<div class="card"><h3>Giornate</h3>
+        <select onchange="ad.camp=this.value;ad.gior=null;pAdmin()">${camps.map(c=>`<option value="${c.id}" ${c.id==ad.camp?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
+        <div class="row"><input id="ag_num" type="number" placeholder="Numero giornata" style="flex:1;margin:0"><button class="pri" onclick="nuovaGiornata()">Aggiungi giornata</button></div>
+        ${giors.length?`<label style="display:block;margin-top:10px">Giornata da gestire</label><select onchange="ad.gior=this.value;pAdmin()">${giors.map(g=>`<option value="${g.id}" ${g.id==ad.gior?'selected':''}>Giornata ${g.numero}</option>`).join('')}</select>`:''}</div>`;
+      if(giors.length){
+        const pt=chk(await db.from('partite').select('*').eq('giornata_id',ad.gior).order('inizio'));
+        h+=`<div class="card"><h3>Partite della giornata</h3>${pt.map(p=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+          <b>${esc(p.casa)} – ${esc(p.trasferta)}</b> <small class="muted">${fmt(p.inizio)}</small>
+          <div class="row" style="margin-top:6px"><input class="n" type="number" min="0" id="rc_${p.id}" value="${p.gol_casa??''}"> – <input class="n" type="number" min="0" id="rt_${p.id}" value="${p.gol_trasferta??''}">
+          <button class="ok" onclick="salvaRis(${p.id})">Salva risultato</button><button class="del" onclick="delRiga('partite',${p.id})">Elimina</button></div></div>`).join('')||'<p class="muted">Nessuna partita.</p>'}
+          <h3 style="margin-top:14px">Nuova partita</h3>
+          <label>Casa</label><input id="np_c"><label>Trasferta</label><input id="np_t">
+          <label>Data e ora del calcio d'inizio</label><input id="np_d" type="datetime-local">
+          <button class="pri" onclick="nuovaPartita()">Aggiungi partita</button></div>`;
+      }
+    }
+  }
+
+  if(ad.tab==='giocatori'){
+    const {count}=await db.from('giocatori').select('*',{count:'exact',head:true});
+    const fg=chk(await db.from('fanta_giornate').select('*').order('numero'));
+    h+=`<div class="card"><h3>Giornate fantacalcio</h3><p class="muted">La scadenza è l'ora in cui si chiudono le formazioni.</p>
+      ${fg.map(g=>`<div class="row between" style="padding:4px 0"><span>Giornata ${g.numero} · ${fmt(g.scadenza)}</span><button class="del" onclick="delFG(${g.numero})">Elimina</button></div>`).join('')}
+      <label>Numero</label><input id="fg_n" type="number"><label>Scadenza formazioni</label><input id="fg_s" type="datetime-local">
+      <button class="pri" onclick="nuovaFG()">Aggiungi giornata</button></div>
+    <div class="card"><h3>Listone giocatori (${count||0})</h3>
+      <p class="muted">Incolla una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b><br>Ruolo: P, D, C o A. Es: <i>Lautaro Martinez;A;Inter;35</i></p>
+      <textarea id="imp" rows="7"></textarea><button class="pri" onclick="importa()">Importa giocatori</button></div>
+    <div class="card"><h3>Cerca / elimina</h3><input id="adg_q" placeholder="Nome giocatore" oninput="adCercaG()"><div id="adg_r"></div></div>`;
+  }
+
+  if(ad.tab==='voti'){
+    const fg=chk(await db.from('fanta_giornate').select('*').order('numero'));
+    if(!fg.length){app.innerHTML=h+'<p class="muted">Crea prima le giornate fantacalcio (scheda Giocatori).</p>';return}
+    if(!fg.find(g=>g.numero==ad.vg)) ad.vg=fg[fg.length-1].numero;
+    const sq=chk(await db.from('giocatori').select('squadra').order('squadra'));
+    const squadre=[...new Set(sq.map(s=>s.squadra))];
+    if(!squadre.length){app.innerHTML=h+'<p class="muted">Importa prima il listone giocatori.</p>';return}
+    if(!squadre.includes(ad.vsq)) ad.vsq=squadre[0];
+    const gg=chk(await db.from('giocatori').select('*').eq('squadra',ad.vsq)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome));
+    const vv=gg.length?chk(await db.from('voti').select('*').eq('giornata',ad.vg).in('giocatore_id',gg.map(g=>g.id))):[];
+    const V=id=>vv.find(v=>v.giocatore_id===id)||{};
+    h+=`<div class="row"><select style="flex:1" onchange="ad.vg=this.value;pAdmin()">${fg.map(g=>`<option value="${g.numero}" ${g.numero==ad.vg?'selected':''}>Giornata ${g.numero}</option>`).join('')}</select>
+      <select style="flex:1" onchange="ad.vsq=this.value;pAdmin()">${squadre.map(s=>`<option ${s===ad.vsq?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+      <p class="muted" style="font-size:12px">Lascia vuoto il voto di chi non ha giocato. GS = gol subiti, RP = rigori parati, RS = rigori sbagliati, AG = autogol.</p>
+      <div class="card" style="overflow-x:auto"><table><tr><th>Giocatore</th><th>Voto</th><th>Gol</th><th>Ass</th><th>Amm</th><th>Esp</th><th>GS</th><th>RP</th><th>RS</th><th>AG</th></tr>
+      ${gg.map(g=>{const v=V(g.id);const n=(k)=>`<input class="n" style="width:46px" type="number" min="0" data-g="${g.id}" data-k="${k}" value="${v[k]??(k==='voto'?'':0)}">`;
+        return `<tr><td style="white-space:nowrap">${ruolo(g.ruolo)}${esc(g.nome)}</td><td><input class="n" style="width:56px" type="number" step="0.5" data-g="${g.id}" data-k="voto" value="${v.voto??''}"></td>
+        <td>${n('gol')}</td><td>${n('assist')}</td><td><input type="checkbox" data-g="${g.id}" data-k="ammonizione" ${v.ammonizione?'checked':''}></td><td><input type="checkbox" data-g="${g.id}" data-k="espulsione" ${v.espulsione?'checked':''}></td>
+        <td>${n('gol_subiti')}</td><td>${n('rigori_parati')}</td><td>${n('rigori_sbagliati')}</td><td>${n('autogol')}</td></tr>`}).join('')}</table></div>
+      <button class="pri" style="width:100%" onclick="salvaVoti([${gg.map(g=>g.id)}])">Salva voti ${esc(ad.vsq)}</button>`;
+  }
+
+  if(ad.tab==='articoli'){
+    const art=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
+    h+=`<div class="card"><h3>Nuovo articolo</h3><label>Titolo</label><input id="ar_t"><label>Link immagine (facoltativo)</label><input id="ar_i">
+      <label>Testo</label><textarea id="ar_x" rows="8"></textarea><button class="pri" onclick="nuovoArt()">Pubblica</button></div>
+      ${art.map(a=>`<div class="card row between"><span><b>${esc(a.titolo)}</b><br><small class="muted">${fmt(a.pubblicato_il)}</small></span><button class="del" onclick="delRiga('articoli',${a.id})">Elimina</button></div>`).join('')}`;
+  }
+  app.innerHTML=h;
+}
+async function approva(id){chk(await db.from('profili').update({approvato:true}).eq('id',id));toast('Utente accettato');pAdmin()}
+async function cambiaRuolo(id,r){chk(await db.from('profili').update({ruolo:r}).eq('id',id));pAdmin()}
+async function rifiuta(id){if(!confirm('Sicuro? L\'utente non potrà più entrare.'))return;chk(await db.from('profili').delete().eq('id',id));pAdmin()}
+async function delRiga(t,id){if(!confirm('Eliminare?'))return;chk(await db.from(t).delete().eq('id',id));toast('Eliminato');pAdmin()}
+async function nuovoCamp(){const n=val('ac_nome');if(!n)return;chk(await db.from('campionati').insert({nome:n}));pAdmin()}
+async function toggleCamp(id,a){chk(await db.from('campionati').update({attivo:a}).eq('id',id));pAdmin()}
+async function nuovaGiornata(){const n=+val('ag_num');if(!n)return toast('Inserisci il numero',true);const g=chk(await db.from('giornate').insert({campionato_id:ad.camp,numero:n}).select().single());ad.gior=g.id;pAdmin()}
+async function nuovaPartita(){
+  const c=val('np_c'),t=val('np_t'),d=val('np_d');
+  if(!c||!t||!d) return toast('Compila casa, trasferta e data',true);
+  chk(await db.from('partite').insert({giornata_id:ad.gior,casa:c,trasferta:t,inizio:new Date(d).toISOString()}));
+  toast('Partita aggiunta');pAdmin();
+}
+async function salvaRis(id){
+  const c=document.getElementById('rc_'+id).value,t=document.getElementById('rt_'+id).value;
+  chk(await db.from('partite').update({gol_casa:c===''?null:+c,gol_trasferta:t===''?null:+t}).eq('id',id));
+  toast('Risultato salvato, punti calcolati');
+}
+async function nuovaFG(){
+  const n=+val('fg_n'),s=val('fg_s');if(!n||!s)return toast('Inserisci numero e scadenza',true);
+  chk(await db.from('fanta_giornate').insert({numero:n,scadenza:new Date(s).toISOString()}));pAdmin();
+}
+async function delFG(n){if(!confirm('Eliminare la giornata con formazioni e voti?'))return;chk(await db.from('fanta_giornate').delete().eq('numero',n));pAdmin()}
+async function importa(){
+  const righe=document.getElementById('imp').value.split('\n').map(r=>r.trim()).filter(Boolean);
+  const out=[],err=[];
+  righe.forEach((r,i)=>{const [nome,ru,sq,q]=r.split(';').map(x=>(x||'').trim());const R=(ru||'').toUpperCase();
+    if(!nome||!['P','D','C','A'].includes(R)||!sq) err.push(i+1); else out.push({nome,ruolo:R,squadra:sq,quotazione:+q||1})});
+  if(err.length) return toast('Righe non valide: '+err.join(', '),true);
+  if(!out.length) return;
+  chk(await db.from('giocatori').insert(out));toast(out.length+' giocatori importati');pAdmin();
+}
+let tAd;
+function adCercaG(){clearTimeout(tAd);tAd=setTimeout(async()=>{
+  const q=val('adg_q');const b=document.getElementById('adg_r');if(q.length<2){b.innerHTML='';return}
+  const gg=chk(await db.from('giocatori').select('*').ilike('nome','%'+q+'%').limit(20));
+  b.innerHTML=gg.map(g=>`<div class="row between" style="padding:4px 0"><span>${ruolo(g.ruolo)}${esc(g.nome)} <span class="muted">${esc(g.squadra)} · Q${g.quotazione}</span></span><button class="del" onclick="delRiga('giocatori',${g.id})">Elimina</button></div>`).join('');
+},300)}
+async function salvaVoti(ids){
+  const up=[],del=[];
+  for(const id of ids){
+    const get=k=>document.querySelector(`[data-g="${id}"][data-k="${k}"]`);
+    const voto=get('voto').value;
+    if(voto===''){del.push(id);continue}
+    const r={giocatore_id:id,giornata:+ad.vg,voto:+voto};
+    ['gol','assist','gol_subiti','rigori_parati','rigori_sbagliati','autogol'].forEach(k=>r[k]=+get(k).value||0);
+    r.ammonizione=get('ammonizione').checked;r.espulsione=get('espulsione').checked;
+    up.push(r);
+  }
+  if(up.length) chk(await db.from('voti').upsert(up,{onConflict:'giocatore_id,giornata'}));
+  if(del.length) chk(await db.from('voti').delete().eq('giornata',ad.vg).in('giocatore_id',del));
+  toast('Voti salvati');
+}
+async function nuovoArt(){
+  const t=val('ar_t'),x=val('ar_x');if(!t||!x)return toast('Titolo e testo obbligatori',true);
+  chk(await db.from('articoli').insert({titolo:t,testo:x,immagine_url:val('ar_i')||null}));toast('Articolo pubblicato');pAdmin();
+}
 </script>
 </body>
 </html>
