@@ -588,7 +588,7 @@ async function invia(){
 async function delMsg(id){chk(await db.from('messaggi').delete().eq('id',id));document.getElementById('m'+id)?.remove()}
 
 // ---------- giocatori (strumenti) ----------
-let gz={q:'',ruolo:'',squadra:''};
+let gz={q:'',ruolo:'',squadra:'',ord:''};
 async function pGiocatori(){
   const sq=chk(await db.from('giocatori').select('squadra').eq('attivo',true));
   const squadre=[...new Set(sq.map(s=>s.squadra))].sort();
@@ -596,18 +596,21 @@ async function pGiocatori(){
   <input id="gz_q" placeholder="Cerca per nome" value="${esc(gz.q)}" oninput="gz.q=this.value;listaG()">
   <div class="row"><select style="flex:1" onchange="gz.ruolo=this.value;listaG()"><option value="">Tutti i ruoli</option>${['P','D','C','A'].map(r=>`<option ${gz.ruolo===r?'selected':''}>${r}</option>`).join('')}</select>
   <select style="flex:1" onchange="gz.squadra=this.value;listaG()"><option value="">Tutte le squadre</option>${squadre.map(s=>`<option ${gz.squadra===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+  <select onchange="gz.ord=this.value;listaG()"><option value="">Ordina per quotazione</option><option value="su" ${gz.ord==='su'?'selected':''}>📈 In crescita</option><option value="giu" ${gz.ord==='giu'?'selected':''}>📉 In calo</option></select>
   <div id="gz_lista"></div>`;
   listaG();
 }
 let tG;
 function listaG(){clearTimeout(tG);tG=setTimeout(async()=>{
-  let q=db.from('giocatori').select('*').eq('attivo',true).order('quotazione',{ascending:false}).order('nome').limit(60);
+  let q=db.from('giocatori').select('*').eq('attivo',true);
+  q=gz.ord==='su'?q.order('var_q',{ascending:false}).order('quotazione',{ascending:false}):gz.ord==='giu'?q.order('var_q').order('quotazione',{ascending:false}):q.order('quotazione',{ascending:false});
+  q=q.order('nome').limit(60);
   if(gz.q.length>=2) q=q.ilike('nome','%'+gz.q+'%');
   if(gz.ruolo) q=q.eq('ruolo',gz.ruolo);
   if(gz.squadra) q=q.eq('squadra',gz.squadra);
   const gg=chk(await q);
   const b=document.getElementById('gz_lista');if(!b)return;
-  b.innerHTML=gg.map(g=>`<div class="card row between" style="padding:10px" onclick="schedaG(${g.id})"><span>${foto(g.foto)}${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <span class="muted">${esc(g.squadra)}</span></span><span class="badge">Q ${g.quotazione}</span></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
+  b.innerHTML=gg.map(g=>`<div class="card row between" style="padding:10px" onclick="schedaG(${g.id})"><span>${foto(g.foto)}${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <span class="muted">${esc(g.squadra)}</span></span><span class="badge">${qv(g)}</span></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
 },250)}
 function spiega(r,st,gc){
   if(!st) return null;
@@ -625,6 +628,7 @@ function spiega(r,st,gc){
 function bonusRighe(v){const b=[];
   if(v.gol)b.push(`+${3*v.gol} gol (${v.gol})`);if(v.assist)b.push(`+${v.assist} assist`);if(v.ammonizione)b.push('-0,5 ammonizione');if(v.espulsione)b.push('-1 espulsione');
   if(v.gol_subiti)b.push(`-${v.gol_subiti} gol subiti`);if(v.rigori_parati)b.push(`+${3*v.rigori_parati} rigori parati`);if(v.rigori_sbagliati)b.push(`-${3*v.rigori_sbagliati} rigori sbagliati`);if(v.autogol)b.push(`-${2*v.autogol} autogol`);return b}
+function qv(g){const d=g.var_q||0;return `Q ${g.quotazione}`+(d>0?` <span style="color:#2ecc71">▲${d}</span>`:d<0?` <span style="color:#e74c3c">▼${-d}</span>`:'')}
 async function schedaG(id){
   const g=chk(await db.from('giocatori').select('*').eq('id',id).single());
   const vv=chk(await db.from('voti').select('*').eq('giocatore_id',id).order('giornata'));
@@ -637,7 +641,7 @@ async function schedaG(id){
   const avv=gn=>{const p=pp.find(x=>x.giornata===gn);return p?(p.casa===g.squadra?'vs '+p.trasferta:'@ '+p.casa):''};
   app.innerHTML=`<button onclick="pGiocatori()">← Giocatori</button>
   <div class="card" style="margin-top:12px"><div class="scheda">${g.foto?`<img src="${esc(g.foto)}" alt="">`:''}<div><h2 style="margin:0">${esc(g.nome)}</h2>
-    <div style="margin-top:6px">${ruolo(g.ruolo)}${esc(g.squadra)} · <b>Q ${g.quotazione}</b></div></div></div>
+    <div style="margin-top:6px">${ruolo(g.ruolo)}${esc(g.squadra)} · <b>${qv(g)}</b>${g.var_q?` <small class="muted">(inizio stagione ${g.quot_iniziale})</small>`:''}</div></div></div>
     <div class="stat"><div><b>${giocate.length}</b>Presenze</div><div><b>${media('voto')}</b>Media voto</div><div><b>${media('fantavoto')}</b>Fantamedia</div>
     <div><b>${somma('gol')}</b>Gol</div><div><b>${somma('assist')}</b>Assist</div><div><b>${vv.filter(v=>v.ammonizione).length}/${vv.filter(v=>v.espulsione).length}</b>Amm/Esp</div></div></div>
   <div class="card"><h3>Voti giornata per giornata</h3>${on('f_voto_spiegato')?(premOk()?'<p class="muted" style="font-size:12px">🔍 Tocca una giornata per vedere come è nato il voto.</p>':'<p class="muted" style="font-size:12px">💎 Con il Premium vedi da cosa nasce ogni voto.</p>'):''}
@@ -1234,7 +1238,7 @@ async function impListone(b){
 }
 async function salvaScad(n){chk(await db.from('fanta_giornate').update({scadenza:new Date(val('sc_g')).toISOString()}).eq('numero',n));toast('Scadenza salvata')}
 async function pubblica(n,stato){
-  if(!confirm(stato?'Pubblicare i voti? Diventano visibili e contano per le classifiche.':'Ritirare i voti? Torneranno in bozza.'))return;
+  if(!confirm(stato?'Pubblicare i voti? Diventano visibili, contano per le classifiche e aggiornano le quotazioni (solo la prima volta).':'Ritirare i voti? Torneranno in bozza.'))return;
   chk(await db.from('fanta_giornate').update({pubblicata:stato}).eq('numero',n));toast(stato?'Voti pubblicati':'Voti ritirati');pAdmin();
 }
 async function calcolaUna(b,id){
