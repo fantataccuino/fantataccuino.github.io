@@ -152,7 +152,6 @@ async function avvia(session){
   if(!profilo) return schermata('Account non attivo','Il tuo account non è stato accettato.');
   if(!profilo.approvato) return schermata('In attesa di approvazione','La tua registrazione è arrivata. Un admin deve accettarla prima che tu possa entrare: riprova più tardi.');
   await caricaFeat();
-  const {data:gt}=await db.rpc('gettoni_giornalieri');if(gt!=null)profilo.gettoni=gt;
   document.getElementById('top').style.display='block';
   renderNav(); vai(pagina);
 }
@@ -227,7 +226,7 @@ function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;r
 <p><b>1. Il servizio.</b> FantaTaccuino è un gioco di fantacalcio gestito in modo amatoriale. È offerto così com'è: può avere errori, interruzioni o modifiche, e può essere chiuso in qualsiasi momento.</p>
 <p><b>2. Account.</b> Ogni iscrizione viene approvata dall'amministratore. È consentito un solo account per persona. Sei responsabile della tua password e di quello che succede con il tuo account.</p>
 <p><b>3. Voti.</b> I voti sono assegnati dalla redazione di FantaTaccuino.</p>
-<p><b>4. Palloni dorati.</b> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore.</p>
+<p><b>4. Palloni dorati.</b> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore. Ogni nuovo iscritto riceve 100 palloni dorati di prova per provare il Calcetto anche senza Premium: le vincite delle partite di prova non vengono accreditate e, finiti i palloni di prova, per continuare serve il Premium.</p>
 <p><b>5. Calcetto.</b> Ai tavoli del Calcetto si partecipa solo con palloni dorati. Una volta iscritto a un tavolo non puoi più uscire. Il banco trattiene una percentuale dei palloni dorati del tavolo; il montepremi è solo in palloni dorati. Se un tavolo viene annullato i palloni dorati vengono restituiti.</p>
 <p><b>6. Premium.</b> Il Premium sblocca funzioni aggiuntive per il periodo indicato. Prezzo, pagamento e diritto di recesso vengono indicati prima dell'acquisto.</p>
 <p><b>7. Comportamento.</b> In chat e nelle leghe sono vietati insulti, contenuti offensivi, spam e trucchi per falsare il gioco (account multipli, uso di errori del sito). L'amministratore può cancellare messaggi e sospendere o eliminare gli account che non rispettano queste regole.</p>
@@ -826,10 +825,13 @@ let sg={tab:'lobby',tav:null,g:null,squadre:null,edit:null},sngTimer=null;
 async function pSng(){
   clearTimeout(sngTimer);
   await db.rpc('sng_aggiorna');
-  const {data:pr}=await db.from('profili').select('gettoni,premium_fino').eq('id',utente.id).single();if(pr)Object.assign(profilo,pr);
+  const {data:pr}=await db.from('profili').select('gettoni,premium_fino,prova').eq('id',utente.id).single();if(pr)Object.assign(profilo,pr);
   if(sg.tav) return tavoloView();
-  let h=`<h2>⚽ Calcetto</h2><div class="card row between"><span><span class="pd"></span> <b style="font-size:20px;color:var(--gold)">${profilo.gettoni}</b> palloni dorati</span><small class="muted">+10 ogni giorno · minimo 100 a inizio mese</small></div>`;
-  if(!premOk()) h+=boxPremium('Il Calcetto');
+  const PROVA=!premOk();
+  let h=`<h2>⚽ Calcetto</h2>`+(PROVA?`<div class="card" style="border-color:var(--gold)"><div class="row between"><span>🎁 <b style="font-size:20px;color:var(--gold)">${profilo.prova??0}</b> palloni dorati di prova</span></div>
+    <p class="muted" style="margin:8px 0 0">Hai ricevuto <b>100 palloni dorati di prova</b> per provare il Calcetto. Le vincite delle partite di prova <b>non vengono accreditate</b>: servono solo per conoscere la modalità. Quando i palloni di prova finiscono, per continuare a giocare serve il <b>💎 Premium</b>.</p></div>`
+    :`<div class="card row between"><span><span class="pd"></span> <b style="font-size:20px;color:var(--gold)">${profilo.gettoni}</b> palloni dorati</span></div>`);
+  if(PROVA&&(profilo.prova??0)<=0) h+=boxPremium('Il Calcetto');
   h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole'],...(profilo.ruolo==='admin'?[['gestisci','🛠️ Gestisci tavoli']]:[])].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
   if(sg.tab==='lobby'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso'));
@@ -840,7 +842,7 @@ async function pSng(){
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
       return `<div class="card"><div class="row between"><b>${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">G${t.giornata}</span></div>
       <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso <span class="pd"></span> ${t.ingresso} · Montepremi <span class="pd"></span> ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'} · Iscritti <b>${n}/${t.posti}</b></p>
-      ${io?`<span class="badge" style="color:var(--green)">✅ Sei al tavolo</span> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:premOk()?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:''}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
+      ${io?`<span class="badge" style="color:var(--green)">✅ Sei al tavolo</span> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:!PROVA?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:(profilo.prova??0)>=t.ingresso?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso},true)">🎁 Entra in prova</button>`:'<span class="muted">💎 Serve il Premium</span>'}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
   }
   if(sg.tab==='gestisci'&&profilo.ruolo==='admin'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').in('stato',['aperto','draft','in_gioco','annullato']).order('id',{ascending:false}).limit(60));
@@ -889,7 +891,7 @@ async function pSng(){
   }
   if(sg.tab==='classifica'){
     const inizio=new Date();inizio.setDate(1);inizio.setHours(0,0,0,0);
-    const r=chk(await db.from('sng_iscritti').select('utente_id,vinti,sng_tavoli!inner(stato,ingresso,creato_il),profili(username,premium_fino)').eq('sng_tavoli.stato','chiuso').gte('sng_tavoli.creato_il',inizio.toISOString()));
+    const r=chk(await db.from('sng_iscritti').select('utente_id,vinti,sng_tavoli!inner(stato,ingresso,creato_il),profili(username,premium_fino)').eq('sng_tavoli.stato','chiuso').eq('prova',false).gte('sng_tavoli.creato_il',inizio.toISOString()));
     const t={};r.forEach(x=>{const u=t[x.utente_id]||(t[x.utente_id]={n:x.profili,saldo:0,g:0,v:0});u.saldo+=x.vinti-x.sng_tavoli.ingresso;u.g++;if(x.vinti>0)u.v++});
     const cl=Object.values(t).sort((a,b)=>b.saldo-a.saldo);
     h+=`<div class="card"><h3>👑 Re del Calcetto · ${new Date().toLocaleString('it-IT',{month:'long'})}</h3><table><tr><th>#</th><th>Utente</th><th>Tavoli</th><th>Vinti</th><th>Saldo</th></tr>
@@ -904,8 +906,9 @@ async function pSng(){
     4b. Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
     5. Punti = somma dei fantavoti dei 5 titolari. Il 🃏 Jolly è un titolare. La 🪑 Riserva entra una volta sola, al posto del primo titolare <b>di movimento</b> (D, C, A, jolly compreso) che prende s.v. Il portiere non ha riserva: se prende s.v. vale 0, come vale 0 il posto se anche la riserva è s.v.<br>
     6. Come nel Sit & Go: il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei palloni dorati in gioco, il resto è il montepremi. Tavoli da 2 e 4: montepremi tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
-    7. Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i palloni dorati tornano indietro.<br><br>
-    <span class="pd"></span> I palloni dorati sono gratuiti, non si comprano e non hanno alcun valore: servono solo per giocare e per la classifica "Re del mese".</p></div>`;
+    7. Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i palloni dorati tornano indietro.<br>
+    8. <b>🎁 Prova gratuita</b>: chi non ha il Premium riceve <b>100 palloni dorati di prova</b> per provare il Calcetto. Le vincite delle partite di prova non vengono accreditate e non contano per il "Re del mese". Finiti i palloni di prova, per continuare serve il 💎 Premium.<br><br>
+    <span class="pd"></span> I palloni dorati servono per giocare ai tavoli del Calcetto e vengono assegnati dall'amministratore.</p></div>`;
   app.innerHTML=h;
 }
 async function salvaTavolo(id,vuoto){
@@ -922,8 +925,8 @@ async function eliminaTavolo(id){
   if(!confirm('Eliminare il tavolo? Chi era iscritto riavrà i suoi palloni dorati.'))return;
   const t=chk(await db.from('sng_tavoli').select('ingresso,stato').eq('id',id).single());
   if(['aperto','draft','in_gioco'].includes(t.stato)){
-    const isc=chk(await db.from('sng_iscritti').select('utente_id, profili(gettoni)').eq('tavolo_id',id));
-    for(const i of isc) chk(await db.from('profili').update({gettoni:(i.profili?.gettoni||0)+t.ingresso}).eq('id',i.utente_id));
+    const isc=chk(await db.from('sng_iscritti').select('utente_id,prova, profili(gettoni,prova)').eq('tavolo_id',id));
+    for(const i of isc) chk(await db.from('profili').update(i.prova?{prova:(i.profili?.prova||0)+t.ingresso}:{gettoni:(i.profili?.gettoni||0)+t.ingresso}).eq('id',i.utente_id));
   }
   chk(await db.from('sng_tavoli').delete().eq('id',id));
   toast('Tavolo eliminato');pSng();
@@ -943,9 +946,9 @@ async function creaTavoli(){
   chk(await db.from('sng_tavoli').insert(righe));
   toast(righe.length+' tavoli creati');sg.tab=profilo.ruolo==='admin'?'gestisci':'lobby';pSng();
 }
-async function sngEntra(id,ing){
-  if(!confirm(`Entrare al tavolo? Paghi ${ing} palloni dorati.\n\nAttenzione: una volta iscritto non potrai più uscire. I palloni dorati tornano indietro solo se il tavolo non si riempie prima del calcio d'inizio.`))return;
-  const {data,error}=await db.rpc('sng_entra',{p_tavolo:id});if(error)return toast(error.message,true);
+async function sngEntra(id,ing,prova){
+  if(!confirm(`Entrare al tavolo? Paghi ${ing} palloni dorati${prova?' di prova':''}.${prova?'\n\nÈ una partita di prova: se vinci, le vincite non vengono accreditate.':''}\n\nAttenzione: una volta iscritto non potrai più uscire. I palloni dorati tornano indietro solo se il tavolo non si riempie prima del calcio d'inizio.`))return;
+  const {data,error}=await db.rpc(prova?'sng_entra_prova':'sng_entra',{p_tavolo:id});if(error)return toast(error.message,true);
   toast(data==='draft'?'Tavolo pieno: il draft è partito!':'Sei al tavolo!');sg.tav=id;pSng();
 }
 async function sngEsci(id){const {error}=await db.rpc('sng_esci',{p_tavolo:id});if(error)return toast(error.message,true);toast('Sei uscito, palloni dorati rimborsati');pSng()}
@@ -965,6 +968,7 @@ async function tavoloView(){
   const mie=sc.filter(s=>s.utente_id===utente.id);
   let h=`<button onclick="sg.tav=null;pSng()">← Calcetto</button><h2 style="margin-top:12px">${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</h2>
   ${errAv?`<p style="color:var(--red)">❌ ${esc(errAv.message)}</p>`:''}<p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso <span class="pd"></span> ${t.ingresso} · Montepremi <span class="pd"></span> ${montepremi(t)}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
+  if(isc.find(i=>i.utente_id===utente.id)?.prova) h+=`<div class="card" style="border-color:var(--gold)"><p style="margin:0">🎁 <b>Partita di prova</b>: giochi con i palloni dorati di prova e le eventuali vincite non vengono accreditate.</p></div>`;
   if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>• ${un(i.profili)}</div>`).join('')}</div>`;
   if(t.stato==='annullato') h+=`<div class="card"><p>↩️ Tavolo annullato: non si è riempito prima del calcio d'inizio. I palloni dorati sono stati restituiti.</p></div>`;
   if(t.stato==='draft'){
@@ -1240,7 +1244,7 @@ async function pAdmin(){
   if(ad.tab==='utenti'){
     const us=chk(await db.from('profili').select('*').order('approvato').order('creato_il',{ascending:false}));
     h+=us.map(u=>`<div class="card row between"><div><b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
-      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
+      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni} · 🎁 ${u.prova??0}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
       ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><span class="pd" style="font-size:22px"></span><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
       ${u.id===utente.id?'':`<div class="row">${!u.approvato?`<button class="ok" onclick="approva('${u.id}')">Accetta</button>`:''}
         ${u.approvato?`<button onclick="cambiaRuolo('${u.id}','${u.ruolo==='admin'?'utente':'admin'}')">${u.ruolo==='admin'?'Togli admin':'Rendi admin'}</button>`:''}
