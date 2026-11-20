@@ -222,6 +222,7 @@ function renderNav(){aggSaldo();
 function vai(p){
   pagina=p; renderNav(); if(typeof draftTimer!=='undefined') clearTimeout(draftTimer); if(typeof sngTimer!=='undefined') clearTimeout(sngTimer); if(typeof sngIv!=='undefined') clearInterval(sngIv);
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
+  if(typeof liveIv!=='undefined'&&liveIv){clearInterval(liveIv);liveIv=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
   ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin})[p]();
 }
@@ -232,7 +233,7 @@ const TERMINI_VER='2026-11-20';
 const TITOLARE='Luca Scanga',MAIL_TIT='fantataccuino@gmail.com';
 function pPremium(){
   const fino=profilo.premium_fino&&profilo.premium_fino>=new Date().toISOString().slice(0,10)?profilo.premium_fino:null;
-  const V=[['⚽','Calcetto','Gioca ai tavoli del Calcetto con i palloni dorati.'],['📋','Leghe illimitate','Crea tutte le leghe che vuoi (senza Premium al massimo 2).'],['🪄','Consiglio formazione','Il sito ti propone la formazione migliore della tua rosa.'],['⚠️','Allarme probabili','Ti avvisa se un tuo titolare non è nelle probabili formazioni.'],['🔍','Voto spiegato','Scopri da cosa nasce ogni voto della redazione.'],['📈','Grafici giocatore','Andamento di voti e quotazione giornata per giornata.'],['💎','Badge Premium','Il diamante accanto al tuo nome in chat, classifiche e tavoli.']];
+  const V=[['⚽','Calcetto','Gioca ai tavoli del Calcetto con i palloni dorati.'],['📋','Leghe illimitate','Crea tutte le leghe che vuoi (senza Premium al massimo 2).'],['🪄','Consiglio formazione','Il sito ti propone la formazione migliore della tua rosa.'],['⚠️','Allarme probabili','Ti avvisa se un tuo titolare non è nelle probabili formazioni.'],['🔍','Voto spiegato','Scopri da cosa nasce ogni voto della redazione.'],['📈','Grafici giocatore','Andamento di voti e quotazione giornata per giornata.'],['🔴','Diretta live','Segui in diretta gol, assist, cartellini e fantavoti della gara serale.'],['💎','Badge Premium','Il diamante accanto al tuo nome in chat, classifiche e tavoli.']];
   app.innerHTML=`<h2>💎 Premium</h2>
   <div class="card" style="border-color:var(--gold);text-align:center">${profilo.ruolo==='admin'?'<h3>Sei amministratore: hai tutte le funzioni Premium.</h3>':fino?`<h3 style="color:var(--gold)">✅ Sei Premium</h3><p class="muted">Attivo fino al <b>${new Date(fino).toLocaleDateString('it-IT')}</b></p>`:`<h3>Non sei ancora Premium</h3><p class="muted">Per attivarlo scrivi all'amministratore.</p>${FEAT.wa_premium?`<button class="pri" style="width:100%" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei attivare il Premium su FantaTaccuino. Il mio nome utente è: '+profilo.username),'_blank')">💬 Scrivimi su WhatsApp</button>`:`<p class="muted">Contatto: <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}`}</div>
   <h3 style="margin-top:16px">Cosa sblocca</h3>
@@ -273,9 +274,10 @@ async function eliminaAccount(){
 let ARTS=[];
 async function pHome(){
   ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
+  const LIVE=(await db.from('partite_sa').select('api_id,casa,trasferta,gol_casa,gol_trasferta').eq('live',true)).data||[];
   const col=['linear-gradient(180deg,#7a4dff,#2a0f6b)','linear-gradient(180deg,#ff7a59,#5a1030)','linear-gradient(180deg,#3ad1a0,#0e3d4a)','linear-gradient(180deg,#ffb347,#6b2a00)'];
   const T=[['📋','Le tue leghe',"vai('fanta')"],['⚽','Calcetto',"vai('sng')"],['🔎','Giocatori',"vai('giocatori')"],['📅','Serie A',"vai('seriea')"],['💬','Chat',"vai('chat')"],['📈','Chi sale',"gz.ord='su';vai('giocatori')"],['📉','Chi scende',"gz.ord='giu';vai('giocatori')"],['💎','Premium',"vai('premium')"],['📜','Regole',"vai('termini')"]].filter(t=>t[1]!=='Premium'||on('f_premium')).filter(t=>t[1]!=='Calcetto'||on('f_sng'));
-  app.innerHTML=`${on('f_sng')?`<div class="hero"><div class="t">GIOCA AL <span style="color:var(--green)">CALCETTO</span><br><span style="color:var(--gold)">PALLONI DORATI</span> <span class="pd"></span></div><button class="pri" onclick="vai('sng')">Gioca ora</button></div>`:''}
+  app.innerHTML=`${LIVE.map(l=>`<div class="hero" style="border-color:#ff6b6b88;cursor:pointer" onclick="pagina='seriea';renderNav();pagelle(${l.api_id})"><div class="t"><span style="color:#ff6b6b">● LIVE</span> ${esc(l.casa)} ${l.gol_casa??0}–${l.gol_trasferta??0} ${esc(l.trasferta)}<br><small style="font:600 15px system-ui;color:var(--muted)">${premOk()?'Segui i fantavoti in diretta':'💎 Diretta riservata ai Premium'}</small></div><button class="pri">Segui</button></div>`).join('')}${on('f_sng')?`<div class="hero"><div class="t">GIOCA AL <span style="color:var(--green)">CALCETTO</span><br><span style="color:var(--gold)">PALLONI DORATI</span> <span class="pd"></span></div><button class="pri" onclick="vai('sng')">Gioca ora</button></div>`:''}
   <h3>✉️ Ultime notizie ${ARTS.length?`<span class="badge" style="background:var(--red)">${ARTS.length}</span>`:''}</h3>
   ${ARTS.length?`<div class="news">${ARTS.slice(0,10).map((a,i)=>`<div onclick="apriArt(${a.id})" style="background-image:linear-gradient(180deg,#0000 35%,#000c),${a.immagine_url?`url('${esc(a.immagine_url)}')`:col[i%4]}">${esc(a.titolo)}</div>`).join('')}</div>`:'<p class="muted">Nessuna notizia ancora.</p>'}
   <div class="tiles">${T.map(t=>`<div class="tile" onclick="${t[2]}"><div>${t[0]}</div><span>${t[1]}</span></div>`).join('')}</div>`;
@@ -300,6 +302,10 @@ async function pFanta(){
       ${on('f_draft')?'<option value="draft">⚡ Draft a serpentone (si sceglie a turno)</option>':''}
       ${on('f_ombra')?'<option value="ombra">👥 Lega Ombra (ognuno importa la rosa da un\'altra app)</option>':''}</select>
     <div id="nl_cr"><label>Crediti per squadra</label><input id="nl_cred" type="number" value="500"></div>
+    <div class="card" style="background:#0d0826aa;border-color:var(--gold);margin:6px 0 12px"><h3>📖 Prima di creare: le funzioni speciali</h3>
+      ${on('f_carte')?`<details><summary style="color:var(--txt);font-weight:700">🃏 Carte Tattiche: cosa sono?</summary><p class="muted" style="font-size:14px;margin-top:6px">Ogni squadra ha 4 carte e ognuna si può giocare <b>una sola volta in tutta la stagione</b>, nella giornata che sceglie. Si gioca dalla scheda Formazione e si può annullare fino alla scadenza.</p>${CARTE.map(c=>`<p style="font-size:14px;margin:6px 0"><b>${c.n}</b><br><span class="muted">${c.d}</span></p>`).join('')}<p class="muted" style="font-size:13px">👍 Rendono la lega più strategica e piena di colpi di scena. 👎 Se preferisci il fantacalcio classico, lasciale spente.</p></details>`:''}
+      ${on('f_sprint')?`<details style="margin-top:8px"><summary style="color:var(--txt);font-weight:700">🏆 Mini-torneo Sprint (torneo flash): cos'è?</summary><p class="muted" style="font-size:14px;margin-top:6px">Una lega che vale <b>solo per alcune giornate</b> di Serie A, per esempio dalla 14ª alla 18ª. Si gioca con le stesse regole, ma la classifica conta solo quelle giornate.</p><p class="muted" style="font-size:14px">👍 Perfetta per tornei veloci tra amici, anche a campionato già iniziato, o per un mini-campionato di Natale. 👎 Se vuoi una lega per tutta la stagione, lasciala spenta.</p></details>`:''}
+      <details style="margin-top:8px"><summary style="color:var(--txt);font-weight:700">🔨 Asta, ⚡ Draft o 👥 Lega Ombra?</summary><p class="muted" style="font-size:14px;margin-top:6px"><b>Asta</b>: fate l'asta dal vivo o in chat, poi il presidente assegna i giocatori con il prezzo pagato.<br><b>Draft</b>: si scelgono i giocatori a turno sul sito, a serpentone, e ogni giocatore può averlo una sola squadra.<br><b>Lega Ombra</b>: ognuno importa la rosa che ha su un'altra app e gioca qui con i voti di FantaTaccuino.</p></details></div>
     ${on('f_carte')?'<label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="nl_carte"> 🃏 Carte Tattiche (Capitano x2, Muro, Panchina lunga, Scommessa)</label>':''}
     ${on('f_sprint')?`<label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="nl_sprint" onchange="document.getElementById('nl_sp').style.display=this.checked?'block':'none'"> 🏆 Mini-torneo Sprint (solo alcune giornate)</label>
       <div id="nl_sp" style="display:none"><label>Dalla giornata di Serie A</label><input id="nl_da" type="number" min="1" max="38"><label>Alla giornata</label><input id="nl_a" type="number" min="1" max="38"></div>`:''}
@@ -333,7 +339,7 @@ const LIM_DRAFT={P:3,D:8,C:8,A:6};
 const CARTE=[
   {k:'capitano',n:'👑 Capitano x2',d:'Raddoppia bonus e malus (gol, assist, cartellini…) del giocatore scelto, se gioca.',gioc:true},
   {k:'muro',n:'🧱 Muro',d:'Negli scontri diretti annulla un gol dell\'avversario.'},
-  {k:'panchina',n:'🔄 Panchina lunga',d:'In questa giornata fino a 5 sostituzioni invece di 3.'},
+  {k:'panchina',n:'🔄 Panchina lunga',d:'In questa giornata 2 sostituzioni in più del regolamento.'},
   {k:'scommessa',n:'🎲 Scommessa',d:'Scegli un giocatore: voto 7 o più = +3, sotto il 6 = -3.',gioc:true}];
 const MODALITA={asta:'Asta',draft:'Draft',ombra:'Lega Ombra'};
 let draftTimer=null;
@@ -479,7 +485,7 @@ async function datiLega(lega,membri){
       if(sc){const v=vm[sc.giocatore_id+'-'+g],n=gm[sc.giocatore_id]?.nome;let b=0;
         if(v&&v.voto!==null){b=Number(v.voto)>=7?3:Number(v.voto)<6?-3:0}
         pt+=b;extra.push(`🎲 Scommessa su ${esc(n)} (voto ${v?.voto??'s.v.'}): ${b>0?'+':''}${b}`)}
-      if(cartaDi(g,uid,'panchina')) extra.push('🔄 Panchina lunga: fino a 5 cambi');
+      if(cartaDi(g,uid,'panchina')) extra.push('🔄 Panchina lunga: 2 cambi in più');
       const muro=!!cartaDi(g,uid,'muro');if(muro) extra.push('🧱 Muro: annulla un gol avversario');
       if(recup) extra.unshift(`📋 Formazione non schierata: recuperata quella della giornata ${recup}`);
       ris[g][uid]={pt:Math.round(pt*10)/10,righe,extra,muro};
@@ -1200,7 +1206,7 @@ async function redLista(h){
     <button class="${g.pubblicata?'del':'ok'}" onclick="pubblica(${g.numero},${!g.pubblicata})">${g.pubblicata?'Ritira voti':'Pubblica la giornata'}</button></div>
   ${pp.map(p=>`<div class="card row between" style="padding:10px"><span><b>${esc(p.casa)} – ${esc(p.trasferta)}</b> ${p.gol_casa!==null?`<b style="color:var(--gold)">${p.gol_casa}-${p.gol_trasferta}</b>`:''}<br>
     <small class="muted">${fmt(p.data)}</small> ${p.stato_red==='pronta'?'<span class="badge" style="color:var(--green)">✅ Pronta</span>':'<span class="badge">Da fare</span>'}</span>
-    <div class="row"><button onclick="probApri(${p.api_id})">📋 Probabili</button><button class="pri" onclick="redApri(${p.api_id})">Voti</button></div></div>`).join('')}`;
+    <div class="row"><button onclick="probApri(${p.api_id})">📋 Probabili</button><button onclick="liveAdmin(${p.api_id})" style="${p.live?'border-color:#ff6b6b;color:#ff6b6b':''}">🔴 Live</button><button class="pri" onclick="redApri(${p.api_id})">Voti</button></div></div>`).join('')}`;
 }
 async function redApri(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
@@ -1345,8 +1351,50 @@ async function probSalva(){
 }
 
 // ---------- pagelle (utenti) ----------
+// ---------- live ----------
+let liveIv=null;
+function fvLive(e){return 6+3*(e.gol||0)+(e.assist||0)-(e.amm?0.5:0)-(e.esp?1:0)-(e.gs||0)+3*(e.rp||0)-3*(e.rs||0)-2*(e.ag||0)}
+async function liveDati(id){const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
+  const gg=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('squadra',[p.casa,p.trasferta]).eq('attivo',true));
+  const pr=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
+  const ev=chk(await db.from('live_eventi').select('*').eq('partita_id',id));return {p,gg,pr,ev}}
+async function liveAdmin(id){const {p,gg,pr,ev}=await liveDati(id);
+  const E={};ev.forEach(e=>E[e.giocatore_id]=e);
+  const lista=sq=>gg.filter(g=>g.squadra===sq&&(pr.length?pr.includes(g.id)||E[g.id]:true)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]);
+  const gc=ev.filter(e=>gg.find(g=>g.id===e.giocatore_id)?.squadra===p.casa).reduce((a,e)=>a+(e.gol||0),0)+ev.filter(e=>gg.find(g=>g.id===e.giocatore_id)?.squadra===p.trasferta).reduce((a,e)=>a+(e.ag||0),0);
+  const gt=ev.filter(e=>gg.find(g=>g.id===e.giocatore_id)?.squadra===p.trasferta).reduce((a,e)=>a+(e.gol||0),0)+ev.filter(e=>gg.find(g=>g.id===e.giocatore_id)?.squadra===p.casa).reduce((a,e)=>a+(e.ag||0),0);
+  const btn=(gid,k,lab,v)=>`<button style="padding:6px 9px;${v?'border-color:var(--green);color:var(--green)':''}" onclick="liveEv(${id},${gid},'${k}',1)">${lab}${v&&typeof v==='number'?' '+v:''}</button>`;
+  const riga=g=>{const e=E[g.id]||{};return `<div class="card" style="padding:10px;margin-bottom:6px"><div class="row between"><span>${ruolo(g.ruolo)}<b>${esc(g.nome)}</b></span><b style="color:var(--gold)">${fvLive(e)}</b></div>
+    <div class="row" style="margin-top:6px">${btn(g.id,'gol','⚽',e.gol)}${btn(g.id,'assist','🅰️',e.assist)}${btn(g.id,'amm','🟨',e.amm)}${btn(g.id,'esp','🟥',e.esp)}${g.ruolo==='P'?btn(g.id,'gs','🥅',e.gs)+btn(g.id,'rp','🧤',e.rp):''}${btn(g.id,'rs','❌',e.rs)}${btn(g.id,'ag','🙈',e.ag)}${E[g.id]?`<button class="del" style="padding:6px 9px" onclick="liveEv(${id},${g.id},'reset',0)">↺</button>`:''}</div></div>`};
+  app.innerHTML=`<button onclick="pAdmin()">← Partite della giornata</button><h2 style="margin-top:12px">🔴 Live: ${esc(p.casa)} ${gc} – ${gt} ${esc(p.trasferta)}</h2>
+  <div class="card row between"><span>${p.live?'<b style="color:#ff6b6b">● IN DIRETTA</b>: i Premium la vedono ora':'Live spento: i Premium non la vedono'}</span><button class="${p.live?'del':'ok'}" onclick="liveToggle(${id},${!p.live})">${p.live?'Chiudi live':'Avvia live'}</button></div>
+  <p class="muted" style="font-size:13px">Tocca un evento per aggiungerlo (⚽ gol · 🅰️ assist · 🟨 🟥 cartellini · 🥅 gol subito · 🧤 rigore parato · ❌ rigore sbagliato · 🙈 autogol). ↺ azzera il giocatore. Il fantavoto live è provvisorio: base 6 più bonus e malus. I voti veri li metti a fine partita in "Voti".${pr.length?'':' Senza probabili vedi tutta la rosa.'}</p>
+  <h3>${esc(p.casa)}</h3>${lista(p.casa).map(riga).join('')}<h3>${esc(p.trasferta)}</h3>${lista(p.trasferta).map(riga).join('')}`}
+async function liveToggle(id,v){chk(await db.from('partite_sa').update({live:v}).eq('api_id',id));toast(v?'Live avviato':'Live chiuso');liveAdmin(id)}
+async function liveEv(id,gid,k,_){const {data:e}=await db.from('live_eventi').select('*').eq('partita_id',id).eq('giocatore_id',gid).maybeSingle();
+  if(k==='reset'){chk(await db.from('live_eventi').delete().eq('partita_id',id).eq('giocatore_id',gid));return liveAdmin(id)}
+  const o={partita_id:id,giocatore_id:gid,...(e||{})};if(k==='amm'||k==='esp')o[k]=!o[k];else o[k]=(o[k]||0)+1;
+  chk(await db.from('live_eventi').upsert(o,{onConflict:'partita_id,giocatore_id'}));
+  if(k==='gol'||k==='ag'){const {p,gg,ev}=await liveDati(id);const sq=g=>gg.find(x=>x.id===g)?.squadra;let gc=0,gt=0;ev.forEach(x=>{if(sq(x.giocatore_id)===p.casa){gc+=x.gol||0;gt+=x.ag||0}else{gt+=x.gol||0;gc+=x.ag||0}});await db.from('partite_sa').update({gol_casa:gc,gol_trasferta:gt}).eq('api_id',id)}
+  liveAdmin(id)}
+async function liveView(id){
+  if(!premOk()){app.innerHTML=`<button onclick="vai('seriea')">← Serie A</button><div style="margin-top:12px">${boxPremium('🔴 La diretta live')}</div>`;return}
+  const disegna=async()=>{if(pagina!=='seriea')return;const {p,gg,ev}=await liveDati(id);const E={};ev.forEach(e=>E[e.giocatore_id]=e);
+    const sq=g=>g.squadra;let gc=0,gt=0;ev.forEach(x=>{const g=gg.find(y=>y.id===x.giocatore_id);if(!g)return;if(g.squadra===p.casa){gc+=x.gol||0;gt+=x.ag||0}else{gt+=x.gol||0;gc+=x.ag||0}});
+    const mie=chk(await db.from('rose').select('giocatore_id').eq('utente_id',utente.id)).map(x=>x.giocatore_id);
+    const miei=gg.filter(g=>mie.includes(g.id));
+    const ic=e=>[...Array(e.gol||0).fill('⚽'),...Array(e.assist||0).fill('🅰️'),e.amm?'🟨':'',e.esp?'🟥':'',...Array(e.rp||0).fill('🧤'),...Array(e.rs||0).fill('❌'),...Array(e.ag||0).fill('🙈'),e.gs?`🥅${e.gs}`:''].join(' ');
+    const r=g=>{const e=E[g.id]||{};return `<div class="row between" style="padding:7px 0;border-bottom:1px solid #ffffff14"><span>${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <small>${ic(e)}</small></span><b style="color:var(--gold)">${fvLive(e)}</b></div>`};
+    const conEv=sqn=>gg.filter(g=>g.squadra===sqn&&E[g.id]).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]);
+    app.innerHTML=`<button onclick="vai('seriea')">← Serie A</button>
+    <div class="card" style="margin-top:12px;text-align:center"><b style="color:#ff6b6b">${p.live?'● LIVE':'Finita'}</b><div class="row" style="justify-content:center;gap:16px;margin-top:6px"><h3 style="margin:0">${esc(p.casa)}</h3><span class="ris">${gc} – ${gt}</span><h3 style="margin:0">${esc(p.trasferta)}</h3></div><small class="muted">Si aggiorna da solo ogni 30 secondi</small></div>
+    ${miei.length?`<div class="card" style="border-color:var(--gold)"><h3>⭐ I tuoi giocatori in campo</h3>${miei.sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(r).join('')}<p class="muted" style="font-size:12px">Fantavoto live provvisorio: base 6 più bonus e malus classici. Il voto vero arriva a fine partita.</p></div>`:''}
+    <div class="card"><h3>${esc(p.casa)}</h3>${conEv(p.casa).map(r).join('')||'<p class="muted">Nessun evento</p>'}</div>
+    <div class="card"><h3>${esc(p.trasferta)}</h3>${conEv(p.trasferta).map(r).join('')||'<p class="muted">Nessun evento</p>'}</div>`};
+  await disegna();clearInterval(liveIv);liveIv=setInterval(disegna,30000)}
 async function pagelle(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
+  if(p.live) return liveView(id);
   const gg=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto').in('squadra',[p.casa,p.trasferta]));
   const vv=gg.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',gg.map(g=>g.id))):[];
   const pr=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
