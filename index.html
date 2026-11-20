@@ -98,7 +98,7 @@ tr.mod td{background:#ffd44722}
 .news{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
 .news::-webkit-scrollbar{display:none}
 .news div{flex:0 0 150px;height:180px;border-radius:20px;border:2px solid #ffffff30;background-size:cover;background-position:center;display:flex;align-items:flex-end;padding:10px;font:800 17px/1.1 var(--cond);cursor:pointer;box-shadow:0 6px 16px #0006}
-.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
 .tile{background:linear-gradient(160deg,#4b25c9,#2a1490);border:2px solid #5a35e0;border-radius:20px;box-shadow:0 6px 18px #0006,inset 0 1px 0 #ffffff30;text-align:center;padding:10px 4px;cursor:pointer}
 .tile div{font-size:30px}
 .tile span{display:inline-block;background:#3a17b8;border-radius:10px;padding:3px 7px;font-weight:800;font-size:11px;margin-top:4px}
@@ -192,26 +192,33 @@ async function registrati(){
 async function esci(){await db.auth.signOut();utente=null;profilo=null;pagina='home';renderAuth()}
 
 // ---------- navigazione ----------
-const PAGINE = {home:'🏠 Home',fanta:'📋 Leghe',sng:'⚽ Calcetto',giocatori:'🔎 Giocatori',seriea:'📅 Serie A',chat:'💬 Chat',termini:'📜 Termini',admin:'⚙️ Admin'};
+const PAGINE = {home:'🏠 Home',fanta:'📋 Leghe',sng:'⚽ Calcetto',giocatori:'🔎 Giocatori',seriea:'📅 Serie A',chat:'💬 Chat',premium:'💎 Premium',termini:'📜 Termini',admin:'⚙️ Admin'};
 function navB(v){const i=v.indexOf(' ');return `<span class="ic">${v.slice(0,i)}</span><span>${v.slice(i+1)}</span>`}
 function renderNav(){
   document.getElementById('nav').innerHTML=Object.entries(PAGINE)
-    .filter(([k])=>(k!=='admin'||profilo.ruolo==='admin')&&(k!=='sng'||on('f_sng')))
+    .filter(([k])=>(k!=='admin'||profilo.ruolo==='admin')&&(k!=='sng'||on('f_sng'))&&(k!=='premium'||on('f_premium')))
     .map(([k,v])=>`<button class="${k===pagina?'on':''}" onclick="vai('${k}')">${navB(v)}</button>`).join('')
-    +(isPrem()&&on('f_premium')?`<button disabled style="opacity:1;color:var(--gold)">${navB('💎 Premium')}</button>`:'')
     +(FEAT.link_donazioni?`<button onclick="window.open('${esc(FEAT.link_donazioni)}','_blank')">${navB('☕ Sostienici')}</button>`:'');
 }
 function vai(p){
   pagina=p; renderNav(); if(typeof draftTimer!=='undefined') clearTimeout(draftTimer); if(typeof sngTimer!=='undefined') clearTimeout(sngTimer); if(typeof sngIv!=='undefined') clearInterval(sngIv);
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
-  ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,admin:pAdmin})[p]();
+  ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin})[p]();
 }
 
 
 // ---------- termini e privacy ----------
 const TERMINI_VER='2026-11-20';
 const TITOLARE='Luca Scanga',MAIL_TIT='fantataccuino@gmail.com';
+function pPremium(){
+  const fino=profilo.premium_fino&&profilo.premium_fino>=new Date().toISOString().slice(0,10)?profilo.premium_fino:null;
+  const V=[['⚽','Calcetto','Gioca ai tavoli del Calcetto con i palloni dorati.'],['📋','Leghe illimitate','Crea tutte le leghe che vuoi (senza Premium al massimo 2).'],['🪄','Consiglio formazione','Il sito ti propone la formazione migliore della tua rosa.'],['⚠️','Allarme probabili','Ti avvisa se un tuo titolare non è nelle probabili formazioni.'],['🔍','Voto spiegato','Scopri da cosa nasce ogni voto della redazione.'],['📈','Grafici giocatore','Andamento di voti e quotazione giornata per giornata.'],['💎','Badge Premium','Il diamante accanto al tuo nome in chat, classifiche e tavoli.']];
+  app.innerHTML=`<h2>💎 Premium</h2>
+  <div class="card" style="border-color:var(--gold);text-align:center">${profilo.ruolo==='admin'?'<h3>Sei amministratore: hai tutte le funzioni Premium.</h3>':fino?`<h3 style="color:var(--gold)">✅ Sei Premium</h3><p class="muted">Attivo fino al <b>${new Date(fino).toLocaleDateString('it-IT')}</b></p>`:`<h3>Non sei ancora Premium</h3><p class="muted">Per attivarlo scrivi all'amministratore.</p>${FEAT.wa_premium?`<button class="pri" style="width:100%" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei attivare il Premium su FantaTaccuino. Il mio nome utente è: '+profilo.username),'_blank')">💬 Scrivimi su WhatsApp</button>`:`<p class="muted">Contatto: <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}`}</div>
+  <h3 style="margin-top:16px">Cosa sblocca</h3>
+  ${V.map(v=>`<div class="card row" style="flex-wrap:nowrap;padding:12px 14px"><div style="font-size:28px">${v[0]}</div><div><b>${v[1]}</b><br><small class="muted">${v[2]}</small></div></div>`).join('')}`;
+}
 function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;return `<h2>Termini d'uso e privacy</h2><p class="muted">Ultimo aggiornamento: 20 novembre 2026</p>
 <div class="card"><h3>🔒 Informativa privacy</h3>
 <p><b>Chi tratta i tuoi dati.</b> Il titolare del trattamento è ${TITOLARE}, persona fisica, contattabile a ${m}.</p>
@@ -248,7 +255,7 @@ let ARTS=[];
 async function pHome(){
   ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
   const col=['linear-gradient(180deg,#7a4dff,#2a0f6b)','linear-gradient(180deg,#ff7a59,#5a1030)','linear-gradient(180deg,#3ad1a0,#0e3d4a)','linear-gradient(180deg,#ffb347,#6b2a00)'];
-  const T=[['📋','Le tue leghe',"vai('fanta')"],['⚽','Calcetto',"vai('sng')"],['🔎','Giocatori',"vai('giocatori')"],['📅','Serie A',"vai('seriea')"],['💬','Chat',"vai('chat')"],['📈','Chi sale',"gz.ord='su';vai('giocatori')"],['📉','Chi scende',"gz.ord='giu';vai('giocatori')"],['📜','Regole',"vai('termini')"]].filter(t=>t[1]!=='Calcetto'||on('f_sng'));
+  const T=[['📋','Le tue leghe',"vai('fanta')"],['⚽','Calcetto',"vai('sng')"],['🔎','Giocatori',"vai('giocatori')"],['📅','Serie A',"vai('seriea')"],['💬','Chat',"vai('chat')"],['📈','Chi sale',"gz.ord='su';vai('giocatori')"],['📉','Chi scende',"gz.ord='giu';vai('giocatori')"],['💎','Premium',"vai('premium')"],['📜','Regole',"vai('termini')"]].filter(t=>t[1]!=='Premium'||on('f_premium')).filter(t=>t[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=`${on('f_sng')?`<div class="hero"><div class="t">GIOCA AL <span style="color:var(--green)">CALCETTO</span><br><span style="color:var(--gold)">PALLONI DORATI</span> <span class="pd"></span></div><button class="pri" onclick="vai('sng')">Gioca ora</button></div>`:''}
   <h3>✉️ Ultime notizie ${ARTS.length?`<span class="badge" style="background:var(--red)">${ARTS.length}</span>`:''}</h3>
   ${ARTS.length?`<div class="news">${ARTS.slice(0,10).map((a,i)=>`<div onclick="apriArt(${a.id})" style="background-image:linear-gradient(180deg,#0000 35%,#000c),${a.immagine_url?`url('${esc(a.immagine_url)}')`:col[i%4]}">${esc(a.titolo)}</div>`).join('')}</div>`:'<p class="muted">Nessuna notizia ancora.</p>'}
@@ -1236,7 +1243,9 @@ async function pAdmin(){
     h+=`<p class="muted">Accendi o spegni le funzioni per tutto il sito. Le leghe già create con una funzione spenta continuano a funzionare, ma non se ne possono creare di nuove.</p>`
       +F.map(([k,n,d])=>`<div class="card row between"><div style="flex:1"><b>${n}</b><br><small class="muted">${d}</small></div>
         <button class="${on(k)?'ok':'del'}" onclick="toggleFeat('${k}',${!on(k)})">${on(k)?'ATTIVA':'SPENTA'}</button></div>`).join('')
-      +`<div class="card"><h3>☕ Donazioni</h3><p class="muted">Link della tua pagina Ko-fi, Buy Me a Coffee o PayPal.me. Se lo lasci vuoto il pulsante "Sostienici" non compare.</p>
+      +`<div class="card"><h3>💬 WhatsApp per il Premium</h3><p class="muted">Il tuo numero WhatsApp: nella pagina 💎 Premium compare il pulsante "Scrivimi su WhatsApp". Scrivilo con il prefisso, senza + e senza spazi (es. 393331234567). Attenzione: chi tocca il pulsante vede il numero.</p>
+        <input id="wa_num" inputmode="numeric" value="${esc(FEAT.wa_premium||'')}" placeholder="39..."><button class="pri" onclick="salvaWa()">Salva</button></div>
+      <div class="card"><h3>☕ Donazioni</h3><p class="muted">Link della tua pagina Ko-fi, Buy Me a Coffee o PayPal.me. Se lo lasci vuoto il pulsante "Sostienici" non compare.</p>
         <input id="lk_don" value="${esc(FEAT.link_donazioni||'')}" placeholder="https://ko-fi.com/..."><button class="pri" onclick="salvaDon()">Salva</button></div>
       <div class="card"><h3>⚽ Trattenuta del banco (Calcetto)</h3><p class="muted">Percentuale dei palloni dorati di ogni tavolo che il banco trattiene. Il resto è il montepremi.</p>
         <div class="row"><input id="rk" class="n" type="number" min="0" max="50" value="${+FEAT.rake_calcetto||0}"> % <button class="pri" onclick="salvaRake()">Salva</button></div></div>`;
@@ -1319,6 +1328,7 @@ async function pAdmin(){
   app.innerHTML=h;
 }
 async function salvaRake(){const v=Math.max(0,Math.min(50,+val('rk')||0));chk(await db.from('impostazioni').upsert({chiave:'rake_calcetto',valore:String(v)}));await caricaFeat();toast('Trattenuta: '+v+'%')}
+async function salvaWa(){const v=val('wa_num').replace(/[^0-9]/g,'');if(v&&v.length<10)return toast('Numero troppo corto: metti il prefisso 39 davanti',true);chk(await db.from('impostazioni').upsert({chiave:'wa_premium',valore:v}));await caricaFeat();toast(v?'Numero WhatsApp salvato':'Numero tolto');pAdmin()}
 async function salvaDon(){const v=val('lk_don');if(v&&!/^https:\/\//.test(v))return toast('Il link deve iniziare con https://',true);chk(await db.from('impostazioni').upsert({chiave:'link_donazioni',valore:v}));await caricaFeat();renderNav();toast('Link salvato')}
 async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);chk(await db.from('profili').update({premium_fino:anni?d.toISOString().slice(0,10):null}).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
 async function modGettoni(id,seg){const n=Math.abs(parseInt(document.getElementById('pg_'+id).value));if(!n)return toast('Scrivi quanti palloni dorati',true);
