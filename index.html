@@ -920,12 +920,9 @@ function redRender(){
   <h2 style="margin-top:12px">${esc(p.casa)} – ${esc(p.trasferta)}</h2>
   <div class="card"><label>Risultato</label><div class="row"><input class="n" type="number" min="0" value="${red.ris.casa??''}" onchange="red.ris.casa=this.value===''?null:+this.value"> –
     <input class="n" type="number" min="0" value="${red.ris.trasf??''}" onchange="red.ris.trasf=this.value===''?null:+this.value"></div></div>
-  <div class="card"><h3>📷 Importa da screenshot</h3><p class="muted">Carica gli screenshot della partita (formazioni con i cambi ed eventi: gol, assist, cartellini). L'AI compila il tabellino, poi controlli tu.</p>
-    <input type="file" id="red_img" accept="image/*" multiple><button class="pri" id="red_btn" onclick="importaScreen()">Leggi screenshot</button><p id="red_err" style="color:var(--red)"></p>
-    <p class="muted" style="font-size:12px">Consiglio: 2-3 screenshot (formazioni con cambi + eventi) bastano e l'AI risponde prima.</p>
-    <details><summary>📋 Importa da testo (riserva)</summary><p class="muted">Incolla il tabellino in formato JSON (per esempio quello che ti prepara Claude dagli screenshot).</p><textarea id="red_txt" rows="5"></textarea><button onclick="importaTesto()">Importa testo</button></details></div>
+  <div class="card"><h3>📋 Importa tabellino</h3><p class="muted">Incolla il tabellino in formato JSON (quello che ti prepara Claude dagli screenshot di FotMob).</p><textarea id="red_txt" rows="5"></textarea><button class="pri" onclick="importaTesto()">Importa testo</button></div>
   ${red.righe.length?`<div class="row between"><h3>${esc(p.casa)}</h3><button onclick="proponi()">🔄 Ricalcola voti proposti</button></div>${lato('casa').map(riga).join('')}
-  <h3>${esc(p.trasferta)}</h3>${lato('trasferta').map(riga).join('')}`:'<p class="muted">Nessun giocatore ancora: importa gli screenshot o aggiungili a mano.</p>'}
+  <h3>${esc(p.trasferta)}</h3>${lato('trasferta').map(riga).join('')}`:'<p class="muted">Nessun giocatore ancora: importa il tabellino o aggiungili a mano.</p>'}
   <div class="card"><h3>Aggiungi giocatore</h3><select id="red_add">${red.tutti.filter(x=>!red.righe.find(r=>r.id===x.id)).map(x=>`<option value="${x.id}">${esc(x.squadra)} · ${x.ruolo} · ${esc(x.nome)}</option>`).join('')}</select>
     <button onclick="aggRiga()">Aggiungi</button></div>
   <button class="pri" style="width:100%;margin-bottom:20px" onclick="salvaPartita()">💾 Salva partita (pronta)</button>`;
@@ -966,36 +963,6 @@ function caricaTabellino(d){
   }
   red.righe.forEach(r=>{if(r.voto===undefined)r.voto=votoProposto(r)});
   return n;
-}
-function leggiImg(file){return new Promise((ok,ko)=>{const img=new Image();img.onload=()=>{const s=Math.min(1,1600/Math.max(img.width,img.height));
-  const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-  URL.revokeObjectURL(img.src);ok(c.toDataURL('image/jpeg',0.75).split(',')[1])};img.onerror=ko;img.src=URL.createObjectURL(file)})}
-async function importaScreen(){
-  const files=[...document.getElementById('red_img').files];if(!files.length)return toast('Scegli almeno uno screenshot',true);
-  const b=document.getElementById('red_btn');b.disabled=true;b.textContent='L\'AI sta leggendo… (10-30 secondi)';
-  try{
-    const imgs=await Promise.all(files.map(leggiImg));
-    const lista=red.tutti.map(x=>`${x.id}|${x.nome}|${x.ruolo}|${x.lato}`).join('\n');
-    const prompt=`Sei il redattore di un sito di fantacalcio. Dagli screenshot della partita ${red.p.casa} (casa) - ${red.p.trasferta} (trasferta) estrai il tabellino.
-Includi SOLO i giocatori che sono scesi in campo (titolari e subentrati). Per i minuti: titolare non sostituito = 90; titolare sostituito al minuto X = X; subentrato al minuto X = 90 - X (minimo 1).
-Conta i rigori segnati anche come gol. Per i portieri indica i gol subiti mentre erano in campo.
-Abbina ogni giocatore alla lista seguente (formato id|nome|ruolo|squadra) e metti il suo id; se non lo trovi metti id null e scrivi il nome come lo leggi.
-${lista}
-Rispondi SOLO con JSON in questo formato:
-{"risultato":{"casa":0,"trasferta":0},"giocatori":[{"id":123,"nome":"...","squadra":"casa","minuti":90,"gol":0,"assist":0,"ammonizione":false,"espulsione":false,"gol_subiti":0,"rigori_parati":0,"rigori_sbagliati":0,"autogol":0}]}`;
-    const body={contents:[{parts:[{text:prompt},...imgs.map(d=>({inline_data:{mime_type:'image/jpeg',data:d}}))]}],generationConfig:{responseMimeType:'application/json',temperature:0}};
-    const rid=chk(await db.rpc('avvia_lettura',{p_body:body}));
-    let e=null;
-    for(let i=0;i<100&&!e;i++){await sleep(2000);b.textContent=`L'AI sta leggendo… ${(i+1)*2}s`;e=chk(await db.rpc('esito_lettura',{p_id:rid}))}
-    if(!e) throw new Error('Nessuna risposta dall\'AI, riprova');
-    if(e.timeout) throw new Error('L\'AI ci ha messo troppo: riprova con meno screenshot');
-    if(e.errore) throw new Error(e.errore);
-    let d;try{d=JSON.parse(e.content)}catch(x){throw new Error('Risposta non valida ('+e.status+')')}
-    if(e.status!==200) throw new Error(d.error?.message||('Errore Gemini '+e.status));
-    const t=(d.candidates?.[0]?.content?.parts||[]).map(x=>x.text||'').join('').replace(/^```(json)?/,'').replace(/```$/,'').trim();
-    const n=caricaTabellino(JSON.parse(t));
-    toast(n+' giocatori letti: controlla e correggi');redRender();
-  }catch(e){toast('Errore: '+e.message,true);const er=document.getElementById('red_err');if(er)er.textContent='❌ '+e.message;b.disabled=false;b.textContent='Leggi screenshot'}
 }
 function importaTesto(){
   try{const t=val('red_txt').replace(/^```(json)?/,'').replace(/```$/,'').trim();const n=caricaTabellino(JSON.parse(t));toast(n+' giocatori importati');redRender()}
