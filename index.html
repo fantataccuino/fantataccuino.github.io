@@ -253,7 +253,7 @@ const TERMINI_VER='2026-11-20';
 const TITOLARE='Luca Scanga',MAIL_TIT='fantataccuino@gmail.com';
 function pPremium(){
   const fino=profilo.premium_fino&&profilo.premium_fino>=new Date().toISOString().slice(0,10)?profilo.premium_fino:null;
-  const V=[['⚽','Calcetto','Gioca ai tavoli del Calcetto con i palloni dorati.'],['📋','Leghe illimitate','Crea tutte le leghe che vuoi (senza Premium al massimo 2).'],['🪄','Consiglio formazione','Il sito ti propone la formazione migliore della tua rosa.'],['⚠️','Allarme probabili','Ti avvisa se un tuo titolare non è nelle probabili formazioni.'],['🔍','Voto spiegato','Scopri da cosa nasce ogni voto della redazione.'],['📈','Grafici giocatore','Andamento di voti e quotazione giornata per giornata.'],['🔴','Diretta live','Segui in diretta gol, assist, cartellini e fantavoti della gara serale.'],['💎','Badge Premium','Il diamante accanto al tuo nome in chat, classifiche e tavoli.']];
+  const V=[['📊','Titolarità e indisponibili','Percentuale di titolarità di ogni giocatore e chi è infortunato, squalificato o in dubbio, nella rosa e in formazione.'],['⚽','Calcetto','Gioca ai tavoli del Calcetto con i palloni dorati.'],['📋','Leghe illimitate','Crea tutte le leghe che vuoi (senza Premium al massimo 2).'],['🪄','Consiglio formazione','Il sito ti propone la formazione migliore della tua rosa.'],['⚠️','Allarme probabili','Ti avvisa se un tuo titolare non è nelle probabili formazioni.'],['🔍','Voto spiegato','Scopri da cosa nasce ogni voto della redazione.'],['📈','Grafici giocatore','Andamento di voti e quotazione giornata per giornata.'],['🔴','Diretta live','Segui in diretta gol, assist, cartellini e fantavoti della gara serale.'],['💎','Badge Premium','Il diamante accanto al tuo nome in chat, classifiche e tavoli.']];
   app.innerHTML=`<h2>💎 Premium</h2>
   <div class="card" style="border-color:var(--gold);text-align:center">${profilo.ruolo==='admin'?'<h3>Sei amministratore: hai tutte le funzioni Premium.</h3>':fino?`<h3 style="color:var(--gold)">✅ Sei Premium</h3><p class="muted">Attivo fino al <b>${new Date(fino).toLocaleDateString('it-IT')}</b></p>`:`<h3>Non sei ancora Premium</h3><p class="muted">Per attivarlo scrivi all'amministratore.</p>${FEAT.wa_premium?`<button class="pri" style="width:100%" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei attivare il Premium su FantaTaccuino. Il mio nome utente è: '+profilo.username),'_blank')">💬 Scrivimi su WhatsApp</button>`:`<p class="muted">Contatto: <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}`}</div>
   <h3 style="margin-top:16px">Cosa sblocca</h3>
@@ -409,6 +409,16 @@ async function applicaPacchetto(lid,P){
   chk(await db.from('leghe').update(up).eq('id',lid));
   return rep;
 }
+async function impTit(){const righe=val('tit_txt').split('\n').map(x=>x.trim()).filter(Boolean);if(!righe.length)return toast('Incolla le righe',true);
+  const box=document.getElementById('tit_ris');box.innerHTML='<p class="muted">Aggiorno…</p>';
+  if(document.getElementById('tit_az').checked){if(!confirm('Azzerare titolarità e stati di tutti i giocatori?'))return;chk(await db.from('giocatori').update({titolarita:null,stato:null}).eq('attivo',true))}
+  const tutti=chk(await db.from('giocatori').select('id,nome,squadra').eq('attivo',true).limit(3000));let ok=0;const no=[];
+  for(const r of righe){const [n,sq,t,st]=r.split(';').map(x=>(x||'').trim());const S=(st||'').toLowerCase();
+    let c=tutti.filter(g=>norm(g.nome)===norm(n)&&(!sq||norm(g.squadra)===norm(sq)));if(!c.length)c=tutti.filter(g=>norm(g.nome)===norm(n));
+    if(c.length!==1){no.push(r+(c.length?' → più giocatori con questo nome':' → non trovato'));continue}
+    const up={titolarita:t===''?null:Math.max(0,Math.min(100,+t||0)),stato:['infortunato','squalificato','dubbio'].includes(S)?S:null};
+    const {error}=await db.from('giocatori').update(up).eq('id',c[0].id);if(error){no.push(r+' → '+error.message);continue}ok++}
+  box.innerHTML=`<p style="color:var(--green)">✅ Aggiornati ${ok}</p>${no.length?`<div class="muted" style="font-size:13px">${no.map(esc).join('<br>')}</div>`:''}`}
 function leggiTxt(inp,id){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const t=document.getElementById(id);t.value=r.result;toast(`File caricato: ${r.result.split('\n').filter(x=>x.trim()).length} righe`)};r.readAsText(f,'utf-8')}
 async function creaImportata(){
   const nome=val('il_nome');if(!nome)return toast('Scrivi il nome della lega',true);
@@ -650,15 +660,17 @@ async function legaView(){
         A.g++;B.g++;A.gf+=gc;A.gs+=gt;B.gf+=gt;B.gs+=gc;
         if(gc>gt){A.v++;B.p++;A.punti+=3}else if(gc<gt){B.v++;A.p++;B.punti+=3}else{A.n++;B.n++;A.punti++;B.punti++}
       });
-      if(inc.length){
-        const cl=[...membri].sort((a,b)=>tot[b.utente_id].punti-tot[a.utente_id].punti||tot[b.utente_id].pt-tot[a.utente_id].pt);
+      const LIB=Object.entries(lega.attesa||{}).map(([k,v])=>{const z=v.pz||{};tot['n:'+k]={pt:+z.fp||0,g:(+z.v||0)+(+z.n||0)+(+z.p||0),v:+z.v||0,n:+z.n||0,p:+z.p||0,gf:+z.gf||0,gs:+z.gs||0,punti:+z.punti||0};return {utente_id:'n:'+k,nome_squadra:k+' ⏳',libera:true}});
+      const tutti=[...membri,...LIB];
+      if(inc.length||(lega.attesa_cal||[]).length){
+        const cl=[...tutti].sort((a,b)=>tot[b.utente_id].punti-tot[a.utente_id].punti||tot[b.utente_id].pt-tot[a.utente_id].pt);
         h+=`<div class="card" style="overflow-x:auto"><h3>Scontri diretti</h3><table><tr><th>#</th><th>Squadra</th><th>Pt</th><th>G</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th><th>FP</th></tr>
         ${cl.map((m,i)=>{const t=tot[m.utente_id];return `<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b></td><td><b style="color:var(--gold)">${t.punti}</b></td><td>${t.g}</td><td>${t.v}</td><td>${t.n}</td><td>${t.p}</td><td>${t.gf}</td><td>${t.gs}</td><td>${t.pt.toFixed(1)}</td></tr>`}).join('')}</table>
-        <p class="muted" style="font-size:12px">FP = fantapunti totali (primo criterio di spareggio). Gol: ${testoFasce(lega)}.</p></div>`;
+        <p class="muted" style="font-size:12px">FP = fantapunti totali (primo criterio di spareggio). Gol: ${testoFasce(lega)}.${LIB.length?' ⏳ = squadra non ancora presa da nessuno.':''}</p></div>`;
       }
-      const cl2=[...membri].sort((a,b)=>tot[b.utente_id].pt-tot[a.utente_id].pt);
+      const cl2=[...tutti].sort((a,b)=>tot[b.utente_id].pt-tot[a.utente_id].pt);
       h+=`<div class="card"><h3>Classifica a punti totali</h3><table><tr><th>#</th><th>Squadra</th><th>Fantapunti</th></tr>
-        ${cl2.map((m,i)=>`<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b><br><small class="muted">${un(m.profili)}</small></td><td><b>${tot[m.utente_id].pt.toFixed(1)}</b></td></tr>`).join('')}</table>
+        ${cl2.map((m,i)=>`<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b><br><small class="muted">${m.libera?'libera':un(m.profili)}</small></td><td><b>${tot[m.utente_id].pt.toFixed(1)}</b></td></tr>`).join('')}</table>
         <p class="muted" style="font-size:12px">Contano solo le giornate con voti pubblicati${lega.giornata_da?` dalla ${lega.giornata_da} alla ${lega.giornata_a||38}`:''}. Sostituzioni automatiche: massimo ${REG(lega).cambi}, stesso ruolo${REG(lega).sw?" (con switch)":""}, in ordine di panchina.</p></div>`;
     } else {
       const libN=new Set(Object.keys(lega.attesa||{}));
@@ -712,7 +724,7 @@ async function legaView(){
     const ombraMia=lega.modalita==='ombra'&&fz.vedi===utente.id;
     h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
     <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi+(+((lega.bonus||{}).cred||{})[fz.vedi]||0)}</b>`:''}</p>
-    <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
+    <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}<br>${titG(r.giocatori)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
     if(ombraMia) h+=`<div class="card"><h3>👥 Importa la tua rosa</h3><p class="muted">Copia la rosa dall'altra app (Fantagazzetta, Fantalab…) e incollala qui: un giocatore per riga. Basta il cognome, anche senza accenti (es. "Lautaro Martinez", "Martinez L.", "Dimarco").</p>
       <textarea id="om_t" rows="8"></textarea><button class="pri" onclick="importaOmbra(${lega.id})">Importa</button><div id="om_r" style="margin-top:10px"></div></div>
       <div class="card"><h3>Aggiungi un giocatore</h3><input id="om_q" oninput="cercaOmbra(${lega.id})" placeholder="Cerca per nome"><div id="om_s"></div></div>`;
@@ -766,7 +778,7 @@ async function legaView(){
       <h3 style="margin-top:16px">📋 La tua rosa</h3>
       <div class="fmods">${['','P','D','C','A'].map(k=>`<button class="ffil" data-k="${k}" onclick="FFIL='${k}';disegnaCampo()">${k||'Tutti'}</button>`).join('')}</div>
       <p class="muted" style="font-size:12px">Tocca un giocatore: va <b>in campo</b>; toccalo di nuovo e va <b>in panchina</b>; un'altra volta e torna <b>fuori</b>. Tocca un posto vuoto <b>+</b> per vedere solo quel ruolo.</p>
-      ${mia.map(r=>`<div class="frow" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" onclick="tapG(${r.giocatore_id})"><span>${ruolo(r.giocatori.ruolo)}<b>${esc(r.giocatori.nome)}</b> <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span><span style="margin-left:auto;margin-right:8px">${forma5(FVM[r.giocatore_id])}</span><span class="fst" id="fst_${r.giocatore_id}"></span>
+      ${mia.map(r=>`<div class="frow" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" onclick="tapG(${r.giocatore_id})"><span>${ruolo(r.giocatori.ruolo)}<b>${esc(r.giocatori.nome)}</b> <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span><span style="margin-left:auto;margin-right:8px;display:flex;flex-direction:column;align-items:flex-end;gap:3px">${forma5(FVM[r.giocatore_id])}${titG(r.giocatori,1)}</span><span class="fst" id="fst_${r.giocatore_id}"></span>
         <select class="fsel" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" style="display:none">
         <option value="">Tribuna</option><option value="T" ${stato(r.giocatore_id)==='T'?'selected':''}>Titolare</option>
         ${Array.from({length:Math.max(nPan,mia.length)},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
@@ -1157,6 +1169,11 @@ function cartaG(g,fv,w=112){fv=(fv||[]).filter(x=>x!==null&&x!==undefined).map(N
   const fm=fv.length?(fv.reduce((a,b)=>a+b,0)/fv.length).toFixed(1):'–';const col=x=>x>=7?'#16a34a':x>=6?'#eab308':'#e5484d';
   const bars=fv.length?fv.slice(-5).map(x=>`<div class="fb"><small>${+x.toFixed(1)}</small><i style="height:${Math.max(6,Math.min(80,x*6.5))}%;background:${col(x)}"></i></div>`).join(''):'<div class="fnone">nessun<br>voto</div>';
   return `<div class="fcard t-${t}" style="--w:${w}px" onclick="schedaG(${g.id})"><div class="fv">${fm}</div><div class="fr">${g.ruolo}</div><div class="fforma">${bars}<span>ultime 5</span></div><div class="fn">${esc(g.nome)}</div><div class="fs">${esc(g.squadra)} · Q ${q}</div></div>`}
+function titG(g,mini){if(!g)return '';const st={infortunato:'<span style="color:var(--red);font-weight:800">✚ Infortunato</span>',squalificato:'<span style="color:var(--red);font-weight:800">🟥 Squalificato</span>',dubbio:'<span style="color:var(--gold);font-weight:800">❓ In dubbio</span>'}[g.stato];
+  if(!premOk())return (st||g.titolarita!=null)&&!mini?'<small class="muted">💎</small>':'';
+  if(st)return `<span style="font-size:12px;white-space:nowrap">${st}</span>`;
+  if(g.titolarita==null)return '';const t=+g.titolarita,c=t>=70?'var(--green)':t>=40?'var(--gold)':'var(--red)';
+  return `<span title="Titolarità" style="display:inline-block;position:relative;width:64px;height:16px;border-radius:9px;background:#ffffff1f;vertical-align:middle;overflow:hidden"><span style="position:absolute;inset:0 auto 0 0;width:${t}%;background:${c}"></span><span style="position:relative;display:block;text-align:center;font:800 11px/16px Inter,sans-serif;color:#120a3a">${t}%</span></span>`}
 function forma5(fv){fv=(fv||[]).slice(-5);if(!fv.length)return '<small class="muted">nessun voto</small>';const c=x=>x>=7?'#5dff7a':x>=6?'#ffd447':'#ff6b6b';
   return `<span title="Ultimi 5 fantavoti: ${fv.join(' · ')}" style="display:flex;align-items:flex-end;gap:2px;height:30px;flex:0 0 auto">${fv.map(x=>`<i style="display:block;width:7px;border-radius:2px;height:${Math.max(4,Math.min(30,x*2.6))}px;background:${c(x)}"></i>`).join('')}</span>`}
 async function votiDi(ids){const m={};if(!ids.length)return m;const vv=chk(await db.from('voti').select('giocatore_id,giornata,fantavoto').in('giocatore_id',ids).not('fantavoto','is',null).order('giornata'));vv.forEach(v=>(m[v.giocatore_id]=m[v.giocatore_id]||[]).push(+v.fantavoto));return m}
@@ -1747,6 +1764,12 @@ async function pAdmin(){
   }
 
   if(ad.tab==='giocatori'){
+    h+=`<div class="card" style="border-color:var(--green)"><h3>💎 Titolarità e indisponibili</h3>
+      <p class="muted" style="font-size:13px">Lo vedono solo gli utenti Premium (rosa e formazione). Una riga per giocatore: <b>Nome;Squadra;Titolarità;Stato</b><br>Titolarità da 0 a 100 (vuota = non mostrare). Stato: <b>ok</b>, <b>infortunato</b>, <b>squalificato</b> o <b>dubbio</b>.<br>Es: <i>Leysen F.;Genoa;;infortunato</i> · <i>Solet;Udinese;80;ok</i></p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'tit_txt')"></label>
+      <textarea id="tit_txt" rows="6" placeholder="Nome;Squadra;Titolarità;Stato"></textarea>
+      <label style="color:var(--txt);display:block;margin:4px 0 10px"><input type="checkbox" id="tit_az"> Prima azzera titolarità e stati di tutti</label>
+      <button class="pri" onclick="impTit()">Aggiorna</button><div id="tit_ris" style="margin-top:8px"></div></div>`;
     h+=`<div class="card" style="border-color:var(--gold)"><h3>📋 Importa listone da testo</h3>
       <p class="muted">Una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b> (ruolo P, D, C o A)<br>Es: <i>Federico Dimarco;D;Inter;16</i><br>Se il giocatore esiste già (stesso nome e squadra) aggiorna ruolo e quotazione, altrimenti lo crea.</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'lst_txt')"></label>
