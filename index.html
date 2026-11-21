@@ -776,7 +776,9 @@ async function legaView(){
         const sc={};
         mia.forEach(r=>{const p=pp.find(x=>x.casa===r.giocatori.squadra||x.trasferta===r.giocatori.squadra);
           const st=!p?'out':!conP.has(p.api_id)?'?':tit.has(r.giocatore_id)?'ok':'no';const m=fm[r.giocatore_id];
-          alr[r.giocatore_id]=st;sc[r.giocatore_id]=(st==='ok'?100:st==='?'?50:0)+(m?m.reduce((a,b)=>a+b,0)/m.length:6)});
+          const fuori=['infortunato','squalificato'].includes(r.giocatori.stato),tp=r.giocatori.titolarita;
+          const base=fuori?-100:st==='ok'?100:st==='no'||st==='out'?0:(tp!=null?+tp:50)-(r.giocatori.stato==='dubbio'?25:0);
+          alr[r.giocatore_id]=fuori?'out':st;sc[r.giocatore_id]=base+(m?m.reduce((a,b)=>a+b,0)/m.length:6)});
         let best=null;
         for(const [nm,md] of Object.entries(MODULI).filter(([k])=>RGf.moduli.includes(k))){const need={P:1,D:md[0],C:md[1],A:md[2]},ass={};let tot=0,ok=true;
           for(const R of ['P','D','C','A']){const l=mia.filter(r=>r.giocatori.ruolo===R).sort((a,b)=>sc[b.giocatore_id]-sc[a.giocatore_id]);
