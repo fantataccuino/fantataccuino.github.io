@@ -177,8 +177,27 @@ async function avvia(session){
   renderNav(); vai(pagina);
   let visto=true;try{visto=!!localStorage.getItem('benv_'+utente.id)}catch(e){}
   if(!visto) setTimeout(mostraBenvenuto,500);
-  else if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,700);
+  else setTimeout(dopoBenv,700);
 }
+function dopoBenv(){let n=true;try{n=!!localStorage.getItem('nintro_'+utente.id)}catch(e){}
+  if(!n)return mostraNotifIntro();
+  if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) mostraPacchi()}
+function mostraNotifIntro(){if(document.getElementById('nintro'))return;const o=document.createElement('div');o.id='nintro';
+  o.style.cssText='position:fixed;inset:0;z-index:101;background:#0b0628f0;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  const P=premOk(),gia=('Notification' in window)&&Notification.permission==='granted';
+  const vant=[['🔔','Notifiche live','gol, assist, cartellini, gol subiti e infortuni dei tuoi schierati, più il promemoria della formazione'],['🔴','Diretta live','fantavoti in diretta e simulazione del risultato'],['🪄','Consiglio formazione','la formazione migliore della tua rosa'],['⚠️','Allarme probabili','se un tuo titolare non è nelle probabili'],['📊','Titolarità e indisponibili','percentuali di titolarità, infortunati e squalificati'],['📋','Leghe illimitate','senza Premium al massimo 2'],['⚽','Calcetto','i tavoli con i palloni Premium']];
+  o.innerHTML=`<div class="card" style="max-width:460px;width:100%;margin:auto">
+    <div style="font-size:46px;text-align:center">🔔</div>
+    <p style="font:800 26px var(--cond);margin:0;text-align:center">Novità: le notifiche live!</p>
+    <p class="muted" style="text-align:center">Ti arriva un avviso sul telefono quando un tuo giocatore schierato <b>segna</b> ⚽, fa <b>assist</b> 🅰️, prende un <b>cartellino</b> 🟨🟥, il tuo portiere <b>subisce gol</b> 🥅 o un tuo giocatore si <b>infortuna</b> 🚑. E un promemoria ⏰ un'ora prima della scadenza se non hai messo la formazione.</p>
+    <div class="card" style="margin:10px 0;border-color:var(--gold)"><b>💎 Sono riservate agli utenti Premium</b>${P?'<p style="color:var(--green);margin:6px 0 0">✅ Tu sei Premium: puoi attivarle subito.</p>':`<p class="muted" style="margin:6px 0 4px">Con il Premium ottieni:</p>${vant.map(v=>`<div style="font-size:14px;margin:4px 0">${v[0]} <b>${v[1]}</b> <span class="muted">· ${v[2]}</span></div>`).join('')}`}</div>
+    ${P&&isIOS()&&!isApp()?'<p class="muted" style="font-size:13px">📱 Su iPhone prima devi aggiungere il sito alla schermata Home: ti spiego come nella pagina Notifiche.</p>':''}
+    <p class="muted" style="font-size:13px">Puoi decidere tu: le attivi o le spegni quando vuoi da ☰ Altro → 🔔 Notifiche, e scegli quali avvisi ricevere.</p>
+    ${P?(gia?'':`<button class="pri" style="width:100%" onclick="chiudiNIntro();${isIOS()&&!isApp()?"vai('notifiche')":'notifAttiva()'}">🔔 Sì, attiva le notifiche</button>`):`<button class="pri" style="width:100%" onclick="chiudiNIntro();vai('premium')">💎 Scopri il Premium</button>`}
+    <button style="width:100%;margin-top:8px" onclick="chiudiNIntro()">${P&&gia?'Ok, perfetto':'Non ora'}</button></div>`;
+  document.body.appendChild(o)}
+function chiudiNIntro(){try{localStorage.setItem('nintro_'+utente.id,'1')}catch(e){}document.getElementById('nintro')?.remove();
+  if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,300)}
 function mostraBenvenuto(){if(document.getElementById('benv'))return;const o=document.createElement('div');o.id='benv';
   o.style.cssText='position:fixed;inset:0;z-index:101;background:#0b0628f0;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
   o.innerHTML=`<div class="card" style="max-width:460px;width:100%;margin:auto">
@@ -190,7 +209,7 @@ function mostraBenvenuto(){if(document.getElementById('benv'))return;const o=doc
     <button class="pri" style="width:100%" onclick="chiudiBenvenuto()">Ho capito, iniziamo!</button></div>`;
   document.body.appendChild(o)}
 function chiudiBenvenuto(){try{localStorage.setItem('benv_'+utente.id,'1')}catch(e){}document.getElementById('benv')?.remove();
-  if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,300)}
+  setTimeout(dopoBenv,300)}
 function oggiStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function mostraPacchi(){if(document.getElementById('pacchi'))return;const o=document.createElement('div');o.id='pacchi';
   o.style.cssText='position:fixed;inset:0;z-index:100;background:#0b0628e8;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -441,6 +460,88 @@ async function notifAttiva(){try{const perm=await Notification.requestPermission
 async function notifProva(){chk(await db.rpc('notif_prova'));fetch(SUPABASE_URL+'/functions/v1/notifiche',{method:'POST',mode:'no-cors'}).catch(()=>{});toast('Notifica di prova in arrivo…')}
 async function notifSpegni(){const reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();if(sub){await db.from('push_sub').delete().eq('endpoint',sub.endpoint);await sub.unsubscribe()}toast('Notifiche spente su questo telefono');pNotif()}
 async function notifPref(k,v){const cur=(await db.from('notif_pref').select('pref').eq('utente_id',utente.id).maybeSingle()).data?.pref||{};cur[k]=v;chk(await db.from('notif_pref').upsert({utente_id:utente.id,pref:cur}));toast('Salvato')}
+// ---------- mercato ----------
+let MK={sub:'svinc',fil:'',q:'',L:null,sel:{dai:[],ric:[]},a:''};
+const SVR={pieno:'tutto il prezzo pagato',meta:'metà del prezzo pagato',quot:'la quotazione attuale',zero:'niente'};
+async function mercatoTab(lega,membri,rose,pres,nomeSq){let h='';
+  const mk=chk(await db.from('mercati').select('*').eq('lega_id',lega.id).order('id',{ascending:false}).limit(10));
+  const M=mk.find(m=>m.aperto&&(!m.chiude||new Date(m.chiude)>new Date()));
+  const res=u=>lega.crediti-rose.filter(r=>r.utente_id===u).reduce((a,r)=>a+r.prezzo,0)+(+((lega.bonus||{}).cred||{})[u]||0);
+  const svR=(lega.bonus||{}).svinc||'pieno',mia=rose.filter(r=>r.utente_id===MIO),isM=membri.some(m=>m.utente_id===MIO);
+  h+=M?`<div class="card" style="border-color:var(--green)"><h3 style="margin:0">🟢 Mercato aperto</h3><p class="muted" style="margin:6px 0 0">${M.tipo==='buste'?'✉️ <b>Buste chiuse</b>: fai le tue offerte, nessuno vede quelle degli altri. Alla chiusura vince l\'offerta più alta.':'🔨 <b>Asta di riparazione dal vivo</b>: fate l\'asta tra voi, il presidente inserisce gli acquisti.'}${M.chiude?`<br>Chiude il <b>${fmt(M.chiude)}</b>`:''}</p></div>`
+    :`<div class="card"><h3 style="margin:0">🔴 Mercato chiuso</h3><p class="muted" style="margin:6px 0 0">${pres?'Aprilo qui sotto quando volete fare la riparazione.':'Il presidente lo aprirà per la sessione di riparazione. Intanto puoi guardare gli svincolati.'}</p></div>`;
+  if(isM)h+=`<p class="muted" style="margin:4px 2px 10px">💰 I tuoi crediti: <b style="color:var(--gold)">${res(MIO)}</b> · Se svincoli un giocatore ti torna ${SVR[svR]}.</p>`;
+  if(pres){
+    if(!M){const d=new Date(Date.now()+2*864e5);d.setMinutes(0,0,0);const loc=new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,16);
+      h+=`<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">👑 Apri il mercato</h3>
+      <label>Tipo</label><select id="mk_tipo" onchange="document.getElementById('mk_ch_l').textContent=this.value==='buste'?'Chiusura buste (obbligatoria)':'Chiusura automatica (facoltativa)'"><option value="buste">✉️ Buste chiuse</option><option value="asta">🔨 Asta di riparazione dal vivo</option></select>
+      <label id="mk_ch_l">Chiusura buste (obbligatoria)</label><input id="mk_ch" type="datetime-local" value="${loc}">
+      <label>Quando una squadra svincola, le torna</label><select id="mk_sv">${Object.entries(SVR).map(([k,v])=>`<option value="${k}" ${k===svR?'selected':''}>${v}</option>`).join('')}</select>
+      <button class="pri" style="width:100%;margin-top:10px" onclick="apriMercato(${lega.id})">🟢 Apri il mercato</button></div>`}
+    else{h+=`<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">👑 Gestione mercato</h3>
+      ${M.tipo==='buste'?`<p class="muted" style="font-size:13px">Alla chiusura le buste si aprono da sole e i giocatori vanno a chi ha offerto di più (a parità, chi ha offerto prima). Puoi anche chiudere adesso.</p>`:`<p class="muted" style="font-size:13px">Cerca lo svincolato, scegli la squadra e il prezzo dell'asta:</p>
+        <input id="mk_ag" placeholder="🔎 Nome giocatore…" oninput="cercaAsta(${lega.id})"><div id="mk_agl"></div>
+        <select id="mk_au">${membri.map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)} (💰 ${res(m.utente_id)})</option>`).join('')}</select>
+        <input id="mk_ap" type="number" min="1" placeholder="Prezzo">
+        <button class="pri" onclick="assegnaAsta(${lega.id})">🔨 Aggiudica</button>`}
+      <button class="del" style="width:100%;margin-top:10px" onclick="chiudiMercato(${M.id})">🔴 Chiudi il mercato ${M.tipo==='buste'?'e apri le buste':''}</button></div>`}}
+  const subs=[['svinc','🆓 Svincolati'],['rosa','👕 La mia rosa'],...(M&&M.tipo==='buste'?[['buste','✉️ Le mie buste']]:[]),['scambi','🔄 Scambi'],['storico','📜 Movimenti']];
+  if(!subs.find(s=>s[0]===MK.sub))MK.sub='svinc';
+  h+=`<div class="tabs">${subs.map(([k,v])=>`<button class="${MK.sub===k?'on':''}" onclick="MK.sub='${k}';legaView()">${v}</button>`).join('')}</div>`;
+  if(MK.sub==='svinc'){
+    const att=new Set();Object.values(lega.attesa||{}).forEach(v=>(v.rosa||[]).forEach(r=>att.add(+r[0])));const presi=new Set(rose.map(r=>r.giocatore_id));
+    if(!MK.L)MK.L=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione,stato,titolarita').eq('attivo',true).order('quotazione',{ascending:false}).limit(3000));
+    const mieB=M&&M.tipo==='buste'?chk(await db.from('buste').select('id,giocatore_id,offerta').eq('mercato_id',M.id)):[];
+    const L=MK.L.filter(g=>!presi.has(g.id)&&!att.has(g.id));
+    const vis=L.filter(g=>(!MK.fil||g.ruolo===MK.fil)&&(!MK.q||(g.nome+' '+g.squadra).toLowerCase().includes(MK.q.toLowerCase()))).slice(0,100);
+    h+=`<input placeholder="🔎 Cerca nome o squadra…" value="${esc(MK.q)}" onchange="MK.q=this.value;legaView()">
+      <div class="fmods">${['','P','D','C','A'].map(k=>`<button class="ffil ${MK.fil===k?'on':''}" onclick="MK.fil='${k}';legaView()">${k||'Tutti'}</button>`).join('')}</div>
+      <p class="muted" style="font-size:12px">${L.length} svincolati${vis.length<L.filter(g=>(!MK.fil||g.ruolo===MK.fil)).length?' · ne mostro 100, usa la ricerca':''}. Tocca il nome per la scheda.</p>
+      <div class="card" style="padding:6px 12px">${vis.map(g=>{const b=mieB.find(x=>x.giocatore_id===g.id);return `<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line);gap:6px"><span onclick="schedaG(${g.id})" style="cursor:pointer">${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <small class="muted">${esc(g.squadra)}</small><br><small>${qv(g)}</small> ${titG(g,1)}</span>
+        ${M&&M.tipo==='buste'&&isM?(b?`<span style="white-space:nowrap"><b style="color:var(--gold)">✉️ ${b.offerta}</b> <button onclick="faiBusta(${lega.id},${g.id},${b.offerta})">✏️</button></span>`:`<button class="pri" onclick="faiBusta(${lega.id},${g.id})">✉️ Offri</button>`):''}</div>`}).join('')||'<p class="muted">Nessuno svincolato con questi filtri.</p>'}</div>`}
+  if(MK.sub==='rosa'){
+    if(!isM)h+='<p class="muted">Non hai una squadra in questa lega.</p>';
+    else h+=`<div class="card" style="padding:6px 12px">${mia.sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]).map(r=>{const rim=svR==='meta'?Math.floor(r.prezzo/2):svR==='quot'?(+r.giocatori.quotazione||1):svR==='zero'?0:r.prezzo;
+      return `<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line)"><span>${ruolo(r.giocatori.ruolo)}<b>${esc(r.giocatori.nome)}</b> <small class="muted">${esc(r.giocatori.squadra)} · pagato ${r.prezzo}</small></span>${M?`<button class="del" onclick="svincola(${lega.id},${r.giocatore_id},'${esc(r.giocatori.nome).replace(/'/g,'')}',${rim})">✂️ Svincola (+${rim})</button>`:''}</div>`}).join('')}</div>
+      ${M?'':'<p class="muted" style="font-size:13px">Puoi svincolare solo quando il mercato è aperto.</p>'}`}
+  if(MK.sub==='buste'&&M){const mb=chk(await db.from('buste').select('id,offerta,giocatori(nome,ruolo,squadra)').eq('mercato_id',M.id).order('offerta',{ascending:false}));const tot=mb.reduce((a,b)=>a+b.offerta,0);
+    h+=`<div class="card"><p class="muted" style="margin-top:0">Hai offerto in tutto <b>${tot}</b> crediti su ${res(MIO)}. Le offerte degli altri si vedono solo alla chiusura.</p>${mb.map(b=>`<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line)"><span>${ruolo(b.giocatori.ruolo)}<b>${esc(b.giocatori.nome)}</b> <small class="muted">${esc(b.giocatori.squadra)}</small></span><span><b style="color:var(--gold)">${b.offerta}</b> <button class="del" onclick="togliBusta(${b.id})">✕</button></span></div>`).join('')||'<p class="muted">Nessuna busta: vai in 🆓 Svincolati e tocca ✉️ Offri.</p>'}</div>`}
+  if(MK.sub==='scambi'){
+    const sc=chk(await db.from('scambi').select('*').eq('lega_id',lega.id).order('id',{ascending:false}).limit(40));
+    const gN=id=>{const r=rose.find(x=>x.giocatore_id===id);return r?esc(r.giocatori.nome):'#'+id};
+    const riga=s=>`${nomeSq(s.da)} dà: <b>${s.dai.map(gN).join(', ')||'—'}</b>${s.crediti>0?` + ${s.crediti} crediti`:''}<br>${nomeSq(s.a)} dà: <b>${s.ricevi.map(gN).join(', ')||'—'}</b>${s.crediti<0?` + ${-s.crediti} crediti`:''}`;
+    const ric=sc.filter(s=>s.stato==='proposto'&&s.a===MIO),inv=sc.filter(s=>s.stato==='proposto'&&s.da===MIO);
+    if(ric.length)h+=`<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">📥 Proposte per te</h3>${ric.map(s=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)">${riga(s)}<div style="margin-top:6px"><button class="pri" onclick="rispScambio(${s.id},true)">✅ Accetta</button> <button class="del" onclick="rispScambio(${s.id},false)">Rifiuta</button></div></div>`).join('')}</div>`;
+    if(inv.length)h+=`<div class="card"><h3 style="margin-top:0">📤 Le tue proposte</h3>${inv.map(s=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)">${riga(s)}<div style="margin-top:6px"><button class="del" onclick="rispScambio(${s.id},false)">Ritira</button></div></div>`).join('')}</div>`;
+    if(M&&isM){const alt=membri.filter(m=>m.utente_id!==MIO);if(!alt.find(m=>m.utente_id===MK.a))MK.a=alt[0]?.utente_id||'';const sua=rose.filter(r=>r.utente_id===MK.a).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
+      const ck=(lista,k)=>lista.map(r=>`<label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" style="width:auto" ${MK.sel[k].includes(r.giocatore_id)?'checked':''} onchange="const s=MK.sel.${k},i=s.indexOf(${r.giocatore_id});i<0?s.push(${r.giocatore_id}):s.splice(i,1)">${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} <small class="muted">${esc(r.giocatori.squadra)}</small></label>`).join('');
+      h+=`<div class="card"><h3 style="margin-top:0">➕ Proponi uno scambio</h3><label>Con</label><select onchange="MK.a=this.value;MK.sel.ric=[];legaView()">${alt.map(m=>`<option value="${m.utente_id}" ${m.utente_id===MK.a?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
+        <details open><summary style="color:var(--txt);font-weight:700;margin-top:8px">Dai (dalla tua rosa)</summary>${ck(mia.sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]),'dai')}</details>
+        <details open><summary style="color:var(--txt);font-weight:700;margin-top:8px">Ricevi (dalla sua rosa)</summary>${ck(sua,'ric')}</details>
+        <label>Crediti (positivo = li dai tu, negativo = li ricevi)</label><input id="sc_cr" type="number" value="0">
+        <button class="pri" style="width:100%;margin-top:8px" onclick="proponiScambio(${lega.id})">📤 Invia proposta</button></div>`}
+    else if(!M)h+='<p class="muted">Gli scambi si possono proporre solo con il mercato aperto.</p>';
+    const fatti=sc.filter(s=>s.stato==='accettato');if(fatti.length)h+=`<div class="card"><h3 style="margin-top:0">🤝 Scambi conclusi</h3>${fatti.map(s=>`<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:14px">${riga(s)}</div>`).join('')}</div>`}
+  if(MK.sub==='storico'){const ids=[...new Set(mk.flatMap(m=>(m.esito||[]).map(e=>e.g)))];const gg=ids.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('id',ids)):[];
+    h+=mk.filter(m=>(m.esito||[]).length||!m.aperto).map(m=>`<div class="card"><h3 style="margin-top:0">${m.tipo==='buste'?'✉️ Buste':'🔨 Asta'} · ${new Date(m.aperto_il).toLocaleDateString('it-IT')}${m.aperto?' <span class="badge" style="background:var(--green)">in corso</span>':''}</h3>
+      ${(m.esito||[]).map(e=>{const g=gg.find(x=>x.id===e.g);return `<div class="row between" style="padding:5px 0;border-bottom:1px solid var(--line);font-size:14px"><span>${g?ruolo(g.ruolo)+esc(g.nome):'?'} → <b>${nomeSq(e.u)}</b></span><span><b style="color:var(--gold)">${e.p}</b>${e.n?` <small class="muted">(${e.n} offerte)</small>`:''}</span></div>`}).join('')||'<p class="muted">Nessun acquisto.</p>'}</div>`).join('')||'<p class="muted">Ancora nessun mercato concluso.</p>'}
+  return h}
+async function apriMercato(lid){const t=val('mk_tipo'),c=val('mk_ch'),sv=val('mk_sv');if(t==='buste'&&!c)return toast('Scegli quando chiudono le buste',true);
+  const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single());chk(await db.from('leghe').update({bonus:{...(l.bonus||{}),svinc:sv}}).eq('id',lid));
+  chk(await db.rpc('mercato_apri',{p_lega:lid,p_tipo:t,p_chiude:c?new Date(c).toISOString():null}));toast('Mercato aperto! 🟢');legaView()}
+async function chiudiMercato(id){if(!confirm('Chiudere il mercato adesso?'))return;const es=chk(await db.rpc('mercato_chiudi',{p_id:id}));toast(`Mercato chiuso${es&&es.length?': '+es.length+' acquisti':''}`);MK.sub='storico';legaView()}
+async function faiBusta(lid,gid,cur){const v=prompt(cur?'Nuova offerta (crediti):':'Quanti crediti offri?',cur||'');if(v===null)return;const n=parseInt(v);if(!(n>0))return toast('Scrivi un numero di crediti',true);
+  const {error}=await db.rpc('busta_metti',{p_lega:lid,p_g:gid,p_off:n});if(error)return toast(error.message,true);toast('✉️ Busta salvata: '+n+' crediti');legaView()}
+async function togliBusta(id){if(!confirm('Ritirare questa busta?'))return;const {error}=await db.rpc('busta_togli',{p_id:id});if(error)return toast(error.message,true);legaView()}
+async function svincola(lid,gid,n,rim){if(!confirm(`Svincolare ${n}? Ti tornano ${rim} crediti e torna tra gli svincolati.`))return;const {error}=await db.rpc('mercato_svincola',{p_lega:lid,p_g:gid});if(error)return toast(error.message,true);MK.L=null;toast(n+' svincolato');legaView()}
+async function cercaAsta(lid){const q=val('mk_ag').toLowerCase(),box=document.getElementById('mk_agl');if(q.length<2){box.innerHTML='';return}
+  if(!MK.L)MK.L=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione,stato,titolarita').eq('attivo',true).order('quotazione',{ascending:false}).limit(3000));
+  box.innerHTML=MK.L.filter(g=>(g.nome+' '+g.squadra).toLowerCase().includes(q)).slice(0,8).map(g=>`<div class="row between" style="padding:5px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="MK.ag=${g.id};document.getElementById('mk_ag').value='${esc(g.nome).replace(/'/g,'')}';document.getElementById('mk_agl').innerHTML=''"><span>${ruolo(g.ruolo)}${esc(g.nome)} <small class="muted">${esc(g.squadra)}</small></span><small>Q ${g.quotazione}</small></div>`).join('')}
+async function assegnaAsta(lid){if(!MK.ag)return toast('Scegli il giocatore dalla ricerca',true);const p=+val('mk_ap');if(!(p>0))return toast('Scrivi il prezzo',true);
+  const {error}=await db.rpc('mercato_assegna',{p_lega:lid,p_g:MK.ag,p_u:val('mk_au'),p_prezzo:p});if(error)return toast(error.message,true);MK.ag=null;MK.L=null;toast('🔨 Aggiudicato!');legaView()}
+async function proponiScambio(lid){if(!MK.sel.dai.length&&!MK.sel.ric.length)return toast('Scegli almeno un giocatore',true);
+  const {error}=await db.rpc('scambio_proponi',{p_lega:lid,p_a:MK.a,p_dai:MK.sel.dai,p_ricevi:MK.sel.ric,p_crediti:+val('sc_cr')||0});if(error)return toast(error.message,true);MK.sel={dai:[],ric:[]};toast('📤 Proposta inviata');legaView()}
+async function rispScambio(id,ok){if(!confirm(ok?'Accettare lo scambio? I giocatori passano subito di squadra.':'Confermi?'))return;const {error}=await db.rpc('scambio_rispondi',{p_id:id,p_ok:ok});if(error)return toast(error.message,true);toast(ok?'🤝 Scambio fatto!':'Fatto');legaView()}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -560,9 +661,11 @@ async function pDash(){
   const mL=await avv(gLive),mN=await avv(gNext);
   const fatta=gNext?((await db.from('formazioni').select('giocatore_id',{count:'exact',head:true}).eq('lega_id',lega.id).eq('coppa',0).eq('utente_id',MIO).eq('giornata',gNext.numero)).count||0)>0:false;
   const vs=(m)=>`<div class="vsr"><div>${stemma(nome(m[0]),'mini',img(m[0]))}<b>${esc(nome(m[0]))}</b></div><div class="vs">VS</div><div>${stemma(nome(m[1]),'mini',img(m[1]))}<b>${esc(nome(m[1]))}</b></div></div>`;
+  const MKA=(await db.from('mercati').select('tipo,chiude').eq('lega_id',LG).eq('aperto',true).order('id',{ascending:false}).limit(1)).data?.filter(m=>!m.chiude||new Date(m.chiude)>new Date())[0];
   app.innerHTML=selLega()+`<div class="dhero"><label style="display:block;width:96px;margin:0 auto;position:relative;cursor:pointer">${stemma(me?.nome_squadra,'',me?.stemma)}<span style="position:absolute;right:-2px;bottom:6px;background:var(--gold);color:#1a0f3d;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px">📷</span><input type="file" accept="image/*" style="display:none" onchange="cambiaStemma(this)"></label><h2 style="margin:4px 0 0">${esc(me?.nome_squadra||'')}</h2><small class="muted">${esc(lega.nome)}</small>
     <div class="dstats"><div><b>${pos||'-'}ª</b><small>Posizione</small></div><div><b>${sd?t.punti:'-'}</b><small>Punti</small></div><div><b>${t.g}</b><small>Partite</small></div><div><b>${Math.round(t.pt*10)/10}</b><small>Pt. totali</small></div></div></div>
   ${arts.length?`<div class="ticker">${arts.map(a=>`<div onclick="ARTS=[];apriArtDa(${a.id})"><b>NEWS</b>${esc(a.titolo)}</div>`).join('')}</div>`:''}
+  ${MKA?`<div class="card" style="border-color:var(--green);cursor:pointer" onclick="vaiLega('mercato')"><div class="row between"><b>🟢 Mercato aperto</b><small class="muted">${MKA.tipo==='buste'?'✉️ Buste chiuse':'🔨 Asta'}${MKA.chiude?' · fino al '+fmt(MKA.chiude):''}</small></div><button class="pri" style="width:100%;margin-top:8px">Vai al mercato</button></div>`:''}
   ${gLive?`<div class="card"><div class="row between"><b><span style="color:var(--green)">●</span> Live in corso</b><small class="muted">${gLive.numero}ª giornata</small></div>${mL?vs(mL):''}<button class="btnv" onclick="vaiLega('live')">Vai al Live</button></div>`:''}
   ${gNext?`<div class="card"><div class="row between"><b>Prossima giornata</b><small class="muted">${gNext.numero}ª giornata</small></div>${mN?vs(mN):''}
     <p class="muted" style="text-align:center;margin:4px 0">⏱️ Formazione entro <b style="color:var(--txt)">${fmt(gNext.scadenza)}</b>${fatta?' · <span style="color:var(--green)">✅ inserita</span>':''}</p>
@@ -579,7 +682,7 @@ async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e
 async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
 async function pAltro(){
   const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
-  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🏅','Coppa',"vaiLega('coppa')"],['🔔','Notifiche',"vai('notifiche')"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
+  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🔄','Mercato',"vaiLega('mercato')"],['🏅','Coppa',"vaiLega('coppa')"],['🔔','Notifiche',"vai('notifiche')"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
     ...(pres?[['⚙️','Gestione lega',"vaiLega('gestione')"]]:[]),...(on('f_premium')?[['💎','Premium',"vai('premium')"]]:[]),['📜','Termini',"vai('termini')"],...(profilo.ruolo==='admin'?[['🛠️','Admin',"vai('admin')"]]:[]),
     ...(FEAT.link_donazioni?[['☕','Sostienici',`window.open('${esc(FEAT.link_donazioni)}','_blank')`]]:[])].filter(x=>x[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=selLega()+`<h2 style="margin-top:6px">☰ Altro</h2><div class="tiles">${V.map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
@@ -977,12 +1080,12 @@ async function legaView(){
   const isCo=MIO!==utente.id;
   const tabs=[['classifica','Classifica'],['giornate','Giornate'],['rosa','Rose'],['formazione','Formazione']];
   if(lega.modalita==='draft') tabs.splice(2,0,['draft','Draft']);
-  tabs.push(['coppa','🏆 Coppa'],['live','🔴 Live']);
+  tabs.push(['mercato','🔄 Mercato'],['coppa','🏆 Coppa'],['live','🔴 Live']);
   if(pres) tabs.push(['gestione','Gestione']);
   if(!tabs.find(t=>t[0]===fz.tab)) fz.tab='classifica';
   renderNav();
   const modoL=LEGHE.length&&fz.lega===LG;
-  let h=modoL?selLega()+`<h2 style="margin-top:6px">${{classifica:'🏆 Classifica',giornate:'📅 Calendario',rosa:'👕 Squadre',formazione:'📋 Formazione',live:'🔴 Live',coppa:'🏆 Coppa',gestione:'⚙️ Gestione lega',draft:'🎯 Draft'}[fz.tab]||esc(lega.nome)}</h2>`:`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
+  let h=modoL?selLega()+`<h2 style="margin-top:6px">${{classifica:'🏆 Classifica',giornate:'📅 Calendario',rosa:'👕 Squadre',formazione:'📋 Formazione',live:'🔴 Live',coppa:'🏆 Coppa',mercato:'🔄 Mercato',gestione:'⚙️ Gestione lega',draft:'🎯 Draft'}[fz.tab]||esc(lega.nome)}</h2>`:`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
   <h2 style="margin-top:12px">${esc(lega.nome)}</h2>
   <p class="muted">Codice invito: <b style="color:var(--gold)">${esc(lega.codice_invito)}</b> · <span class="badge">${MODALITA[lega.modalita]||'Asta'}</span>
   ${lega.giornata_da?` <span class="badge">🏆 Sprint G${lega.giornata_da}–${lega.giornata_a||38}</span>`:''}${lega.carte?' <span class="badge">🃏 Carte</span>':''}</p>
@@ -1051,6 +1154,7 @@ async function legaView(){
   }
 
   if(fz.tab==='coppa') h+=await coppaTab(lega,membri,pres,nomeSq);
+  if(fz.tab==='mercato') h+=await mercatoTab(lega,membri,rose,pres,nomeSq);
   if(fz.tab==='draft'){
     if(lega.draft_stato==='attesa') h+=`<div class="card"><p class="muted">Il draft non è ancora iniziato. ${pres?'Avvialo dalla scheda Gestione quando sono entrati tutti i partecipanti.':'Aspetta che il presidente lo avvii.'}</p></div>`;
     else{
