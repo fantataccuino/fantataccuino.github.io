@@ -1475,6 +1475,12 @@ async function liberaSq(lid,uid){
   chk(await db.from('leghe').update({attesa:at,attesa_cal:ac,partenza:pz}).eq('id',lid));
   toast(`"${n}" è di nuovo libera`);legaView()}
 async function togliMembro(lid,uid){if(!confirm('Rimuovere questo partecipante?'))return;chk(await db.from('membri_lega').delete().eq('lega_id',lid).eq('utente_id',uid));chk(await db.from('rose').delete().eq('lega_id',lid).eq('utente_id',uid));legaView()}
+async function eliminaLegaAd(lid){const n=chk(await db.from('leghe').select('nome').eq('id',lid).single()).nome;if(!confirm(`Eliminare DEFINITIVAMENTE la lega "${n}"? Si cancellano squadre, rose, classifica, calendario e formazioni. Non si può tornare indietro.`))return;
+  if(prompt('Per confermare scrivi ELIMINA')!=='ELIMINA')return toast('Eliminazione annullata');
+  for(const t of ['formazioni','schieramenti','incontri','rose','carte_usate','coppe','messaggi'])await db.from(t).delete().eq('lega_id',lid);
+  await db.from('membri_lega').delete().eq('lega_id',lid);chk(await db.from('leghe').delete().eq('id',lid));if(LG===lid){LG=null}caricaLeghe().then(renderNav);toast('Lega eliminata');pAdmin()}
+async function adPanchina(){const [lid,sq]=val('ap_sq').split(/\|(.*)/s);const u=val('ap_u');if(!u)return toast('Scegli l\'utente',true);
+  if(!confirm(`Dare la panchina di "${sq}" a ${u}?`))return;chk(await db.rpc('assegna_squadra',{p_lega:+lid,p_nome:sq,p_username:u}));toast(`${sq} ora è di ${u} ⚽`);caricaLeghe().then(renderNav);pAdmin()}
 async function eliminaLega(lid){if(!confirm('Eliminare definitivamente la lega?'))return;chk(await db.from('leghe').delete().eq('id',lid));fz.lega=null;pFanta()}
 
 // ---------- chat ----------
@@ -2194,7 +2200,14 @@ async function pAdmin(){
       <button class="pri" onclick="creaImportata()">Crea lega importata</button>
       <p class="muted" style="font-size:13px;margin-top:14px">Oppure, più veloce: se hai il <b>pacchetto</b> preparato con Claude, crea la lega e carica tutto in un colpo (nome e soglie li prende dal file; la casella "Partecipo anch'io" sopra vale anche qui).</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;margin:0 6px 6px 0;background:#1a7f37">📗 Carica i file di Leghe Fantacalcio (.xlsx)<input type="file" accept=".xlsx,.xls" multiple style="display:none" onchange="fileLeghe(this,0)"></label><label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Crea lega da pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,0)"></label><div id="pk_ris" style="margin-top:10px"></div></div>
-      ${tutte.length?`<div class="card"><h3>Le leghe create da te</h3>${tutte.map(l=>`<div class="row between" style="padding:6px 0"><span><b>${esc(l.nome)}</b> · <span style="color:var(--gold)">${esc(l.codice_invito||'')}</span>${Object.keys(l.attesa||{}).length?` · ⏳ ${Object.keys(l.attesa).length} libere`:''}</span><button onclick="fz.lega=${l.id};fz.tab='gestione';vai('fanta')">Apri</button></div>`).join('')}</div>`:''}`;
+      ${tutte.length?`<div class="card"><h3>Le leghe create da te</h3>${tutte.map(l=>`<div class="row between" style="padding:6px 0"><span><b>${esc(l.nome)}</b> · <span style="color:var(--gold)">${esc(l.codice_invito||'')}</span>${Object.keys(l.attesa||{}).length?` · ⏳ ${Object.keys(l.attesa).length} libere`:''}</span><span><button onclick="fz.lega=${l.id};fz.tab='gestione';vai('fanta')">Apri</button> <button class="del" onclick="eliminaLegaAd(${l.id})">🗑️</button></span></div>`).join('')}</div>`:''}`;
+    const lib=tutte.flatMap(l=>Object.keys(l.attesa||{}).map(n=>({l,n})));
+    if(lib.length){const us=chk(await db.from('profili').select('id,username').order('username'));
+      h+=`<div class="card" style="border-color:var(--green)"><h3>👤 Dai la panchina di un club</h3><p class="muted" style="font-size:13px">Scegli una squadra libera e l'utente iscritto che la guiderà (anche tu). Prende rosa, crediti, classifica e calendario di quel club.</p>
+      <label>Squadra libera</label><select id="ap_sq">${tutte.filter(l=>Object.keys(l.attesa||{}).length).map(l=>`<optgroup label="${esc(l.nome)}">${Object.keys(l.attesa).sort().map(n=>`<option value="${l.id}|${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`).join('')}</select>
+      <label>Allenatore</label><input id="ap_cerca" placeholder="🔎 Cerca utente…" oninput="const q=this.value.toLowerCase();[...document.getElementById('ap_u').options].forEach(o=>o.hidden=!!q&&!o.text.toLowerCase().includes(q))">
+      <select id="ap_u" size="6" style="height:auto"><option value="${esc(profilo.username)}" selected>⭐ Io (${esc(profilo.username)})</option>${us.filter(x=>x.id!==utente.id&&x.username).map(x=>`<option value="${esc(x.username)}">${esc(x.username)}</option>`).join('')}</select>
+      <button class="pri" style="margin-top:10px" onclick="adPanchina()">✅ Dai la panchina</button></div>`}
   }
   if(ad.tab==='dati'){
     const {count:np}=await db.from('partite_sa').select('*',{count:'exact',head:true});
