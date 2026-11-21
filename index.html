@@ -697,7 +697,7 @@ async function legaView(){
     const spesi=mia.reduce((s,r)=>s+r.prezzo,0);
     const ombraMia=lega.modalita==='ombra'&&fz.vedi===utente.id;
     h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
-    <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi}</b>`:''}</p>
+    <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi+(+((lega.bonus||{}).cred||{})[fz.vedi]||0)}</b>`:''}</p>
     <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
     if(ombraMia) h+=`<div class="card"><h3>👥 Importa la tua rosa</h3><p class="muted">Copia la rosa dall'altra app (Fantagazzetta, Fantalab…) e incollala qui: un giocatore per riga. Basta il cognome, anche senza accenti (es. "Lautaro Martinez", "Martinez L.", "Dimarco").</p>
       <textarea id="om_t" rows="8"></textarea><button class="pri" onclick="importaOmbra(${lega.id})">Importa</button><div id="om_r" style="margin-top:10px"></div></div>
@@ -830,6 +830,10 @@ async function legaView(){
       ${membri.map(m=>{const rr=rose.filter(r=>r.utente_id===m.utente_id).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
         return `<details><summary>${esc(m.nome_squadra)} (${rr.length})</summary>${rr.map(r=>`<div class="row between" style="padding:4px 0"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} · ${r.prezzo}</span><button class="del" onclick="togliGiocatore(${r.id})">Togli</button></div>`).join('')}</details>`}).join('')}
     </div>
+    ${lega.modalita==='asta'?`<div class="card"><h3>💰 Crediti delle squadre</h3><p class="muted" style="font-size:13px">Scrivi un numero e tocca ➕ per aggiungere, ➖ per togliere, oppure = per impostare i crediti rimasti esatti.</p>
+      ${membri.map(m=>{const sp=rose.filter(r=>r.utente_id===m.utente_id).reduce((a,r)=>a+r.prezzo,0),adj=+((lega.bonus||{}).cred||{})[m.utente_id]||0,res=lega.crediti-sp+adj;
+        return `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);gap:6px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b>${esc(m.nome_squadra)}</b><br><small class="muted">rimasti</small> <b style="color:var(--gold)">${res}</b></span>
+        <input id="cr_${m.utente_id}" type="number" placeholder="n." style="width:64px;margin:0;padding:8px;text-align:center"><button onclick="modCred(${lega.id},'${m.utente_id}',1)">➕</button><button onclick="modCred(${lega.id},'${m.utente_id}',-1)">➖</button><button onclick="modCred(${lega.id},'${m.utente_id}',0)">=</button></div>`}).join('')}</div>`:''}
     <div class="card"><h3>Partecipanti</h3>${membri.map(m=>`<div class="row between" style="padding:4px 0"><span>${esc(m.nome_squadra)} <span class="muted">${un(m.profili)}</span></span>
       ${profilo.ruolo==='admin'?`<button onclick="liberaSq(${lega.id},'${m.utente_id}')">🔓 Rimetti libera</button> `:''}${m.utente_id!==lega.creatore_id?`<button class="del" onclick="togliMembro(${lega.id},'${m.utente_id}')">Rimuovi</button>`:'<span class="badge">Presidente</span>'}</div>`).join('')}
       <button class="del" style="margin-top:14px" onclick="eliminaLega(${lega.id})">Elimina lega</button></div>`;
@@ -1048,6 +1052,11 @@ async function assegna(lid,gid){
   toast('Giocatore assegnato!');legaView();
 }
 async function togliGiocatore(id){if(!confirm('Togliere il giocatore dalla rosa?'))return;chk(await db.from('rose').delete().eq('id',id));legaView()}
+async function modCred(lid,uid,seg){const n=+document.getElementById('cr_'+uid).value;if(!n&&seg!==0)return toast('Scrivi un numero',true);
+  const l=chk(await db.from('leghe').select('bonus,crediti').eq('id',lid).single());const b={...(l.bonus||{})};const c={...(b.cred||{})};
+  if(seg===0){const sp=chk(await db.from('rose').select('prezzo').eq('lega_id',lid).eq('utente_id',uid)).reduce((a,r)=>a+r.prezzo,0);c[uid]=n-(l.crediti-sp)}
+  else c[uid]=(+c[uid]||0)+seg*n;
+  b.cred=c;chk(await db.from('leghe').update({bonus:b}).eq('id',lid));toast('Crediti aggiornati');legaView()}
 async function liberaSq(lid,uid){
   const m=chk(await db.from('membri_lega').select('nome_squadra').eq('lega_id',lid).eq('utente_id',uid).single()),n=m.nome_squadra;
   if(!confirm(`Rimettere libera "${n}"? L'utente esce dalla lega e la squadra (rosa, punti di partenza, calendario) torna nell'elenco: la potrà prendere chi entra col codice.`))return;
