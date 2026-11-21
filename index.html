@@ -161,8 +161,22 @@ async function avvia(session){
   await caricaFeat();
   document.getElementById('top').style.display='block';
   renderNav(); vai(pagina);
-  if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,700);
+  let visto=true;try{visto=!!localStorage.getItem('benv_'+utente.id)}catch(e){}
+  if(!visto) setTimeout(mostraBenvenuto,500);
+  else if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,700);
 }
+function mostraBenvenuto(){if(document.getElementById('benv'))return;const o=document.createElement('div');o.id='benv';
+  o.style.cssText='position:fixed;inset:0;z-index:101;background:#0b0628f0;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  o.innerHTML=`<div class="card" style="max-width:460px;width:100%;margin:auto">
+    <p style="font:800 28px var(--cond);margin:0;text-align:center">👋 Benvenuto su FantaTaccuino!</p>
+    <p class="muted" style="text-align:center">Prima di iniziare, come funzionano i palloni del Calcetto:</p>
+    <div class="card" style="margin:10px 0;border-color:var(--green)"><b>🎁 Palloni gratis</b><p class="muted" style="margin:6px 0 0">Ne ricevi <b>100</b> in regalo, più un <b>pacco ogni giorno</b>. Servono per provare il Calcetto nei <b>tavoli 🎁 Gratis</b>. Quello che vinci lì non si accumula: è solo per divertirti e capire come funziona.</p></div>
+    <div class="card" style="margin:10px 0;border-color:var(--gold)"><b>${'<span class="pd"></span>'} Palloni Premium</b><p class="muted" style="margin:6px 0 0">Servono per i <b>tavoli normali</b> del Calcetto, riservati agli utenti <b>💎 Premium</b>. Li assegna l'amministratore: non si comprano.</p></div>
+    <p class="muted" style="font-size:13px">I due saldi li vedi sempre in alto: 🎁 gratis | Premium. I palloni non sono soldi e non si convertono in premi reali.</p>
+    <button class="pri" style="width:100%" onclick="chiudiBenvenuto()">Ho capito, iniziamo!</button></div>`;
+  document.body.appendChild(o)}
+function chiudiBenvenuto(){try{localStorage.setItem('benv_'+utente.id,'1')}catch(e){}document.getElementById('benv')?.remove();
+  if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) setTimeout(mostraPacchi,300)}
 function oggiStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function mostraPacchi(){if(document.getElementById('pacchi'))return;const o=document.createElement('div');o.id='pacchi';
   o.style.cssText='position:fixed;inset:0;z-index:100;background:#0b0628e8;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -1205,7 +1219,7 @@ async function pSng(){
   let h=`<h2>⚽ Calcetto</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
     <div class="card" style="margin:0;border-color:#5dff7a88"><small class="muted">🎁 Palloni gratis</small><div style="font:800 32px var(--cond);color:var(--green)">${profilo.prova??0}</div><small class="muted">Per i tavoli 🎁 Gratis. Le vincite non vengono accreditate.</small></div>
     <div class="card" style="margin:0;border-color:#ffd44788"><small class="muted"><span class="pd"></span> Palloni Premium</small><div style="font:800 32px var(--cond);color:var(--gold)">${profilo.gettoni??0}</div><small class="muted">Per i tavoli normali, riservati ai 💎 Premium.</small></div></div>
-    <p class="muted" style="font-size:13px;margin:10px 2px 14px">I palloni gratis: 100 all'iscrizione più quelli dei 🎁 pacchi giornalieri. I palloni Premium li assegna l'amministratore.</p>`;
+    <p class="muted" style="font-size:13px;margin:10px 2px 14px">I palloni gratis: 100 all'iscrizione più quelli dei 🎁 pacchi giornalieri. I palloni Premium li assegna l'amministratore. <a href="#" onclick="mostraBenvenuto();return false">Come funzionano?</a></p>`;
   h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole'],...(profilo.ruolo==='admin'?[['gestisci','🛠️ Gestisci tavoli']]:[])].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
   if(sg.tab==='lobby'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso'));
