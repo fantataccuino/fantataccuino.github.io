@@ -316,8 +316,8 @@ async function pFanta(){
     <button class="pri" onclick="creaLega()">Crea lega</button></div>
   <div class="card"><h3>Entra con codice invito</h3>
     <label>Codice</label><input id="el_cod">
-    <label>Nome della tua squadra</label><input id="el_sq">
-    <button class="pri" onclick="entraLega()">Entra</button></div>`;
+    <label>Nome della tua squadra <small class="muted">(se la lega ha squadre libere, la scegli dopo)</small></label><input id="el_sq">
+    <button class="pri" onclick="entraLega()">Entra</button><div id="el_lib"></div></div>`;
 }
 async function creaLega(){
   const nome=val('nl_nome');if(!nome) return toast('Scrivi il nome della lega',true);
@@ -331,11 +331,16 @@ async function creaLega(){
   toast('Lega creata!');fz.lega=l.id;fz.tab=l.modalita==='ombra'?'rosa':'classifica';pFanta();
 }
 async function entraLega(){
-  const cod=val('el_cod'),sq=val('el_sq');if(!cod||!sq) return toast('Inserisci codice e nome squadra',true);
+  const cod=val('el_cod'),sq=val('el_sq');if(!cod) return toast('Inserisci il codice invito',true);
+  const {data:lib}=await db.rpc('squadre_libere',{p_codice:cod});
+  if(lib&&lib.length){document.getElementById('el_lib').innerHTML=`<h3 style="margin-top:16px">Scegli la tua squadra</h3><p class="muted" style="font-size:13px">Queste squadre hanno già rosa, punti e calendario. Prendi la tua:</p>${lib.map(n=>`<button style="margin:4px 6px 0 0" onclick="prendiSq(decodeURIComponent('${encodeURIComponent(cod)}'),decodeURIComponent('${encodeURIComponent(n)}'))">⚽ ${esc(n)}</button>`).join('')}`;return}
+  if(!sq) return toast('Scrivi il nome della tua squadra',true);
   const id=chk(await db.rpc('entra_lega',{p_codice:cod,p_nome_squadra:sq}));
   toast('Sei entrato nella lega!');fz.lega=id;pFanta();
 }
 
+async function prendiSq(cod,n){if(!confirm(`Confermi che "${n}" è la tua squadra? Non potrai cambiarla.`))return;
+  const id=chk(await db.rpc('prendi_squadra',{p_codice:cod,p_nome:n}));toast('Benvenuto in '+n+'!');fz.lega=id;pFanta()}
 const MODULI={'3-4-3':[3,4,3],'3-5-2':[3,5,2],'4-3-3':[4,3,3],'4-4-2':[4,4,2],'4-5-1':[4,5,1],'5-3-2':[5,3,2],'5-4-1':[5,4,1]};
 const LIM_DRAFT={P:3,D:8,C:8,A:6};
 const CARTE=[
@@ -370,10 +375,15 @@ function riepBonus(B){B={...BONUS_DEF,...(B||{})};return BONUS_LAB.map(([k,n])=>
 async function nominaPres(lid){const u=val('np_u');if(!u)return toast('Nessun partecipante da nominare',true);const esci=!!document.getElementById('np_esci')?.checked;
   if(!confirm('Nominare questo partecipante presidente della lega?'+(esci?' Tu uscirai dalla lega.':'')))return;
   chk(await db.rpc('nomina_presidente',{p_lega:lid,p_utente:u,p_esci:esci}));toast('Presidente nominato');legaView()}
-async function salvaPartenza(lid){const o={};document.querySelectorAll('.pz').forEach(i=>{const v=i.value.replace(',','.');if(v==='')return;(o[i.dataset.u]=o[i.dataset.u]||{})[i.dataset.k]=+v});chk(await db.from('leghe').update({partenza:o}).eq('id',lid));toast('Classifica di partenza salvata');legaView()}
+async function salvaPartenza(lid){const o={},L=chk(await db.from('leghe').select('attesa').eq('id',lid).single()),at=L.attesa||{};
+  document.querySelectorAll('.pz').forEach(i=>{const v=i.value.replace(',','.');if(v==='')return;const u=i.dataset.u;
+    if(u.startsWith('n:')){const t=at[u.slice(2)];if(t)(t.pz=t.pz||{})[i.dataset.k]=+v}else (o[u]=o[u]||{})[i.dataset.k]=+v});
+  chk(await db.from('leghe').update({partenza:o,attesa:at}).eq('id',lid));toast('Classifica di partenza salvata');legaView()}
 async function impRoseLega(lid){
   const righe=document.getElementById('tr_rose').value.split('\n').map(x=>x.trim()).filter(Boolean);if(!righe.length)return toast('Incolla le rose',true);
   const box=document.getElementById('tr_ris');box.innerHTML='<p class="muted">Abbino i giocatori…</p>';
+  const lib=document.getElementById('tr_libere').checked;
+  if(lib)return impRoseLibere(lid,righe,box);
   const membri=chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid));
   const tutti=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('attivo',true).limit(2000));
   if(document.getElementById('tr_svuota').checked){if(!confirm('Svuotare tutte le rose di questa lega prima di importare?'))return;chk(await db.from('rose').delete().eq('lega_id',lid))}
@@ -404,6 +414,40 @@ async function impRoseLega(lid){
     +dubbi.map(d=>`<div class="card" style="padding:10px"><b>❓ "${esc(d.riga)}"</b> – quale intendi?<br>${d.c.map(g=>`<button style="margin:4px 4px 0 0" onclick="assegnaT(${lid},'${d.u}',${g.id},${d.pr},this)">${g.ruolo} · ${esc(g.nome)} (${esc(g.squadra)})</button>`).join('')}</div>`).join('')
     +(no.length?`<div class="card" style="padding:10px;border-color:var(--red)"><b style="color:var(--red)">Da sistemare (${no.length})</b>${no.map(x=>`<div class="muted" style="font-size:13px">• ${esc(x)}</div>`).join('')}<p class="muted" style="font-size:12px">Correggi queste righe e importale di nuovo, senza spuntare "Svuota".</p></div>`:'');
 }
+async function impRoseLibere(lid,righe,box){
+  const L=chk(await db.from('leghe').select('attesa').eq('id',lid).single()),at=L.attesa||{};
+  const membri=chk(await db.from('membri_lega').select('nome_squadra').eq('lega_id',lid)).map(m=>norm(m.nome_squadra).trim());
+  const tutti=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('attivo',true).limit(2000));
+  const sv=document.getElementById('tr_svuota').checked;
+  const presi=new Set(chk(await db.from('rose').select('giocatore_id').eq('lega_id',lid)).map(x=>x.giocatore_id));
+  const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
+  const no=[],dubbi=[],conta={},nuove={};let cur=null;
+  for(const riga of righe){
+    const m=riga.match(/^(.*?)[\s,]+(\d+)\s*$/);
+    if(!m){cur=riga.replace(/[:\-–]+$/,'').trim();if(membri.includes(norm(cur).trim())){no.push(`"${cur}" è già una squadra con un utente: saltata`);cur=null;continue}
+      if(sv||!at[cur])at[cur]={rosa:[],pz:(at[cur]&&at[cur].pz)||{}};nuove[cur]=1;continue}
+    if(!cur){no.push(riga+' → manca il nome della squadra sopra');continue}
+    const gn=m[1].replace(/^[PDCA]\s+/,'').trim(),pr=+m[2]||1,pw=parole(gn);
+    const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;let p=0;for(const w of pw){if(nw.includes(w))p+=3;else if(nw.some(x=>x.length<=2&&x[0]===w[0]))p+=1}return nw.some(x=>pw.includes(x))?p:0};
+    const cand=tutti.map(g=>({g,p:sc(g)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p);
+    if(!cand.length){no.push(`${cur}: ${riga} → giocatore non trovato nel listone`);continue}
+    const top=cand.filter(x=>x.p===cand[0].p);
+    if(top.length>1){dubbi.push({riga,sq:cur,pr,c:top.slice(0,6).map(x=>x.g)});continue}
+    const g=cand[0].g,giaA=Object.entries(at).find(([k,v])=>v.rosa.some(r=>r[0]===g.id));
+    if(presi.has(g.id)||(giaA&&giaA[0]!==cur)){no.push(`${cur}: ${riga} → ${g.nome} è già in un'altra rosa`);continue}
+    if(giaA)continue;
+    at[cur].rosa.push([g.id,pr]);conta[cur]=(conta[cur]||0)+1;
+  }
+  chk(await db.from('leghe').update({attesa:at}).eq('id',lid));
+  box.innerHTML=`<p style="color:var(--green)">✅ Squadre libere salvate: ${Object.keys(nuove).map(k=>`${esc(k)} ${(at[k].rosa||[]).length}`).join(' · ')}</p>`
+    +dubbi.map(d=>`<div class="card" style="padding:10px"><b>❓ ${esc(d.sq)}: "${esc(d.riga)}"</b> – quale intendi?<br>${d.c.map(g=>`<button style="margin:4px 4px 0 0" onclick="assegnaA(${lid},decodeURIComponent('${encodeURIComponent(d.sq)}'),${g.id},${d.pr},this)">${g.ruolo} · ${esc(g.nome)} (${esc(g.squadra)})</button>`).join('')}</div>`).join('')
+    +(no.length?`<div class="card" style="padding:10px;border-color:var(--red)"><b style="color:var(--red)">Da sistemare (${no.length})</b>${no.map(x=>`<div class="muted" style="font-size:13px">• ${esc(x)}</div>`).join('')}</div>`:'')
+    +`<button class="pri" style="margin-top:8px" onclick="legaView()">Fatto, aggiorna la pagina</button>`;
+}
+async function assegnaA(lid,sq,gid,pr,b){const L=chk(await db.from('leghe').select('attesa').eq('id',lid).single()),at=L.attesa||{};if(!at[sq])return toast('Squadra non trovata',true);
+  if(Object.values(at).some(v=>v.rosa.some(r=>r[0]===gid)))return toast('Giocatore già in una rosa',true);
+  at[sq].rosa.push([gid,pr]);chk(await db.from('leghe').update({attesa:at}).eq('id',lid));b.parentElement.innerHTML='<span style="color:var(--green)">✅ Aggiunto</span>'}
+async function svuotaLibere(lid){if(!confirm('Eliminare tutte le squadre libere ancora non prese (rose, classifica e calendario in attesa)?'))return;chk(await db.from('leghe').update({attesa:{},attesa_cal:[]}).eq('id',lid));toast('Squadre libere eliminate');legaView()}
 async function assegnaT(lid,uid,gid,pr,b){const {error}=await db.from('rose').insert({lega_id:lid,utente_id:uid,giocatore_id:gid,prezzo:pr});if(error)return toast(error.message,true);b.parentElement.innerHTML='<span style="color:var(--green)">✅ Aggiunto</span>'}
 const MOD_ALL=['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'];
 const MOD_EXTRA=['2-1-7','2-7-1','2-2-6','2-6-2','2-3-5','2-5-3','2-4-4','3-1-6','3-6-1','3-2-5','3-3-4','4-1-5','4-2-4','5-2-3','5-1-4','6-2-2','6-3-1','6-1-3'];
@@ -659,14 +703,16 @@ async function legaView(){
       <button class="pri" onclick="nominaPres(${lega.id})">Nomina presidente</button></div>`;
     if(profilo.ruolo==='admin'){
     h+=`<div class="card" style="border-color:var(--gold)"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
-      <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Prima fai entrare tutti con il codice invito, usando gli stessi nomi squadra.</p>
+      <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Due modi: fai entrare prima tutti con gli stessi nomi squadra, <b>oppure</b> crea le <b>squadre libere</b>: chi entra col codice invito sceglie la sua squadra e trova già rosa, classifica e calendario.</p>
+      ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b><div class="muted" style="font-size:13px">${Object.entries(lega.attesa).map(([k,v])=>`${esc(k)} (${(v.rosa||[]).length})`).join(' · ')}</div><button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
       <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
-      <label style="color:var(--txt);display:block;margin:4px 0 10px"><input type="checkbox" id="tr_svuota"> Svuota prima le rose già presenti in questa lega</label>
+      <label style="color:var(--txt);display:block;margin:4px 0 6px"><input type="checkbox" id="tr_libere"> Crea come <b>squadre libere</b> (ogni giocatore con il prezzo)</label>
+      <label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="tr_svuota"> Svuota prima le rose già presenti in questa lega</label>
       <button class="pri" onclick="impRoseLega(${lega.id})">Importa rose</button><div id="tr_ris" style="margin-top:10px"></div>
       <h3 style="margin-top:18px">2. Classifica di partenza</h3><p class="muted" style="font-size:13px">I numeri che ogni squadra ha già nell'altra app. Le giornate giocate qui si sommano a questi.<br><b>Pt</b> = punti in classifica · <b>FP</b> = fantapunti totali · V N P · GF GS = gol fatti e subiti</p>
       <div style="overflow-x:auto"><table><tr><th>Squadra</th><th>Pt</th><th>FP</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th></tr>
-      ${membri.map(m=>{const z=PZ[m.utente_id]||{};return `<tr><td style="white-space:nowrap"><b>${esc(m.nome_squadra)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${m.utente_id}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
+      ${[...membri.map(m=>({u:m.utente_id,n:m.nome_squadra,z:PZ[m.utente_id]||{}})),...Object.entries(lega.attesa||{}).map(([k,v])=>({u:'n:'+k,n:k+' ⏳',z:v.pz||{}}))].map(m=>{const z=m.z;return `<tr><td style="white-space:nowrap"><b>${esc(m.n)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${esc(m.u)}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
       <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button>
       <h3 style="margin-top:18px">3. Calendario dell'altra app</h3><p class="muted" style="font-size:13px">Incolla le giornate del calendario originale: una riga <b>Giornata 1</b>, sotto le partite <b>Squadra A - Squadra B</b>, poi Giornata 2 e così via. Basta il primo giro (es. le giornate 1-11 con 12 squadre): quando finiscono, si ripetono in ordine.</p>
       <textarea id="ci_txt" rows="7" placeholder="Giornata 1&#10;Squadra A - Squadra B&#10;Squadra C - Squadra D"></textarea>
@@ -787,11 +833,13 @@ async function leggiCalImp(lid){
     if(!cur){cur=[];bl.push(cur)}cur.push([pul(pz[0]),pul(pz[1])]);
   });
   const B=bl.filter(b=>b.length);if(!B.length)return toast('Non trovo partite: controlla il formato',true);
-  const mem=chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid));
+  const mem0=chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid));
+  const L=chk(await db.from('leghe').select('attesa').eq('id',lid).single());
+  const mem=[...mem0.map(m=>({...m,v:m.utente_id})),...Object.keys(L.attesa||{}).map(k=>({utente_id:'n:'+k,nome_squadra:k,v:'n:'+k}))];
   const nomi=[...new Set(B.flat(2))];
   CI={B,nomi,lid};
   document.getElementById('ci_map').innerHTML=`<p class="muted" style="font-size:13px">Trovate <b>${B.length}</b> giornate e <b>${nomi.length}</b> squadre. Controlla a quale squadra di questa lega corrisponde ognuna (se non c'è, lascia "ignora").</p>
-    ${nomi.map((n,i)=>{const m=mem.find(x=>nCI(x.nome_squadra)===nCI(n));return `<label>${esc(n)}</label><select class="ci_s" data-i="${i}"><option value="">— ignora —</option>${mem.map(x=>`<option value="${x.utente_id}" ${m&&m.utente_id===x.utente_id?'selected':''}>${esc(x.nome_squadra)}</option>`).join('')}</select>`}).join('')}
+    ${nomi.map((n,i)=>{const m=mem.find(x=>nCI(x.nome_squadra)===nCI(n));return `<label>${esc(n)}</label><select class="ci_s" data-i="${i}"><option value="">— ignora —</option>${mem.map(x=>`<option value="${esc(x.utente_id)}" ${m&&m.utente_id===x.utente_id?'selected':''}>${esc(x.nome_squadra)}${String(x.utente_id).startsWith('n:')?' ⏳':''}</option>`).join('')}</select>`}).join('')}
     <button class="pri" style="margin-top:10px" onclick="salvaCalImp()">Crea calendario</button>`;
 }
 async function salvaCalImp(){
@@ -804,8 +852,13 @@ async function salvaCalImp(){
     b.forEach(([x,y])=>{const X=mp[x],Y=mp[y];if(X&&Y&&X!==Y)righe.push({lega_id:CI.lid,giornata:g,casa:ciclo%2?Y:X,trasferta:ciclo%2?X:Y})})}
   if(!righe.length)return toast('Nessuna partita tra squadre di questa lega',true);
   if(!confirm(`Creare ${righe.length} partite dalla giornata ${da} alla ${a}? Il calendario attuale verrà sostituito.`))return;
+  const nm={};chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',CI.lid)).forEach(m=>nm[m.utente_id]=m.nome_squadra);
+  const nomeDi=u=>u.startsWith('n:')?u.slice(2):nm[u];
+  const subito=righe.filter(r=>!r.casa.startsWith('n:')&&!r.trasferta.startsWith('n:'));
+  const dopo=righe.filter(r=>r.casa.startsWith('n:')||r.trasferta.startsWith('n:')).map(r=>[r.giornata,nomeDi(r.casa),nomeDi(r.trasferta)]);
   chk(await db.from('incontri').delete().eq('lega_id',CI.lid));
-  chk(await db.from('incontri').insert(righe));
+  if(subito.length)chk(await db.from('incontri').insert(subito));
+  chk(await db.from('leghe').update({attesa_cal:dopo}).eq('id',CI.lid));
   toast('Calendario importato!');CI=null;legaView();
 }
 async function cancellaCalendario(lid){if(!confirm('Eliminare il calendario? La lega userà solo la classifica a punti.'))return;chk(await db.from('incontri').delete().eq('lega_id',lid));legaView()}
