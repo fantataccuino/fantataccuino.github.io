@@ -1467,6 +1467,7 @@ async function pSng(){
     • <b>Serpentone</b>: chi sceglie per primo in un giro sceglie per ultimo in quello dopo.<br>
     • Il draft parte <b>30 minuti prima della prima partita</b>, anche se il tavolo si riempie prima. Le iscrizioni chiudono al calcio d'inizio.<br>
     • Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te: il primo disponibile della tua <b>lista ⭐</b>, se l'hai preparata, altrimenti il migliore disponibile. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
+    • I voti sono calcolati da FantaTaccuino sulle statistiche ufficiali delle partite. Durante la partita sono provvisori: diventano definitivi circa <b>3 ore dopo il calcio d'inizio</b>, e solo allora il tavolo si chiude con classifica e vincite.<br>
     • Punti = somma dei fantavoti dei 5 titolari (il 🃏 Jolly è titolare). La 🪑 Riserva entra una volta sola, al posto del primo titolare di movimento che prende s.v. Il portiere non ha riserva: se prende s.v. vale 0.<br>
     • Il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei palloni in gioco, il resto è il montepremi. Tavoli da 2 e 4: tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
     • Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i palloni tornano indietro.<br>
@@ -1477,7 +1478,7 @@ async function pSng(){
 function guidaCalcetto(){const P=[['🎟️','Scegli un tavolo','Nella <b>Lobby</b> trovi i tavoli aperti: ognuno vale per una o più partite di Serie A. Con i palloni gratis entri nei tavoli <b>🎁 Gratis</b>.'],
   ['🃏','Draft a carte','Quando il tavolo è pieno parte il draft: a turno scegli 6 giocatori tra i titolari probabili. Chi prende un giocatore lo toglie agli altri. Hai 60 secondi a scelta. Il draft parte 30 minuti prima della partita: se non puoi esserci, prepara la tua <b>lista ⭐</b> e il sito sceglie per te.'],
   ['⚽','Si gioca in campo','I tuoi 5 titolari fanno punti con i loro fantavoti delle partite vere. La riserva entra se un titolare non gioca.'],
-  ['🏆','Vince chi fa più punti','A fine partite chi ha più punti si prende il montepremi in palloni. Nei tavoli da 6 e 8 premiati i primi due.']];
+  ['🏆','Vince chi fa più punti','Circa 3 ore dopo il calcio d\'inizio, quando i voti sono definitivi, chi ha più punti si prende il montepremi in palloni. Nei tavoli da 6 e 8 premiati i primi due.']];
   return `<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">⚽ Come funziona il Calcetto</h3><p class="muted" style="font-size:14px">Un mini-fanta veloce, partita per partita, contro altri utenti.</p>
   ${P.map((x,i)=>`<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:44px;height:44px;border-radius:22px;background:var(--gold);color:#1a0f3d;display:flex;align-items:center;justify-content:center;font-size:22px">${x[0]}</div><div><b>${i+1}. ${x[1]}</b><div class="muted" style="font-size:14px;margin-top:2px">${x[2]}</div></div></div>`).join('')}
   <p class="muted" style="font-size:13px;margin-bottom:0">🎁 Palloni gratis = solo per provare (le vincite non si accumulano). <span class="pd"></span> Palloni Premium = tavoli normali, per i 💎 Premium.</p></div>`}
@@ -1600,7 +1601,9 @@ async function tavoloView(){
       ${s.map(x=>{const v=VT[x.giocatore_id],sv=chiuso&&(v?.fantavoto==null),entra=x.riserva&&sost,fuori=sost===x.giocatore_id,vale=chiuso&&(x.riserva?entra:!sv);
         return `<div class="row between" style="padding:3px 0;${chiuso&&!vale?'opacity:.5':''}${fuori?';text-decoration:line-through':''}"><span>${x.riserva?(entra?'🔄 ':'🪑 '):x.jolly?'🃏 ':''}${ruolo(x.giocatori.ruolo)}${esc(x.giocatori.nome)} <small class="muted">${esc(x.giocatori.squadra)}${x.riserva?(entra?' · entra dalla panchina':' · riserva'):x.jolly?' · jolly':''}</small></span>
         ${chiuso?`<span style="white-space:nowrap">${sv?'<b class="muted">s.v.</b>':`<small class="muted">V ${v.voto}</small> · <small class="muted">FV</small> <b style="color:${vale?'var(--gold)':'var(--muted)'}">${v.fantavoto}</b>`}</span>`:''}</div>`}).join('')||'<p class="muted">Nessuna scelta ancora.</p>'}</div>`}).join('');
-    if(t.stato==='in_gioco') h+=`<p class="muted">⚽ Draft concluso: voti e risultato arrivano appena la redazione completa le partite del tavolo.</p>`;
+    if(t.stato==='in_gioco'){const ult=pt.map(p=>new Date(p.data)).sort((a,b)=>b-a)[0];const ora=ult?new Date(+ult+3*3600e3):null;
+      h+=`<div class="card" style="border-color:var(--gold)"><p style="margin:0">⏳ <b>Risultato ${ora?`verso le ${ora.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}${ora.toDateString()!==new Date().toDateString()?' del '+ora.toLocaleDateString('it-IT'):''}`:'a fine partite'}</b></p>
+      <p class="muted" style="margin:6px 0 0;font-size:14px">Durante la partita i voti sono provvisori e cambiano. Il risultato del tavolo arriva circa <b>3 ore dopo il calcio d'inizio</b> dell'ultima partita, quando i voti sono definitivi e sono stati sommati bonus e malus. Nel frattempo segui i tuoi giocatori in 📅 Serie A.</p></div>`}
     if(chiuso) h+=`<p class="muted" style="font-size:12px"><b>V</b> = voto in pagella · <b style="color:var(--gold)">FV</b> = fantavoto (voto + bonus/malus). 🔄 = la riserva è entrata al posto del primo titolare di movimento s.v.</p>`;
   }
   app.innerHTML=h;
