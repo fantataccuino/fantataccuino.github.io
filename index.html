@@ -270,7 +270,7 @@ function vai(p){
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   if(typeof liveIv!=='undefined'&&liveIv){clearInterval(liveIv);liveIv=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
-  ({home:pHome,dash:pDash,altro:pAltro,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin})[p]();
+  ({home:pHome,dash:pDash,altro:pAltro,tornei:pTornei,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin})[p]();
 }
 
 
@@ -316,6 +316,93 @@ async function eliminaAccount(){
   alert('Account eliminato. Ciao!');await esci();
 }
 
+// ---------- tornei a giornate ----------
+let TT={id:null,tab:'classifica',sel:null,fil:'P',q:'',mod:'3-4-3',tit:null,L:null,g:null};
+const TMOD=['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'],TLIM={P:2,D:5,C:5,A:4};
+async function pTornei(){
+  if(TT.id) return torneoView();
+  const tt=chk(await db.from('tornei').select('*').order('id',{ascending:false}));
+  const gs=chk(await db.from('fanta_giornate').select('numero,scadenza'));const sc=n=>gs.find(g=>g.numero===n)?.scadenza;
+  const st=t=>t.stato==='chiuso'?'🏁 Concluso':(!sc(t.g_da)||new Date(sc(t.g_da))>new Date()?'🟢 Iscrizioni aperte':'⚽ In corso');
+  let h=`<h2>🏆 Tornei a giornate</h2><p class="muted">Crea la tua squadra dal listone a prezzi, schiera la formazione ogni giornata e sfida tutti: chi fa più punti alla fine si prende il montepremi.</p>`;
+  if(profilo.ruolo==='admin') h+=`<div class="card" style="border-color:var(--gold)"><details><summary style="color:var(--txt);font-weight:800">➕ Crea un torneo (admin)</summary>
+    <label>Nome</label><input id="tn_nome" placeholder="es. Torneo d'inverno">
+    <div class="row" style="flex-wrap:nowrap;gap:8px"><div style="flex:1"><label>Dalla giornata</label><input id="tn_da" type="number" min="1" max="38"></div><div style="flex:1"><label>Alla giornata</label><input id="tn_a" type="number" min="1" max="38"></div></div>
+    <div class="row" style="flex-wrap:nowrap;gap:8px"><div style="flex:1"><label>Quota (palloni Premium)</label><input id="tn_q" type="number" value="10"></div><div style="flex:1"><label>Budget crediti</label><input id="tn_b" type="number" value="250"></div></div>
+    <label>Posti massimi (vuoto = senza limite)</label><input id="tn_p" type="number">
+    <button class="pri" onclick="creaTorneo()">Crea torneo</button></details></div>`;
+  h+=tt.map(t=>`<div class="card" style="cursor:pointer" onclick="TT={...TT,id:${t.id},tab:'classifica',sel:null,tit:null,g:null};torneoView()"><div class="row between"><b>🏆 ${esc(t.nome)}</b><span class="badge">${st(t)}</span></div>
+    <p class="muted" style="margin:6px 0 0">Giornate ${t.g_da}→${t.g_a} · Quota <span class="pd"></span> ${t.quota} · Budget ${t.budget} crediti${t.posti?' · max '+t.posti+' iscritti':''}${st(t).includes('aperte')&&sc(t.g_da)?`<br>Iscrizioni fino a ${fmt(sc(t.g_da))}`:''}</p></div>`).join('')||'<p class="muted">Nessun torneo per ora.</p>';
+  app.innerHTML=h}
+async function creaTorneo(){const o={nome:val('tn_nome'),g_da:+val('tn_da'),g_a:+val('tn_a'),quota:+val('tn_q')||0,budget:+val('tn_b')||250,posti:+val('tn_p')||null};
+  if(!o.nome||!o.g_da||!o.g_a||o.g_a<o.g_da)return toast('Controlla nome e giornate',true);chk(await db.from('tornei').insert(o));toast('Torneo creato!');pTornei()}
+async function torneoView(){
+  const t=chk(await db.from('tornei').select('*').eq('id',TT.id).single());
+  const gs=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').gte('numero',t.g_da).lte('numero',t.g_a).order('numero'));
+  const sc0=gs.find(g=>g.numero===t.g_da)?.scadenza,aperto=t.stato!=='chiuso'&&(!sc0||new Date(sc0)>new Date());
+  const gCur=gs.find(g=>new Date(g.scadenza)>new Date());
+  const cl=(await db.rpc('torneo_classifica',{p_t:t.id})).data||[];const n=cl.length;
+  const mio=(await db.from('tornei_iscritti').select('*').eq('torneo_id',t.id).eq('utente_id',utente.id).maybeSingle()).data;
+  const rk=+FEAT.rake_calcetto||0,mp=Math.floor(t.quota*n*(100-rk)/100);
+  if(!TT.L)TT.L=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione').eq('attivo',true).limit(3000));
+  const G=id=>TT.L.find(g=>g.id===id);
+  let h=`<button onclick="TT.id=null;pTornei()">← Tornei</button><h2 style="margin-top:10px">🏆 ${esc(t.nome)}</h2>
+  <div class="card"><div class="row between"><span>Giornate <b>${t.g_da}→${t.g_a}</b></span><span class="badge">${t.stato==='chiuso'?'🏁 Concluso':aperto?'🟢 Iscrizioni aperte':'⚽ In corso'}</span></div>
+    <p class="muted" style="margin:6px 0 0">Quota <span class="pd"></span> ${t.quota} · Iscritti <b>${n}</b>${t.posti?'/'+t.posti:''} · Montepremi <span class="pd"></span> <b>${mp}</b> ${n>=10?'(60% · 30% · 10%)':'(tutto al 1°)'}${aperto&&sc0?`<br>Iscrizioni e rose libere fino a <b>${fmt(sc0)}</b>`:''}</p></div>`;
+  if(!mio&&aperto){h+=isPrem()?`<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">Iscriviti</h3><label>Nome della tua squadra</label><input id="ti_n" placeholder="es. Real Scanga"><button class="btnv" onclick="torneoIscr(${t.id},${t.quota})">Iscriviti · <span class="pd"></span> ${t.quota}</button></div>`
+    :`<div class="card" style="border-color:var(--gold)"><p>💎 I tornei sono riservati agli utenti Premium.</p><button class="pri" onclick="vai('premium')">Scopri il Premium</button></div>`}
+  const tabs=[['classifica','🏆 Classifica'],...(mio?[['squadra','👕 La mia rosa'],['formazione','📋 Formazione']]:[]),['regole','📜 Regole']];
+  if(!tabs.some(x=>x[0]===TT.tab))TT.tab='classifica';
+  h+=`<div class="tabs">${tabs.map(([k,v])=>`<button class="${TT.tab===k?'on':''}" onclick="TT.tab='${k}';torneoView()">${v}</button>`).join('')}</div>`;
+  if(TT.tab==='classifica'){
+    let rose={};if(!aperto){(await db.from('tornei_iscritti').select('utente_id,rosa').eq('torneo_id',t.id)).data?.forEach(x=>rose[x.utente_id]=x.rosa)}
+    h+=`<div class="card">${cl.length?cl.map((r,i)=>`<details style="border-bottom:1px solid var(--line);padding:6px 0"><summary style="color:var(--txt);list-style:none"><div class="row between"><span><b>${r.posizione||i+1}.</b> <b>${esc(r.nome_squadra)}</b> <small class="muted">${esc(r.username||'')}</small></span><span><b style="color:var(--gold)">${r.punti}</b>${r.vinti?` <small style="color:var(--green)">+<span class="pd"></span>${r.vinti}</small>`:''}</span></div></summary>
+      ${aperto?'<p class="muted" style="font-size:13px">🔒 Le rose si vedono quando chiudono le iscrizioni.</p>':(rose[r.utente_id]||[]).map(G).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(g=>`<div style="font-size:14px;padding:2px 0">${ruolo(g.ruolo)}${esc(g.nome)} <small class="muted">${esc(g.squadra)}</small></div>`).join('')}</details>`).join(''):'<p class="muted">Ancora nessun iscritto.</p>'}
+      <p class="muted" style="font-size:12px;margin-bottom:0">Punti = somma dei fantavoti delle giornate pubblicate. Si aggiorna da sola.</p></div>`}
+  if(TT.tab==='squadra'&&mio){
+    if(!TT.sel)TT.sel=[...(mio.rosa||[])];
+    const sel=TT.sel.map(G).filter(Boolean),spesi=sel.reduce((a,g)=>a+(+g.quotazione||0),0),cnt={P:0,D:0,C:0,A:0};sel.forEach(g=>cnt[g.ruolo]++);
+    const cambi=!aperto?3-(mio.cambi||0):null,mod=JSON.stringify([...TT.sel].sort())!==JSON.stringify([...(mio.rosa||[])].sort());
+    h+=`<div class="card" style="position:sticky;top:64px;z-index:5;background:#1d1060f2"><div class="row between"><b>Crediti ${spesi} / ${t.budget}</b><b style="color:${spesi>t.budget?'#ff6b6b':'var(--green)'}">${t.budget-spesi} rimasti</b></div>
+      <div style="height:8px;background:#ffffff1a;border-radius:6px;margin:8px 0;overflow:hidden"><div style="height:100%;width:${Math.min(100,spesi/t.budget*100)}%;background:${spesi>t.budget?'#ff6b6b':'var(--gold)'}"></div></div>
+      <small class="muted">P ${cnt.P}/2 · D ${cnt.D}/5 · C ${cnt.C}/5 · A ${cnt.A}/4${cambi!==null?` · <b style="color:var(--gold)">${cambi} cambi rimasti</b>`:''}</small>
+      ${mod?`<div class="row" style="gap:8px;margin-top:8px"><button class="pri" style="flex:1" onclick="salvaRosaT(${t.id})">💾 Salva rosa</button><button onclick="TT.sel=null;torneoView()">Annulla</button></div>`:''}</div>
+      ${!aperto?'<p class="muted" style="font-size:13px">Il torneo è iniziato: puoi fare al massimo 3 cambi in totale, prima della scadenza di ogni giornata.</p>':''}
+      <div class="card"><h3 style="margin-top:0">La tua rosa (${sel.length}/16)</h3>${['P','D','C','A'].map(R=>sel.filter(g=>g.ruolo===R).sort((a,b)=>b.quotazione-a.quotazione).map(g=>`<div class="row between" style="padding:4px 0;border-bottom:1px solid var(--line)"><span>${ruolo(g.ruolo)}${esc(g.nome)} <small class="muted">${esc(g.squadra)}</small></span><span><small class="muted">${g.quotazione}</small> <button class="del" onclick="TT.sel=TT.sel.filter(x=>x!==${g.id});torneoView()">✕</button></span></div>`).join('')).join('')||'<p class="muted">Vuota: scegli i giocatori dal listone qui sotto.</p>'}</div>
+      <div class="card"><h3 style="margin-top:0">Listone</h3><div class="fmods">${['P','D','C','A'].map(k=>`<button class="ffil ${TT.fil===k?'on':''}" onclick="TT.fil='${k}';torneoView()">${k} ${cnt[k]}/${TLIM[k]}</button>`).join('')}</div>
+      <input id="tq" placeholder="Cerca giocatore o squadra" value="${esc(TT.q)}" oninput="TT.q=this.value;TT.fq=true;clearTimeout(TT.tq);TT.tq=setTimeout(torneoView,400)">
+      ${TT.L.filter(g=>g.ruolo===TT.fil&&!TT.sel.includes(g.id)&&(!TT.q||(g.nome+' '+g.squadra).toLowerCase().includes(TT.q.toLowerCase()))).sort((a,b)=>b.quotazione-a.quotazione).slice(0,80)
+        .map(g=>{const pieno=cnt[g.ruolo]>=TLIM[g.ruolo],caro=spesi+(+g.quotazione||0)>t.budget;return `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);${pieno||caro?'opacity:.4':''}"><span>${ruolo(g.ruolo)}${esc(g.nome)} <small class="muted">${esc(g.squadra)}</small></span><span><b style="color:var(--gold)">${g.quotazione}</b> <button ${pieno||caro?'disabled':''} onclick="TT.sel.push(${g.id});torneoView()">＋</button></span></div>`}).join('')}</div>`}
+  if(TT.tab==='formazione'&&mio){
+    if(!(mio.rosa||[]).length) h+=`<div class="card"><p>Prima crea la tua rosa da 👕 La mia rosa.</p></div>`;
+    else if(!gCur) h+=`<div class="card"><p>Il torneo è finito: niente più formazioni da inserire.</p></div>`;
+    else{
+      if(TT.g!==gCur.numero){const f=(await db.from('tornei_form').select('*').eq('torneo_id',t.id).eq('utente_id',utente.id).lte('giornata',gCur.numero).order('giornata',{ascending:false}).limit(1)).data?.[0];
+        TT.g=gCur.numero;TT.mod=f?.modulo||'3-4-3';TT.tit=(f?.titolari||[]).filter(x=>mio.rosa.includes(x));TT.salvata=f?.giornata===gCur.numero}
+      const m=TT.mod.split('-').map(Number),need={P:1,D:m[0],C:m[1],A:m[2]},tit=TT.tit.map(G).filter(Boolean),c={P:0,D:0,C:0,A:0};tit.forEach(g=>c[g.ruolo]++);
+      const ok=tit.length===11&&['P','D','C','A'].every(R=>c[R]===need[R]);
+      const pan=mio.rosa.filter(x=>!TT.tit.includes(x)).map(G).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||b.quotazione-a.quotazione);
+      h+=`<div class="card"><div class="row between"><b>Giornata ${gCur.numero}</b><small class="muted">entro ${fmt(gCur.scadenza)}</small></div>${TT.salvata?'<p style="color:var(--green);margin:6px 0 0">✅ Formazione salvata</p>':'<p class="muted" style="margin:6px 0 0">Se non la salvi vale quella della giornata prima.</p>'}
+        <div class="fmods">${TMOD.map(x=>`<button class="fmod ${x===TT.mod?'on':''}" onclick="TT.mod='${x}';TT.tit=[];torneoView()">${x}</button>`).join('')}</div>
+        <p class="muted" style="font-size:13px">Tocca i giocatori per metterli titolari: P ${c.P}/1 · D ${c.D}/${need.D} · C ${c.C}/${need.C} · A ${c.A}/${need.A}. Gli altri vanno in panchina (entrano al massimo 3, stesso ruolo).</p>
+        ${mio.rosa.map(G).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||b.quotazione-a.quotazione).map(g=>{const on=TT.tit.includes(g.id);return `<div class="frow ${on?'tit':''}" onclick="titTog(${g.id},'${g.ruolo}')"><span>${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <small class="muted">${esc(g.squadra)}</small></span><span class="fst" style="margin-left:auto">${on?'IN CAMPO':'PANCA'}</span></div>`}).join('')}
+        <button class="btnv" ${ok?'':'disabled style="opacity:.5"'} onclick="salvaFormT(${t.id},${gCur.numero})">${ok?'💾 Salva formazione':'Completa il modulo'}</button></div>`;
+      TT._pan=pan.map(g=>g.id)}}
+  if(TT.tab==='regole') h+=`<div class="card"><h3 style="margin-top:0">📜 Come funziona</h3><p class="muted" style="font-size:14px">
+    • <b>Iscrizione</b>: riservata ai 💎 Premium, quota in palloni Premium. Chiude alla scadenza della giornata ${t.g_da}.<br>
+    • <b>Rosa</b>: 16 giocatori (2 P, 5 D, 5 C, 4 A) dal listone; ognuno costa la sua quotazione e devi stare nei ${t.budget} crediti. Lo stesso giocatore può averlo più gente.<br>
+    • <b>Rose segrete</b>: fino alla chiusura delle iscrizioni ognuno vede solo la sua; dopo diventano visibili a tutti.<br>
+    • <b>Cambi</b>: a torneo iniziato hai 3 cambi in totale, da fare prima della scadenza di una giornata.<br>
+    • <b>Formazione</b>: ogni giornata 11 titolari (moduli classici) e 5 in panchina; massimo 3 sostituzioni automatiche dello stesso ruolo. Se non la inserisci vale quella della giornata prima.<br>
+    • <b>Punti</b>: somma dei fantavoti di tutte le giornate del torneo.<br>
+    • <b>Premi</b>: alla pubblicazione dell'ultima giornata il torneo si chiude da solo. Il banco trattiene il ${rk}%, il resto va al 1°; con 10 o più iscritti 60% al 1°, 30% al 2°, 10% al 3°. Con un solo iscritto la quota viene restituita.</p></div>`;
+  app.innerHTML=h;if(TT.fq){TT.fq=false;const e=document.getElementById('tq');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}}}
+function titTog(id,R){const m=TT.mod.split('-').map(Number),need={P:1,D:m[0],C:m[1],A:m[2]};const i=TT.tit.indexOf(id);
+  if(i>=0)TT.tit.splice(i,1);else{const c=TT.tit.filter(x=>TT.L.find(g=>g.id===x)?.ruolo===R).length;if(c>=need[R])return toast(`Hai già ${need[R]} ${R} in campo con il ${TT.mod}`,true);TT.tit.push(id)}torneoView()}
+async function torneoIscr(id,q){if(!confirm(`Iscriversi pagando ${q} palloni Premium?`))return;chk(await db.rpc('torneo_iscriviti',{p_t:id,p_nome:val('ti_n')}));toast('Iscritto! Ora crea la tua rosa');profilo.gettoni-=q;aggSaldo();TT.tab='squadra';torneoView()}
+async function salvaRosaT(id){if(TT.sel.length!==16)return toast('Servono 16 giocatori',true);const r=chk(await db.rpc('torneo_rosa',{p_t:id,p_ids:TT.sel}));toast('Rosa salvata!'+(r<3?` Cambi rimasti: ${r}`:''));TT.sel=null;TT.g=null;torneoView()}
+async function salvaFormT(id,g){chk(await db.from('tornei_form').upsert({torneo_id:id,utente_id:utente.id,giornata:g,titolari:TT.tit,panchina:TT._pan||[],modulo:TT.mod},{onConflict:'torneo_id,utente_id,giornata'}));toast('Formazione salvata!');TT.salvata=true;torneoView()}
+
 // ---------- notizie ----------
 let ARTS=[];
 function stemma(nome,cl='',url){if(url)return `<div class="stemma ${cl}" style="background:#fff center/cover no-repeat url('${esc(url)}')"></div>`;let h=0;for(const c of String(nome||''))h=(h*31+c.charCodeAt(0))%360;const ini=String(nome||'?').replace(/^(fc|ac|as|uc|team|real)\s+/i,'').split(/[\s-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -336,7 +423,7 @@ async function pDash(){
     <div class="card"><h3 style="margin-top:0">🔑 Entra in una lega</h3><p class="muted">Hai un codice invito da un amico? Inseriscilo e scegli la tua squadra.</p><button class="btnv" onclick="vai('fanta')">Entra con il codice</button></div>
     <div class="card"><h3 style="margin-top:0">➕ Crea una lega</h3><p class="muted">Crea la tua lega, scegli le regole e invita gli amici con il codice.</p><button class="btnv" onclick="vai('fanta')">Crea una lega</button></div>
     <div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">🚚 Trasferisci la tua lega</h3><p class="muted">Giochi già su un'altra app? Mandaci gli screenshot e la portiamo qui noi, con rose, classifica e calendario.</p>${wa?`<a href="${wa}" target="_blank" class="btnv" style="text-align:center;text-decoration:none;background:#25d366">💬 Contatta l'amministratore</a>`:`<p class="muted">Scrivici a <b>fantataccuino@gmail.com</b></p>`}</div>
-    <div class="tiles">${[['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`;return}
+    <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`;return}
   const lega=chk(await db.from('leghe').select('*').eq('id',LG).single());
   const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino)').eq('lega_id',lega.id));
   MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
@@ -357,7 +444,7 @@ async function pDash(){
   ${gNext?`<div class="card"><div class="row between"><b>Prossima giornata</b><small class="muted">${gNext.numero}ª giornata</small></div>${mN?vs(mN):''}
     <p class="muted" style="text-align:center;margin:4px 0">⏱️ Formazione entro <b style="color:var(--txt)">${fmt(gNext.scadenza)}</b>${fatta?' · <span style="color:var(--green)">✅ inserita</span>':''}</p>
     <button class="btnv" style="${fatta?'background:#ffffff22;color:var(--txt)':''}" onclick="vaiLega('formazione')">${fatta?'Modifica formazione':'Inserisci formazione'}</button></div>`:''}
-  <div class="tiles">${[['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
+  <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
 async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e6)return toast('Immagine troppo grande',true);
   toast('Carico lo stemma…');const im=new Image();im.src=URL.createObjectURL(f);await im.decode();
   const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),m=Math.min(im.width,im.height);
@@ -369,7 +456,7 @@ async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e
 async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
 async function pAltro(){
   const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
-  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
+  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
     ...(pres?[['⚙️','Gestione lega',"vaiLega('gestione')"]]:[]),...(on('f_premium')?[['💎','Premium',"vai('premium')"]]:[]),['📜','Termini',"vai('termini')"],...(profilo.ruolo==='admin'?[['🛠️','Admin',"vai('admin')"]]:[]),
     ...(FEAT.link_donazioni?[['☕','Sostienici',`window.open('${esc(FEAT.link_donazioni)}','_blank')`]]:[])].filter(x=>x[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=selLega()+`<h2 style="margin-top:6px">☰ Altro</h2><div class="tiles">${V.map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
