@@ -1399,9 +1399,9 @@ async function legaView(){
         return `<details><summary>${esc(m.nome_squadra)} (${rr.length})</summary>${rr.map(r=>`<div class="row between" style="padding:4px 0"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} · ${r.prezzo}</span><button class="del" onclick="togliGiocatore(${r.id})">Togli</button></div>`).join('')}</details>`}).join('')}
     </div>
     ${lega.modalita==='asta'?`<div class="card"><h3>💰 Crediti delle squadre</h3><p class="muted" style="font-size:13px">Scrivi un numero e tocca ➕ per aggiungere, ➖ per togliere, oppure = per impostare i crediti rimasti esatti.</p>
-      ${membri.map(m=>{const sp=rose.filter(r=>r.utente_id===m.utente_id).reduce((a,r)=>a+r.prezzo,0),adj=+((lega.bonus||{}).cred||{})[m.utente_id]||0,res=lega.crediti-sp+adj;
-        return `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);gap:6px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b>${esc(m.nome_squadra)}</b><br><small class="muted">rimasti</small> <b style="color:var(--gold)">${res}</b></span>
-        <input id="cr_${m.utente_id}" type="number" placeholder="n." style="width:64px;margin:0;padding:8px;text-align:center"><button onclick="modCred(${lega.id},'${m.utente_id}',1)">➕</button><button onclick="modCred(${lega.id},'${m.utente_id}',-1)">➖</button><button onclick="modCred(${lega.id},'${m.utente_id}',0)">=</button></div>`}).join('')}</div>`:''}
+      ${(CRK=[...membri.map(m=>({k:m.utente_id,n:m.nome_squadra,sp:rose.filter(r=>r.utente_id===m.utente_id).reduce((a,r)=>a+r.prezzo,0)})),...Object.entries(lega.attesa||{}).map(([n,v])=>({k:'n:'+n,n,sp:(v.rosa||[]).reduce((a,r)=>a+(+r[1]||0),0),lib:1}))]).map((m,i)=>{const adj=+((lega.bonus||{}).cred||{})[m.k]||0,res=lega.crediti-m.sp+adj;
+        return `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);gap:6px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b>${esc(m.n)}</b>${m.lib?' ⏳':''}<br><small class="muted">rimasti</small> <b style="color:var(--gold)">${res}</b></span>
+        <input id="cr_${i}" type="number" placeholder="n." style="width:64px;margin:0;padding:8px;text-align:center"><button onclick="modCred(${lega.id},${i},1)">➕</button><button onclick="modCred(${lega.id},${i},-1)">➖</button><button onclick="modCred(${lega.id},${i},0)">=</button></div>`}).join('')}<p class="muted" style="font-size:12px">⏳ = squadra libera: i crediti passano a chi la prende.</p></div>`:''}
     <div class="card"><h3>Partecipanti</h3>${membri.map(m=>`<div class="row between" style="padding:4px 0"><span>${esc(m.nome_squadra)} <span class="muted">${un(m.profili)}</span></span>
       ${profilo.ruolo==='admin'?`<button onclick="liberaSq(${lega.id},'${m.utente_id}')">🔓 Rimetti libera</button> `:''}${m.utente_id!==lega.creatore_id?`<button class="del" onclick="togliMembro(${lega.id},'${m.utente_id}')">Rimuovi</button>`:'<span class="badge">Presidente</span>'}</div>`).join('')}
       <button class="del" style="margin-top:14px" onclick="eliminaLega(${lega.id})">Elimina lega</button></div>`;
@@ -1622,9 +1622,10 @@ async function assegna(lid,gid){
   toast('Giocatore assegnato!');legaView();
 }
 async function togliGiocatore(id){if(!confirm('Togliere il giocatore dalla rosa?'))return;chk(await db.from('rose').delete().eq('id',id));legaView()}
-async function modCred(lid,uid,seg){const n=+document.getElementById('cr_'+uid).value;if(!n&&seg!==0)return toast('Scrivi un numero',true);
+let CRK=[];
+async function modCred(lid,i,seg){const K=CRK[i],uid=K.k,n=+document.getElementById('cr_'+i).value;if(!n&&seg!==0)return toast('Scrivi un numero',true);
   const l=chk(await db.from('leghe').select('bonus,crediti').eq('id',lid).single());const b={...(l.bonus||{})};const c={...(b.cred||{})};
-  if(seg===0){const sp=chk(await db.from('rose').select('prezzo').eq('lega_id',lid).eq('utente_id',uid)).reduce((a,r)=>a+r.prezzo,0);c[uid]=n-(l.crediti-sp)}
+  if(seg===0){c[uid]=n-(l.crediti-K.sp)}
   else c[uid]=(+c[uid]||0)+seg*n;
   b.cred=c;chk(await db.from('leghe').update({bonus:b}).eq('id',lid));toast('Crediti aggiornati');legaView()}
 async function coAggiungi(lid){const u=val('co_u');if(!u)return toast('Scrivi il nome utente',true);chk(await db.rpc('co_aggiungi',{p_lega:lid,p_username:u}));toast(u+' ora gestisce la squadra con te');legaView()}
@@ -1800,8 +1801,16 @@ async function pSng(){
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:''}).join(', ');
     h+=`<button style="width:100%;margin-bottom:10px" onclick="guidaSngOverlay()">❓ Come si gioca al Calcetto</button>`;
     if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='gestisci';pSng()">🛠️ Gestisci tavoli (admin)</button>`;
-    h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
-      return `<div class="card" ${t.gratis?'style="border-color:#5dff7a88"':''}><div class="row between"><b>${t.gratis?'🎁 ':''}${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">${t.gratis?'GRATIS · ':''}G${t.giornata}</span></div>
+    if(!sg.tipo)sg.tipo=premOk()?'pre':'free';
+    const nF=tav.filter(t=>t.gratis).length,nP=tav.length-nF;
+    h+=`<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:nowrap">
+      <button style="flex:1;padding:12px 6px;${sg.tipo==='free'?'background:#1a7f37;color:#fff;border-color:#5dff7a':''}" onclick="sg.tipo='free';pSng()">🎁 Tavoli Free<br><small>${nF} aperti · palloni gratis</small></button>
+      <button style="flex:1;padding:12px 6px;${sg.tipo==='pre'?'background:linear-gradient(135deg,#b8860b,#ffd34d);color:#1d0f63;border-color:#ffd34d':''}" onclick="sg.tipo='pre';pSng()">💎 Tavoli Premium<br><small>${nP} aperti · palloni Premium</small></button></div>
+    <p class="muted" style="font-size:13px;margin:0 2px 10px">${sg.tipo==='free'?'🎁 <b>Free</b>: per tutti, si entra con i palloni gratis. Servono per provare: le vincite non si accumulano e non contano per il Re del mese.':'💎 <b>Premium</b>: riservati agli utenti Premium, si entra con i palloni Premium. Le vincite vanno nel saldo e contano per il 👑 Re del mese.'}</p>`;
+    const tavV=tav.filter(t=>sg.tipo==='free'?t.gratis:!t.gratis);
+    if(!tavV.length)h+=`<div class="card"><p class="muted" style="margin:0">${sg.tipo==='free'?'Nessun tavolo Free aperto in questo momento: si creano da soli prima di ogni partita.':'Nessun tavolo Premium aperto in questo momento.'}</p></div>`;
+    h+=tavV.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
+      return `<div class="card" style="border-color:${t.gratis?'#5dff7a88':'#ffd34d99'}"><div class="row between"><b>${t.gratis?'🎁 ':'💎 '}${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge" style="${t.gratis?'':'background:#ffd34d;color:#1d0f63'}">${t.gratis?'FREE':'PREMIUM'} · G${t.giornata}</span></div>
       <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso ${t.gratis?'🎁':'<span class="pd"></span>'} ${t.ingresso} · ${t.gratis?'Tavolo di prova, vincite non accreditate':`Montepremi <span class="pd"></span> ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'}`} · Iscritti <b>${n}/${t.posti}</b></p>
       ${io?`<span class="badge" style="color:var(--green)">✅ Sei al tavolo</span> <button onclick="sg.tav=${t.id};pSng()">Apri</button>`:t.gratis?((profilo.prova??0)>=t.ingresso?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso},true)">🎁 Entra gratis</button>`:'<span class="muted">🎁 Palloni gratis insufficienti: apri i pacchi giornalieri!</span>'):!PROVA?`<button class="ok" onclick="sngEntra(${t.id},${t.ingresso})">Entra</button>`:'<span class="muted">💎 Serve il Premium</span>'}</div>`}).join('')||'<p class="muted">Nessun tavolo aperto al momento.</p>';
   }
