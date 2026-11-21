@@ -677,6 +677,17 @@ async function legaView(){
         <p class="muted" style="font-size:12px">Contano solo le giornate con voti pubblicati${lega.giornata_da?` dalla ${lega.giornata_da} alla ${lega.giornata_a||38}`:''}. Sostituzioni automatiche: massimo ${REG(lega).cambi}, stesso ruolo${REG(lega).sw?" (con switch)":""}, in ordine di panchina.</p></div>`;
     } else {
       const libN=new Set(Object.keys(lega.attesa||{}));
+      {const gA=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').eq('pubblicata',false).order('numero').limit(1))[0];
+       if(gA){const iniz=new Date(gA.scadenza)<=new Date();
+        const fo=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('giornata',gA.numero));
+        const scA=chk(await db.from('schieramenti').select('utente_id,modulo,nascosta').eq('lega_id',lega.id).eq('giornata',gA.numero));
+        const boxF=uid=>{const s=scA.find(x=>x.utente_id===uid),r=fo.filter(x=>x.utente_id===uid);
+          if(!r.length)return s?.nascosta&&!iniz&&uid!==MIO?'<p class="muted">🔒 Formazione nascosta: si vede al calcio d\'inizio</p>':'<p class="muted">Formazione non ancora inserita</p>';
+          const t=r.filter(x=>x.titolare).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]),pn=r.filter(x=>!x.titolare).sort((a,b)=>a.ordine-b.ordine);
+          return `<small class="muted">${esc(s?.modulo||'')}${s?.nascosta?' · 🙈 nascosta agli altri':''}</small>${t.map(x=>`<div style="padding:2px 0">${ruolo(x.giocatori.ruolo)}${esc(x.giocatori.nome)} <small class="muted">${esc(x.giocatori.squadra)}</small></div>`).join('')}${pn.length?`<div class="muted" style="font-size:13px;margin-top:4px">🪑 ${pn.map(x=>esc(x.giocatori.nome)).join(', ')}</div>`:''}`};
+        const incA=inc.filter(i=>i.giornata===gA.numero);
+        h+=`<div class="card"><h3>👀 Formazioni · giornata ${gA.numero}</h3><p class="muted" style="font-size:13px">${iniz?'Le partite sono iniziate: tutte le formazioni sono visibili.':'Scadenza '+fmt(gA.scadenza)+'. Chi ha scelto di nasconderla la mostra al calcio d\'inizio.'}</p>
+          ${(incA.length?incA.map(i=>[i.casa,i.trasferta]):membri.map(m=>[m.utente_id])).map(c=>`<details style="border-top:1px solid var(--line);padding:6px 0"><summary style="color:var(--txt);font-weight:700">${c.map(nomeSq).join(' – ')}</summary>${c.map(u=>`<div style="margin:6px 0"><b>${nomeSq(u)}</b>${boxF(u)}</div>`).join('')}</details>`).join('')}</div>`}}
       const calT=[...inc.map(i=>[i.giornata,membri.find(m=>m.utente_id===i.casa)?.nome_squadra||'?',membri.find(m=>m.utente_id===i.trasferta)?.nome_squadra||'?']),...(lega.attesa_cal||[])];
       if(calT.length){const gs=[...new Set(calT.map(x=>+x[0]))].sort((a,b)=>a-b);
         if(!gs.includes(+fz.cg))fz.cg=gs.find(x=>!pub.includes(x))||gs[0];
@@ -750,7 +761,7 @@ async function legaView(){
     else{
       const g=giorn[0];
       const att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero));
-      const sch=chk(await db.from('schieramenti').select('modulo').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
+      const sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
       const mod=RGf.moduli.includes(sch?.modulo)?sch.modulo:RGf.moduli[0];
       const stato=id=>{const f=att.find(x=>x.giocatore_id===id);return !f?'':f.titolare?'T':'P'+f.ordine};
       const nPan=RGf.panca?(RGf.panca.P+RGf.panca.D+RGf.panca.C+RGf.panca.A):Math.max(12,mia.length-11);
@@ -791,6 +802,7 @@ async function legaView(){
         <select class="fsel" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" style="display:none">
         <option value="">Tribuna</option><option value="T" ${stato(r.giocatore_id)==='T'?'selected':''}>Titolare</option>
         ${Array.from({length:Math.max(nPan,mia.length)},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
+      <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:12px 0 0"><input type="checkbox" id="f_nasc" style="width:auto" ${sch?.nascosta?'checked':''}> 🙈 Nascondi la mia formazione agli altri fino al calcio d'inizio</label>
       <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione</button></div>`;
       if(lega.carte&&on('f_carte')){
         const mie=chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id).eq('utente_id',MIO));
@@ -927,7 +939,7 @@ async function salvaFormazione(lid,gn){
   if(FREG&&FREG.panca){const pc={P:0,D:0,C:0,A:0};document.querySelectorAll('.fsel').forEach(x=>{if(x.value&&x.value!=='T')pc[x.dataset.r]++});const tr=['P','D','C','A'].find(k=>pc[k]>FREG.panca[k]);if(tr)return toast(`In panchina al massimo ${FREG.panca[tr]} ${tr}`,true)}
   chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('utente_id',MIO).eq('giornata',gn));
   chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:MIO,giornata:gn}))));
-  chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,modulo},{onConflict:'lega_id,utente_id,giornata'}));
+  chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,modulo,nascosta:!!document.getElementById('f_nasc')?.checked},{onConflict:'lega_id,utente_id,giornata'}));
   toast('Formazione salvata!');
 }
 async function usaCarta(lid,gn,k){
