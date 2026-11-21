@@ -1316,7 +1316,7 @@ async function pSng(){
     const ids=[...new Set(tav.flatMap(t=>t.partite||[]))];
     const pp=ids.length?chk(await db.from('partite_sa').select('api_id,casa,trasferta,data').in('api_id',ids)):[];
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:''}).join(', ');
-    if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='gestisci';pSng()">🛠️ Gestisci / crea tavoli (admin)</button>`;
+    if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='gestisci';pSng()">🛠️ Gestisci tavoli (admin)</button>`;
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
       return `<div class="card" ${t.gratis?'style="border-color:#5dff7a88"':''}><div class="row between"><b>${t.gratis?'🎁 ':''}${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">${t.gratis?'GRATIS · ':''}G${t.giornata}</span></div>
       <p class="muted" style="margin:6px 0">⚽ ${desc(t)}<br>⏱️ Chiude ${t.chiusura?fmt(t.chiusura):'-'} · Ingresso ${t.gratis?'🎁':'<span class="pd"></span>'} ${t.ingresso} · ${t.gratis?'Tavolo di prova, vincite non accreditate':`Montepremi <span class="pd"></span> ${montepremi(t)}${t.posti>4?' (70% / 30%)':' (tutto al 1°)'}`} · Iscritti <b>${n}/${t.posti}</b></p>
@@ -1328,7 +1328,7 @@ async function pSng(){
     const pp=ids.length?chk(await db.from('partite_sa').select('api_id,casa,trasferta').in('api_id',ids)):[];
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:'?'}).join(', ')||'nessuna partita';
     const ST={aperto:'⏳ Aperto',draft:'🔥 Draft',in_gioco:'⚽ In gioco',annullato:'↩️ Annullato'};
-    h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='crea';pSng()">➕ Crea tavoli</button>`+tav.map(t=>`<div class="card">
+    h+=`<p class="muted" style="font-size:13px">🤖 I tavoli 🎁 Gratis si creano da soli per ogni partita e ogni fascia oraria, e quando uno si riempie se ne apre subito un altro. Qui puoi solo vederli o annullarli.</p>`+tav.map(t=>`<div class="card">
       <div class="row between"><b>#${t.id} · ${esc(t.nome||'Calcetto')}</b><span class="badge">${ST[t.stato]||t.stato}</span></div>
       <p class="muted" style="margin:6px 0">G${t.giornata} · ${t.posti} posti · <span class="pd"></span> ${t.ingresso} · iscritti ${t.sng_iscritti.length}<br>⚽ ${desc(t)}</p>
       <div class="row">${t.stato==='aperto'?`<button onclick="sg.edit=${t.id};sg.tab='modifica';pSng()">✏️ Modifica</button>`:''}
@@ -1819,12 +1819,13 @@ async function pSerieA(){
 }
 
 // ---------- admin ----------
-let ad={tab:'redazione',g:null,vsq:null};
+let ad={tab:'giornate',g:null,vsq:null};
 async function pAdmin(){
   if(profilo.ruolo!=='admin') return vai('home');
-  const T=[['redazione','📝 Redazione'],['utenti','Utenti'],['funzioni','Funzioni'],['dati','📅 Calendario'],['importa','🚚 Importa lega'],['giornate','Giornate'],['voti','Voti'],['giocatori','Giocatori'],['articoli','Articoli']];
+  const T=[['giornate','🤖 Giornate'],['voti','Voti'],['utenti','Utenti'],['funzioni','Funzioni'],['importa','🚚 Importa lega'],['giocatori','Giocatori'],['articoli','Articoli']];
   let h=`<h2>Admin</h2><div class="tabs">${T.map(([k,v])=>`<button class="${ad.tab===k?'on':''}" onclick="ad.tab='${k}';pAdmin()">${v}</button>`).join('')}</div>`;
 
+  if(['redazione','dati'].includes(ad.tab)) ad.tab='giornate';
   if(ad.tab==='redazione'){ if(prb) return probRender(); if(red) return redRender(); app.innerHTML=await redLista(h); return; }
   if(ad.tab==='funzioni'){
     await caricaFeat();
@@ -1884,15 +1885,9 @@ async function pAdmin(){
     const pp=chk(await db.from('partite_sa').select('*').eq('giornata',ad.g).order('data'));
     h+=`<select onchange="ad.g=this.value;pAdmin()">${fg.map(x=>`<option value="${x.numero}" ${x.numero==ad.g?'selected':''}>Giornata ${x.numero} ${x.pubblicata?'✅':''}</option>`).join('')}</select>
     <div class="card"><h3>Giornata ${g.numero} ${g.pubblicata?'<span class="badge">Voti pubblicati</span>':'<span class="badge">Voti in bozza</span>'}</h3>
-      <label>Scadenza formazioni</label><div class="row"><input id="sc_g" type="datetime-local" value="${toLocal(g.scadenza)}" style="flex:1;margin:0"><button onclick="salvaScad(${g.numero})">Salva</button></div>
-      <div class="row" style="margin-top:12px"><button onclick="ad.tab='voti';pAdmin()">Controlla voti</button>
-      <button class="${g.pubblicata?'del':'ok'}" onclick="pubblica(${g.numero},${!g.pubblicata})">${g.pubblicata?'Ritira voti':'Pubblica voti'}</button></div>
+      <p class="muted" style="margin:6px 0">🤖 Tutto automatico: calendario, scadenza (${fmt(g.scadenza)}), probabili, formazioni ufficiali, live e voti. I voti si pubblicano da soli circa 4 ore dopo l'ultima partita.</p>
+      <div class="row" style="margin-top:8px"><button onclick="ad.tab='voti';pAdmin()">✏️ Controlla / correggi voti</button>${g.pubblicata?`<button class="del" onclick="pubblica(${g.numero},false)">Ritira voti</button>`:''}</div>
       <p id="prog" class="muted"></p></div>
-    <div class="card" style="border-color:var(--green)"><details><summary style="color:var(--txt);font-weight:800">📋 Carica tutte le probabili della giornata</summary>
-      <p class="muted" style="font-size:13px;margin-top:8px">Una riga per squadra: <b>Squadra: Nome; Nome; Nome…</b> (gli 11 titolari). Le squadre che scrivi sostituiscono le loro probabili, le altre restano come sono.<br>Es: <i>Inter: Sommer; Bisseck; Acerbi; Bastoni; …</i></p>
-      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'pb_txt')"></label>
-      <textarea id="pb_txt" rows="6" placeholder="Squadra: Nome; Nome; …"></textarea>
-      <button class="pri" onclick="probImporta(${g.numero})">Carica probabili</button><div id="pb_ris" style="margin-top:8px"></div></details></div>
     <div class="card">${pp.map(p=>`<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(p.casa)} – ${esc(p.trasferta)} ${p.gol_casa!==null?`<b style="color:var(--gold)">${p.gol_casa}-${p.gol_trasferta}</b>`:''}<br><small class="muted">${fmt(p.data)}</small></span>
       </div>`).join('')}</div>`;
   }
@@ -1922,12 +1917,6 @@ async function pAdmin(){
   }
 
   if(ad.tab==='giocatori'){
-    h+=`<div class="card" style="border-color:var(--green)"><h3>💎 Titolarità e indisponibili</h3>
-      <p class="muted" style="font-size:13px">Lo vedono solo gli utenti Premium (rosa e formazione). Una riga per giocatore: <b>Nome;Squadra;Titolarità;Stato</b><br>Titolarità da 0 a 100 (vuota = non mostrare). Stato: <b>ok</b>, <b>infortunato</b>, <b>squalificato</b> o <b>dubbio</b>.<br>Es: <i>Leysen F.;Genoa;;infortunato</i> · <i>Solet;Udinese;80;ok</i></p>
-      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'tit_txt')"></label>
-      <textarea id="tit_txt" rows="6" placeholder="Nome;Squadra;Titolarità;Stato"></textarea>
-      <label style="color:var(--txt);display:block;margin:4px 0 10px"><input type="checkbox" id="tit_az"> Prima azzera titolarità e stati di tutti</label>
-      <button class="pri" onclick="impTit()">Aggiorna</button><div id="tit_ris" style="margin-top:8px"></div></div>`;
     h+=`<div class="card" style="border-color:var(--gold)"><h3>📋 Importa listone da testo</h3>
       <p class="muted">Una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b> (ruolo P, D, C o A)<br>Es: <i>Federico Dimarco;D;Inter;16</i><br>Se il giocatore esiste già (stesso nome e squadra) aggiorna ruolo e quotazione, altrimenti lo crea.</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'lst_txt')"></label>
