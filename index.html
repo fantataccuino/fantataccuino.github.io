@@ -318,7 +318,7 @@ async function eliminaAccount(){
 
 // ---------- notizie ----------
 let ARTS=[];
-function stemma(nome,cl=''){let h=0;for(const c of String(nome||''))h=(h*31+c.charCodeAt(0))%360;const ini=String(nome||'?').replace(/^(fc|ac|as|uc|team|real)\s+/i,'').split(/[\s-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+function stemma(nome,cl='',url){if(url)return `<div class="stemma ${cl}" style="background:#fff center/cover no-repeat url('${esc(url)}')"></div>`;let h=0;for(const c of String(nome||''))h=(h*31+c.charCodeAt(0))%360;const ini=String(nome||'?').replace(/^(fc|ac|as|uc|team|real)\s+/i,'').split(/[\s-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
   return `<div class="stemma ${cl}" style="background:linear-gradient(145deg,hsl(${h},70%,52%),hsl(${(h+40)%360},70%,30%))">${esc(ini)}</div>`}
 async function statLega(lega,membri){const {pub,ris}=await datiLega(lega,membri);
   const inc=chk(await db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata'));
@@ -335,7 +335,7 @@ async function pDash(){
   const lega=chk(await db.from('leghe').select('*').eq('id',LG).single());
   const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino)').eq('lega_id',lega.id));
   MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
-  const me=membri.find(m=>m.utente_id===MIO),nome=u=>membri.find(m=>m.utente_id===u)?.nome_squadra||String(u).replace(/^n:/,'')||'?';
+  const me=membri.find(m=>m.utente_id===MIO),nome=u=>membri.find(m=>m.utente_id===u)?.nome_squadra||String(u).replace(/^n:/,'')||'?',img=u=>membri.find(m=>m.utente_id===u)?.stemma;
   const {tot,cl,sd}=await statLega(lega,membri);const t=tot[MIO]||{pt:0,g:0,punti:0},pos=cl.indexOf(MIO)+1;
   const arts=(await db.from('articoli').select('id,titolo').order('pubblicato_il',{ascending:false}).limit(6)).data||[];
   const gg=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').eq('pubblicata',false).order('numero'));
@@ -344,8 +344,8 @@ async function pDash(){
     if(i)return [i.casa,i.trasferta];const c=(lega.attesa_cal||[]).find(x=>x[0]===g.numero&&(x[1]===me?.nome_squadra||x[2]===me?.nome_squadra));return c?[c[1]===me?.nome_squadra?MIO:'n:'+c[1],c[2]===me?.nome_squadra?MIO:'n:'+c[2]]:null};
   const mL=await avv(gLive),mN=await avv(gNext);
   const fatta=gNext?((await db.from('formazioni').select('giocatore_id',{count:'exact',head:true}).eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',gNext.numero)).count||0)>0:false;
-  const vs=(m)=>`<div class="vsr"><div>${stemma(nome(m[0]),'mini')}<b>${esc(nome(m[0]))}</b></div><div class="vs">VS</div><div>${stemma(nome(m[1]),'mini')}<b>${esc(nome(m[1]))}</b></div></div>`;
-  app.innerHTML=selLega()+`<div class="dhero">${stemma(me?.nome_squadra)}<h2 style="margin:4px 0 0">${esc(me?.nome_squadra||'')}</h2><small class="muted">${esc(lega.nome)}</small>
+  const vs=(m)=>`<div class="vsr"><div>${stemma(nome(m[0]),'mini',img(m[0]))}<b>${esc(nome(m[0]))}</b></div><div class="vs">VS</div><div>${stemma(nome(m[1]),'mini',img(m[1]))}<b>${esc(nome(m[1]))}</b></div></div>`;
+  app.innerHTML=selLega()+`<div class="dhero"><label style="display:block;width:96px;margin:0 auto;position:relative;cursor:pointer">${stemma(me?.nome_squadra,'',me?.stemma)}<span style="position:absolute;right:-2px;bottom:6px;background:var(--gold);color:#1a0f3d;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px">📷</span><input type="file" accept="image/*" style="display:none" onchange="cambiaStemma(this)"></label><h2 style="margin:4px 0 0">${esc(me?.nome_squadra||'')}</h2><small class="muted">${esc(lega.nome)}</small>
     <div class="dstats"><div><b>${pos||'-'}ª</b><small>Posizione</small></div><div><b>${sd?t.punti:'-'}</b><small>Punti</small></div><div><b>${t.g}</b><small>Partite</small></div><div><b>${Math.round(t.pt*10)/10}</b><small>Pt. totali</small></div></div></div>
   ${arts.length?`<div class="ticker">${arts.map(a=>`<div onclick="ARTS=[];apriArtDa(${a.id})"><b>NEWS</b>${esc(a.titolo)}</div>`).join('')}</div>`:''}
   ${gLive?`<div class="card"><div class="row between"><b><span style="color:var(--green)">●</span> Live in corso</b><small class="muted">${gLive.numero}ª giornata</small></div>${mL?vs(mL):''}<button class="btnv" onclick="vaiLega('live')">Vai al Live</button></div>`:''}
@@ -353,6 +353,14 @@ async function pDash(){
     <p class="muted" style="text-align:center;margin:4px 0">⏱️ Formazione entro <b style="color:var(--txt)">${fmt(gNext.scadenza)}</b>${fatta?' · <span style="color:var(--green)">✅ inserita</span>':''}</p>
     <button class="btnv" style="${fatta?'background:#ffffff22;color:var(--txt)':''}" onclick="vaiLega('formazione')">${fatta?'Modifica formazione':'Inserisci formazione'}</button></div>`:''}
   <div class="tiles">${[['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
+async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e6)return toast('Immagine troppo grande',true);
+  toast('Carico lo stemma…');const im=new Image();im.src=URL.createObjectURL(f);await im.decode();
+  const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),m=Math.min(im.width,im.height);
+  x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,256,256);
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.88));const path=`${utente.id}/${LG}-${Date.now()}.jpg`;
+  const {error}=await db.storage.from('stemmi').upload(path,blob,{contentType:'image/jpeg',upsert:true});if(error)return toast(error.message,true);
+  const url=db.storage.from('stemmi').getPublicUrl(path).data.publicUrl;
+  chk(await db.rpc('set_stemma',{p_lega:LG,p_url:url}));toast('Stemma aggiornato!');pDash()}
 async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
 async function pAltro(){
   const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
