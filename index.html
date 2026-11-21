@@ -638,6 +638,8 @@ async function legaView(){
   const pres=lega.creatore_id===utente.id||profilo.ruolo==='admin';
   const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino)').eq('lega_id',lega.id));
   const nomeSq=uid=>esc(membri.find(m=>m.utente_id===uid)?.nome_squadra||'?');
+  MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
+  const isCo=MIO!==utente.id;
   const tabs=[['classifica','Classifica'],['giornate','Giornate'],['rosa','Rose'],['formazione','Formazione']];
   if(lega.modalita==='draft') tabs.splice(2,0,['draft','Draft']);
   if(pres) tabs.push(['gestione','Gestione']);
@@ -704,7 +706,7 @@ async function legaView(){
     else{
       const ord=lega.draft_ordine||[],m=ord.length,n=rose.length,finito=lega.draft_stato==='finito';
       let turno=null;if(!finito&&m){const giro=Math.floor(n/m);let pos=n%m;if(giro%2)pos=m-1-pos;turno=ord[pos]}
-      const mio=turno===utente.id;
+      const mio=turno===MIO;
       const conta=uid=>{const c={P:0,D:0,C:0,A:0};rose.filter(r=>r.utente_id===uid).forEach(r=>c[r.giocatori.ruolo]++);return c};
       const ct=turno?conta(turno):null;
       h+=`<div class="card"><h3>${finito?'✅ Draft concluso':`Scelta n. ${n+1} · tocca a <span style="color:var(--gold)">${nomeSq(turno)}</span>`}</h3>
@@ -718,13 +720,19 @@ async function legaView(){
   }
 
   if(fz.tab==='rosa'){
-    if(!fz.vedi||!membri.find(m=>m.utente_id===fz.vedi)) fz.vedi=utente.id;
+    if(!fz.vedi||!membri.find(m=>m.utente_id===fz.vedi)) fz.vedi=MIO;
     const mia=rose.filter(r=>r.utente_id===fz.vedi).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
     const spesi=mia.reduce((s,r)=>s+r.prezzo,0);
-    const ombraMia=lega.modalita==='ombra'&&fz.vedi===utente.id;
+    const ombraMia=lega.modalita==='ombra'&&fz.vedi===MIO;
     h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
     <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi+(+((lega.bonus||{}).cred||{})[fz.vedi]||0)}</b>`:''}</p>
     <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}<br>${titG(r.giocatori)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
+    const mm=membri.find(m=>m.utente_id===fz.vedi);
+    if(mm&&fz.vedi===MIO){const co=mm.co||[];const nomiCo=co.length?chk(await db.from('profili').select('id,username').in('id',co)):[];
+      h+=`<div class="card"><h3>👥 Co-allenatori</h3>${isCo?`<p class="muted">Gestisci <b>${esc(mm.nome_squadra)}</b> insieme a ${esc(mm.profili?.username||'')}: puoi schierare la formazione.</p><button class="del" onclick="coTogli(${lega.id},'${utente.id}')">Lascia la gestione</button>`
+        :`<p class="muted" style="font-size:13px">Fate il fanta in due? Aggiungi l'altra persona con il suo nome utente: potrà schierare la formazione e usare le carte per ${esc(mm.nome_squadra)}. Deve essere registrata su FantaTaccuino.</p>
+        ${nomiCo.map(p=>`<div class="row between" style="padding:4px 0"><span>👤 ${esc(p.username)}</span><button class="del" onclick="coTogli(${lega.id},'${p.id}')">Togli</button></div>`).join('')}
+        <div class="row" style="flex-wrap:nowrap;gap:8px"><input id="co_u" placeholder="Nome utente" style="margin:0"><button class="pri" onclick="coAggiungi(${lega.id})">Aggiungi</button></div>`}</div>`}
     if(ombraMia) h+=`<div class="card"><h3>👥 Importa la tua rosa</h3><p class="muted">Copia la rosa dall'altra app (Fantagazzetta, Fantalab…) e incollala qui: un giocatore per riga. Basta il cognome, anche senza accenti (es. "Lautaro Martinez", "Martinez L.", "Dimarco").</p>
       <textarea id="om_t" rows="8"></textarea><button class="pri" onclick="importaOmbra(${lega.id})">Importa</button><div id="om_r" style="margin-top:10px"></div></div>
       <div class="card"><h3>Aggiungi un giocatore</h3><input id="om_q" oninput="cercaOmbra(${lega.id})" placeholder="Cerca per nome"><div id="om_s"></div></div>`;
@@ -735,13 +743,13 @@ async function legaView(){
     const giorn=chk(await db.from('fanta_giornate').select('*').gt('scadenza',new Date(Date.now()+RGf.timeout*60000).toISOString()).order('numero').limit(1));
     if(giorn.length&&RGf.timeout) giorn[0].scadenza=new Date(new Date(giorn[0].scadenza).getTime()-RGf.timeout*60000).toISOString();
     FREG=RGf;
-    const mia=rose.filter(r=>r.utente_id===utente.id).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]||a.giocatori.nome.localeCompare(b.giocatori.nome));
+    const mia=rose.filter(r=>r.utente_id===MIO).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]||a.giocatori.nome.localeCompare(b.giocatori.nome));
     if(!giorn.length) h+='<p class="muted">Nessuna giornata aperta per la formazione.</p>';
     else if(!mia.length) h+='<p class="muted">La tua rosa è vuota.</p>';
     else{
       const g=giorn[0];
-      const att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('utente_id',utente.id).eq('giornata',g.numero));
-      const sch=chk(await db.from('schieramenti').select('modulo').eq('lega_id',lega.id).eq('utente_id',utente.id).eq('giornata',g.numero).maybeSingle());
+      const att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero));
+      const sch=chk(await db.from('schieramenti').select('modulo').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
       const mod=RGf.moduli.includes(sch?.modulo)?sch.modulo:RGf.moduli[0];
       const stato=id=>{const f=att.find(x=>x.giocatore_id===id);return !f?'':f.titolare?'T':'P'+f.ordine};
       const nPan=RGf.panca?(RGf.panca.P+RGf.panca.D+RGf.panca.C+RGf.panca.A):Math.max(12,mia.length-11);
@@ -784,7 +792,7 @@ async function legaView(){
         ${Array.from({length:Math.max(nPan,mia.length)},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
       <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione</button></div>`;
       if(lega.carte&&on('f_carte')){
-        const mie=chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id).eq('utente_id',utente.id));
+        const mie=chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id).eq('utente_id',MIO));
         h+=`<div class="card"><h3>🃏 Carte Tattiche</h3><p class="muted">Ogni carta si gioca una sola volta in tutta la stagione. Puoi annullarla fino alla scadenza.</p>
         ${CARTE.map(c=>{const u=mie.find(x=>x.carta===c.k);
           if(u) return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${c.n}</b> <span class="badge">${u.giornata===g.numero?'Giocata in questa giornata':'Usata nella giornata '+u.giornata}</span>${u.giornata===g.numero?` <button class="del" onclick="annullaCarta(${lega.id},'${c.k}')">Annulla</button>`:''}</div>`;
@@ -867,7 +875,7 @@ async function legaView(){
   app.innerHTML=h;
   if(fz.tab==='formazione') contaForm();
 }
-let CONS=null,FVM={},FGM={},FREG=null;
+let CONS=null,FVM={},FGM={},FREG=null,MIO=null;
 let FFIL='';
 const fselDi=id=>document.querySelector(`.fsel[data-g="${id}"]`);
 function fStato(){const t={P:[],D:[],C:[],A:[]},pan=[];document.querySelectorAll('.fsel').forEach(s=>{const g=FGM[s.dataset.g];if(!g)return;if(s.value==='T')t[s.dataset.r].push(g);else if(s.value)pan.push([+s.value.slice(1),g])});pan.sort((a,b)=>a[0]-b[0]);return {t,pan}}
@@ -912,19 +920,19 @@ async function salvaFormazione(lid,gn){
   }
   if(!(c.P===1&&c.D===mod[0]&&c.C===mod[1]&&c.A===mod[2])) return toast(`I titolari non rispettano il ${modulo} (1 P, ${mod[0]} D, ${mod[1]} C, ${mod[2]} A)`,true);
   if(FREG&&FREG.panca){const pc={P:0,D:0,C:0,A:0};document.querySelectorAll('.fsel').forEach(x=>{if(x.value&&x.value!=='T')pc[x.dataset.r]++});const tr=['P','D','C','A'].find(k=>pc[k]>FREG.panca[k]);if(tr)return toast(`In panchina al massimo ${FREG.panca[tr]} ${tr}`,true)}
-  chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('utente_id',utente.id).eq('giornata',gn));
-  chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:utente.id,giornata:gn}))));
-  chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:utente.id,giornata:gn,modulo},{onConflict:'lega_id,utente_id,giornata'}));
+  chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('utente_id',MIO).eq('giornata',gn));
+  chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:MIO,giornata:gn}))));
+  chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,modulo},{onConflict:'lega_id,utente_id,giornata'}));
   toast('Formazione salvata!');
 }
 async function usaCarta(lid,gn,k){
   const sel=document.getElementById('cg_'+k);
   const c=CARTE.find(x=>x.k===k);
   if(!confirm(`Giocare ${c.n} in questa giornata? Ogni carta si usa una sola volta.`))return;
-  chk(await db.from('carte_usate').insert({lega_id:lid,utente_id:utente.id,giornata:gn,carta:k,giocatore_id:sel?+sel.value:null}));
+  chk(await db.from('carte_usate').insert({lega_id:lid,utente_id:MIO,giornata:gn,carta:k,giocatore_id:sel?+sel.value:null}));
   toast('Carta giocata!');legaView();
 }
-async function annullaCarta(lid,k){chk(await db.from('carte_usate').delete().eq('lega_id',lid).eq('utente_id',utente.id).eq('carta',k));toast('Carta annullata');legaView()}
+async function annullaCarta(lid,k){chk(await db.from('carte_usate').delete().eq('lega_id',lid).eq('utente_id',MIO).eq('carta',k));toast('Carta annullata');legaView()}
 function roundRobin(ids){
   const t=[...ids];if(t.length%2)t.push(null);
   const n=t.length,giri=[];
@@ -1083,6 +1091,8 @@ async function modCred(lid,uid,seg){const n=+document.getElementById('cr_'+uid).
   if(seg===0){const sp=chk(await db.from('rose').select('prezzo').eq('lega_id',lid).eq('utente_id',uid)).reduce((a,r)=>a+r.prezzo,0);c[uid]=n-(l.crediti-sp)}
   else c[uid]=(+c[uid]||0)+seg*n;
   b.cred=c;chk(await db.from('leghe').update({bonus:b}).eq('id',lid));toast('Crediti aggiornati');legaView()}
+async function coAggiungi(lid){const u=val('co_u');if(!u)return toast('Scrivi il nome utente',true);chk(await db.rpc('co_aggiungi',{p_lega:lid,p_username:u}));toast(u+' ora gestisce la squadra con te');legaView()}
+async function coTogli(lid,uid){if(!confirm('Togliere questo co-allenatore?'))return;chk(await db.rpc('co_togli',{p_lega:lid,p_utente:uid}));toast('Fatto');if(uid===utente.id){fz.lega=null;pFanta()}else legaView()}
 async function liberaSq(lid,uid){
   const m=chk(await db.from('membri_lega').select('nome_squadra').eq('lega_id',lid).eq('utente_id',uid).single()),n=m.nome_squadra;
   if(!confirm(`Rimettere libera "${n}"? L'utente esce dalla lega e la squadra (rosa, punti di partenza, calendario) torna nell'elenco: la potrà prendere chi entra col codice.`))return;
