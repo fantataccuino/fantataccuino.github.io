@@ -93,6 +93,10 @@ tr.mod td{background:#ffd44722}
 .campo:after{content:"";position:absolute;left:50%;top:50%;width:110px;height:110px;margin:-55px;border:2px solid #ffffff40;border-radius:50%;pointer-events:none}
 .campo .linea{display:flex;justify-content:space-evenly;position:relative;z-index:1}
 .panca{display:flex;gap:8px;overflow-x:auto;padding:8px 2px}
+.fmods{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.fmod,.ffil{padding:8px 12px;border-radius:999px;background:#ffffff14;border:1px solid #ffffff2a;color:var(--txt);font-weight:700}.fmod.on,.ffil.on{background:var(--gold);color:#1a0f3d;border-color:var(--gold)}
+.frow{display:flex;align-items:center;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:12px}.frow.tit{background:#2ecc7122}.frow.pan{background:#f5c51818}
+.fst{min-width:78px;text-align:center;font-size:11px;font-weight:800;padding:4px 6px;border-radius:999px;background:#ffffff12}.frow.tit .fst{background:var(--green);color:#06210f}.frow.pan .fst{background:var(--gold);color:#1a0f3d}
+.chip.slot{border:2px dashed #ffffff55;background:#ffffff10;color:#ffffffaa;padding:8px 14px;cursor:pointer}.campo .chip{cursor:pointer}
 .chip{display:inline-flex;align-items:center;background:#0d0826d9;border:1px solid #ffffff33;border-radius:999px;padding:4px 10px 4px 4px;font-size:13px;white-space:nowrap;box-shadow:0 3px 8px #0007}.chip .ruolo{margin-right:6px}
 .campo .linea{flex-wrap:wrap;gap:6px}
 /* home */
@@ -742,13 +746,16 @@ async function legaView(){
       } else h+=`<div class="card" style="border-color:var(--gold)"><p class="muted">💎 Con il Premium: consiglio formazione e allarme se un tuo titolare non è nelle probabili.</p></div>`;
       const tag=id=>({ok:' <small style="color:var(--green)">✅ probabile</small>',no:' <small style="color:var(--red)">⚠️ non nelle probabili</small>',out:' <small style="color:var(--red)">⛔ non gioca</small>'})[alr[id]]||'';
       h+=`<div class="card"><h3>Giornata ${g.numero}</h3><p class="muted">Scadenza: ${fmt(g.scadenza)}</p>
-      <label>Modulo</label><select id="f_mod" onchange="contaForm()">${RGf.moduli.filter(m=>MODULI[m]).map(m=>`<option ${m===mod?'selected':''}>${m}</option>`).join('')}</select>
+      <select id="f_mod" style="display:none" onchange="contaForm()">${RGf.moduli.filter(m=>MODULI[m]).map(m=>`<option ${m===mod?'selected':''}>${m}</option>`).join('')}</select>
+      <div class="fmods">${RGf.moduli.filter(m=>MODULI[m]).map(m=>`<button class="fmod" data-m="${m}" onclick="setMod('${m}')">${m}</button>`).join('')}</div>
       <p id="f_cnt" class="muted"></p><div id="f_campo"></div>
-      <p class="muted" style="font-size:12px">Per ogni giocatore scegli <b>Titolare</b>, una posizione in <b>Panchina</b> (P1 entra per primo) o lascialo in tribuna.</p>
-      ${mia.map(r=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span><span style="margin-left:auto;margin-right:8px">${forma5(FVM[r.giocatore_id])}</span>
-        <select class="fsel" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" style="width:105px;margin:0" onchange="contaForm()">
+      <h3 style="margin-top:16px">📋 La tua rosa</h3>
+      <div class="fmods">${['','P','D','C','A'].map(k=>`<button class="ffil" data-k="${k}" onclick="FFIL='${k}';disegnaCampo()">${k||'Tutti'}</button>`).join('')}</div>
+      <p class="muted" style="font-size:12px">Tocca un giocatore: va <b>in campo</b>; toccalo di nuovo e va <b>in panchina</b>; un'altra volta e torna <b>fuori</b>. Tocca un posto vuoto <b>+</b> per vedere solo quel ruolo.</p>
+      ${mia.map(r=>`<div class="frow" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" onclick="tapG(${r.giocatore_id})"><span>${ruolo(r.giocatori.ruolo)}<b>${esc(r.giocatori.nome)}</b> <small class="muted">${esc(r.giocatori.squadra)}</small>${tag(r.giocatore_id)}</span><span style="margin-left:auto;margin-right:8px">${forma5(FVM[r.giocatore_id])}</span><span class="fst" id="fst_${r.giocatore_id}"></span>
+        <select class="fsel" data-g="${r.giocatore_id}" data-r="${r.giocatori.ruolo}" style="display:none">
         <option value="">Tribuna</option><option value="T" ${stato(r.giocatore_id)==='T'?'selected':''}>Titolare</option>
-        ${Array.from({length:nPan},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
+        ${Array.from({length:Math.max(nPan,mia.length)},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
       <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione</button></div>`;
       if(lega.carte&&on('f_carte')){
         const mie=chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id).eq('utente_id',utente.id));
@@ -831,14 +838,30 @@ async function legaView(){
   if(fz.tab==='formazione') contaForm();
 }
 let CONS=null,FVM={},FGM={},FREG=null;
+let FFIL='';
+const fselDi=id=>document.querySelector(`.fsel[data-g="${id}"]`);
+function fStato(){const t={P:[],D:[],C:[],A:[]},pan=[];document.querySelectorAll('.fsel').forEach(s=>{const g=FGM[s.dataset.g];if(!g)return;if(s.value==='T')t[s.dataset.r].push(g);else if(s.value)pan.push([+s.value.slice(1),g])});pan.sort((a,b)=>a[0]-b[0]);return {t,pan}}
+function compatta(){const {pan}=fStato();pan.forEach(([o,g],i)=>{fselDi(g.id).value='P'+(i+1)})}
+function setMod(m){document.getElementById('f_mod').value=m;contaForm()}
+function tapG(id){const s=fselDi(id);if(!s)return;const R=s.dataset.r,mod=MODULI[document.getElementById('f_mod').value],need={P:1,D:mod[0],C:mod[1],A:mod[2]};const {t,pan}=fStato();
+  if(!s.value){if(t[R].length<need[R])s.value='T';else s.value='P'+(pan.length+1)}
+  else if(s.value==='T')s.value='P'+(pan.length+1);
+  else s.value='';
+  compatta();contaForm()}
+function togliG(id,e){if(e)e.stopPropagation();const s=fselDi(id);if(s){s.value='';compatta();contaForm()}}
+function muoviP(id,d,e){if(e)e.stopPropagation();const {pan}=fStato();const i=pan.findIndex(x=>x[1].id==id),j=i+d;if(i<0||j<0||j>=pan.length)return;[pan[i],pan[j]]=[pan[j],pan[i]];pan.forEach(([o,g],k)=>fselDi(g.id).value='P'+(k+1));contaForm()}
 function disegnaCampo(){const box=document.getElementById('f_campo');if(!box)return;
-  const t={P:[],D:[],C:[],A:[]},pan=[];
-  document.querySelectorAll('.fsel').forEach(s=>{const g=FGM[s.dataset.g];if(!g)return;if(s.value==='T')t[s.dataset.r].push(g);else if(s.value)pan.push([+s.value.slice(1),g])});
-  const c=g=>`<div class="chip">${ruolo(g.ruolo)}<b>${esc(g.nome)}</b></div>`;
-  if(!Object.values(t).some(x=>x.length)){box.innerHTML='';return}
-  box.innerHTML=`<div class="campo">${['A','C','D','P'].map(R=>`<div class="linea">${t[R].map(c).join('')}</div>`).join('')}</div>
-  ${pan.length?`<h3 style="margin-top:12px">🪑 Panchina</h3><div class="panca">${pan.sort((a,b)=>a[0]-b[0]).map(x=>`<div style="text-align:center;flex:0 0 auto"><small class="muted">P${x[0]}</small><br>${c(x[1])}</div>`).join('')}</div>`:''}`}
-function applicaCons(){if(!CONS)return;document.getElementById('f_mod').value=CONS.mod;document.querySelectorAll('.fsel').forEach(s=>s.value=CONS.ass[s.dataset.g]||'');contaForm();toast('Consiglio applicato: ora tocca Salva formazione');document.getElementById('f_mod').scrollIntoView({behavior:'smooth'})}
+  const m=document.getElementById('f_mod').value,mod=MODULI[m],need={P:1,D:mod[0],C:mod[1],A:mod[2]};const {t,pan}=fStato();
+  document.querySelectorAll('.fmod').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  document.querySelectorAll('.ffil').forEach(b=>b.classList.toggle('on',b.dataset.k===FFIL));
+  const c=g=>`<div class="chip" onclick="togliG(${g.id})">${ruolo(g.ruolo)}<b>${esc(g.nome)}</b></div>`;
+  const vuoto=R=>`<div class="chip slot" onclick="FFIL='${R}';disegnaCampo();document.querySelector('.ffil.on')?.scrollIntoView({behavior:'smooth',block:'center'})">＋ ${R}</div>`;
+  box.innerHTML=`<div class="campo">${['A','C','D','P'].map(R=>`<div class="linea">${t[R].map(g=>c(g)).join('')}${Array.from({length:Math.max(0,need[R]-t[R].length)},()=>vuoto(R)).join('')}</div>`).join('')}</div>
+  <h3 style="margin-top:12px">🪑 Panchina ${pan.length?`(${pan.length})`:''}</h3>${pan.length?pan.map(([o,g],i)=>`<div class="row between" style="padding:5px 0;border-bottom:1px solid var(--line)"><span><small class="muted">${i+1}.</small> ${ruolo(g.ruolo)}${esc(g.nome)}</span><span><button onclick="muoviP(${g.id},-1,event)" ${i?'':'disabled'}>▲</button> <button onclick="muoviP(${g.id},1,event)" ${i<pan.length-1?'':'disabled'}>▼</button> <button class="del" onclick="togliG(${g.id},event)">✕</button></span></div>`).join(''):'<p class="muted" style="font-size:13px">Vuota: tocca due volte un giocatore della rosa per metterlo in panchina. Il primo della lista entra per primo.</p>'}`;
+  document.querySelectorAll('.frow').forEach(r=>{const s=fselDi(r.dataset.g),v=s?s.value:'',el=document.getElementById('fst_'+r.dataset.g);
+    r.style.display=(!FFIL||r.dataset.r===FFIL)?'':'none';r.classList.toggle('tit',v==='T');r.classList.toggle('pan',!!v&&v!=='T');
+    if(el)el.textContent=v==='T'?'IN CAMPO':v?'PANCA '+v.slice(1):'—'})}
+function applicaCons(){if(!CONS)return;document.getElementById('f_mod').value=CONS.mod;document.querySelectorAll('.fsel').forEach(s=>s.value=CONS.ass[s.dataset.g]||'');contaForm();toast('Consiglio applicato: ora tocca Salva formazione');document.querySelector('.fmods')?.scrollIntoView({behavior:'smooth'})}
 function contaForm(){
   const el=document.getElementById('f_cnt');if(!el)return;
   const mod=MODULI[document.getElementById('f_mod').value];
