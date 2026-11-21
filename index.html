@@ -808,6 +808,10 @@ async function legaView(){
     const PZ=lega.partenza||{};
     const idsA=Object.values(lega.attesa||{}).flatMap(v=>(v.rosa||[]).map(r=>r[0]));
     const GA={};if(idsA.length)for(let i=0;i<idsA.length;i+=300)chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('id',idsA.slice(i,i+300))).forEach(g=>GA[g.id]=g);
+    if(profilo.ruolo==='admin'&&Object.keys(lega.attesa||{}).length) h+=`<div class="card" style="border-color:var(--green)"><h3>👤 Assegna una squadra a un utente</h3><p class="muted" style="font-size:13px">L'utente deve essere registrato. Entra nella lega e riceve la squadra con rosa, punti e calendario: non deve fare niente.</p>
+      <label>Squadra libera</label><select id="as_sq">${Object.keys(lega.attesa).map(k=>`<option>${esc(k)}</option>`).join('')}</select>
+      <label>Nome utente</label><input id="as_u" placeholder="es. Mario88">
+      <button class="pri" onclick="assegnaSq(${lega.id})">Assegna squadra</button></div>`;
     if(profilo.ruolo==='admin') h+=`<div class="card" style="border-color:var(--gold)"><h3>👑 Nomina presidente</h3><p class="muted" style="font-size:13px">Passa la gestione della lega a un partecipante: diventerà lui il presidente.</p>
       <select id="np_u">${membri.filter(m=>m.utente_id!==lega.creatore_id).map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}</option>`).join('')}</select>
       ${membri.some(m=>m.utente_id===utente.id)?'<label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="np_esci" checked> Esci dalla lega (togli la mia squadra)</label>':''}
@@ -1093,6 +1097,8 @@ async function modCred(lid,uid,seg){const n=+document.getElementById('cr_'+uid).
   b.cred=c;chk(await db.from('leghe').update({bonus:b}).eq('id',lid));toast('Crediti aggiornati');legaView()}
 async function coAggiungi(lid){const u=val('co_u');if(!u)return toast('Scrivi il nome utente',true);chk(await db.rpc('co_aggiungi',{p_lega:lid,p_username:u}));toast(u+' ora gestisce la squadra con te');legaView()}
 async function coTogli(lid,uid){if(!confirm('Togliere questo co-allenatore?'))return;chk(await db.rpc('co_togli',{p_lega:lid,p_utente:uid}));toast('Fatto');if(uid===utente.id){fz.lega=null;pFanta()}else legaView()}
+async function assegnaSq(lid){const sq=val('as_sq'),u=val('as_u');if(!u)return toast('Scrivi il nome utente',true);
+  if(!confirm(`Assegnare "${sq}" a ${u}?`))return;chk(await db.rpc('assegna_squadra',{p_lega:lid,p_nome:sq,p_username:u}));toast(`${sq} assegnata a ${u}`);legaView()}
 async function liberaSq(lid,uid){
   const m=chk(await db.from('membri_lega').select('nome_squadra').eq('lega_id',lid).eq('utente_id',uid).single()),n=m.nome_squadra;
   if(!confirm(`Rimettere libera "${n}"? L'utente esce dalla lega e la squadra (rosa, punti di partenza, calendario) torna nell'elenco: la potrà prendere chi entra col codice.`))return;
