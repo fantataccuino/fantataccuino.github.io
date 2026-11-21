@@ -542,6 +542,36 @@ async function assegnaAsta(lid){if(!MK.ag)return toast('Scegli il giocatore dall
 async function proponiScambio(lid){if(!MK.sel.dai.length&&!MK.sel.ric.length)return toast('Scegli almeno un giocatore',true);
   const {error}=await db.rpc('scambio_proponi',{p_lega:lid,p_a:MK.a,p_dai:MK.sel.dai,p_ricevi:MK.sel.ric,p_crediti:+val('sc_cr')||0});if(error)return toast(error.message,true);MK.sel={dai:[],ric:[]};toast('📤 Proposta inviata');legaView()}
 async function rispScambio(id,ok){if(!confirm(ok?'Accettare lo scambio? I giocatori passano subito di squadra.':'Confermi?'))return;const {error}=await db.rpc('scambio_rispondi',{p_id:id,p_ok:ok});if(error)return toast(error.message,true);toast(ok?'🤝 Scambio fatto!':'Fatto');legaView()}
+// ---------- quotazioni fantacalcio.it ----------
+const sqN=s=>norm(s).replace(/\b(ac|as|ssc|ss|us|fc|afc|cfc|calcio|hellas|1907|1913|1919)\b/g,'').replace(/internazionale/,'inter').replace(/[^a-z]/g,'');
+async function fileQuot(inp){const f=inp.files[0];if(!f)return;const box=document.getElementById('qf_ris');box.innerHTML='<p class="muted">Leggo il file…</p>';
+  if(!window.XLSX)await new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';sc.onload=ok;sc.onerror=ko;document.head.appendChild(sc)});
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const ws=wb.Sheets['Tutti']||wb.Sheets[wb.SheetNames[0]];const M=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  const hi=M.findIndex(r=>r&&r.includes('Qt.A'));if(hi<0){box.innerHTML='<p style="color:var(--red)">Non è il file delle quotazioni di Fantacalcio.it</p>';return}
+  const H=M[hi],ix=k=>H.indexOf(k);const righe=M.slice(hi+1).filter(r=>r&&r[ix('Nome')]).map(r=>({fc:+r[ix('Id')],ru:r[ix('R')],nome:String(r[ix('Nome')]).trim(),sq:String(r[ix('Squadra')]).trim(),qa:+r[ix('Qt.A')]||1,qi:+r[ix('Qt.I')]||+r[ix('Qt.A')]||1,fvm:+r[ix('FVM')]||0}));
+  const DB=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione,fc_id').limit(5000));
+  const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
+  const usati=new Set(),match=[],nuovi=[],dubbi=[];
+  for(const r of righe){let g=DB.find(x=>x.fc_id===r.fc);
+    if(!g){const pw=parole(r.nome),lw=pw.filter(w=>w.length>2),stesse=DB.filter(x=>!usati.has(x.id)&&sqN(x.squadra)===sqN(r.sq));
+      const sc=x=>{const nw=parole(x.nome);if(nw.join(' ')===pw.join(' '))return 100;if(!lw.some(w=>nw.includes(w)))return 0;let p=0;for(const w of pw){if(nw.includes(w))p+=w.length>2?3:2;else if(nw.some(y=>y[0]===w[0]&&(y.length<=2||w.length<=2)))p+=1}return p+(x.ruolo===r.ru?2:0)};
+      let c=stesse.map(x=>({x,p:sc(x)})).filter(z=>z.p>0).sort((a,b)=>b.p-a.p);
+      if(!c.length)c=DB.filter(x=>!usati.has(x.id)&&x.ruolo===r.ru).map(x=>({x,p:sc(x)})).filter(z=>z.p>=100);
+      if(c.length>1&&c[0].p===c[1].p&&c[0].p<100)dubbi.push(r.nome+' ('+r.sq+')');
+      g=c[0]?.x}
+    if(g){usati.add(g.id);match.push({id:g.id,fc:r.fc,qa:r.qa,qi:r.qi,fvm:r.fvm,prima:g.quotazione,nome:r.nome,sq:r.sq})}else nuovi.push(r)}
+  const sqm={};DB.forEach(x=>{if(x.squadra)sqm[sqN(x.squadra)]=x.squadra});QIMP={match,nuovi,sqm};
+  const cambi=match.filter(m=>m.prima!==m.qa).sort((a,b)=>Math.abs(b.qa-b.prima)-Math.abs(a.qa-a.prima));
+  box.innerHTML=`<div class="card" style="border-color:var(--green)"><p>📗 <b>${righe.length}</b> giocatori nel file · <b>${match.length}</b> trovati sul sito · <b>${nuovi.length}</b> non trovati${dubbi.length?` · ${dubbi.length} da controllare`:''}</p>
+    <p class="muted" style="font-size:13px">Cambiano quotazione in <b>${cambi.length}</b>. I più cambiati:</p>${cambi.slice(0,12).map(m=>`<div style="font-size:13px">${esc(m.nome)} <span class="muted">${esc(m.sq)}</span>: ${m.prima} → <b>${m.qa}</b></div>`).join('')}
+    ${nuovi.length?`<details style="margin-top:8px"><summary class="muted">Non trovati sul sito (${nuovi.length}): li aggiungo al listone</summary><div class="muted" style="font-size:12px">${nuovi.map(r=>`${r.ru} ${esc(r.nome)} (${esc(r.sq)})`).join(', ')}</div></details>`:''}
+    ${dubbi.length?`<details><summary class="muted">Da controllare (${dubbi.length})</summary><div class="muted" style="font-size:12px">${dubbi.map(esc).join(', ')}</div></details>`:''}
+    <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="qf_new" checked style="width:auto"> Aggiungi al listone i ${nuovi.length} non trovati</label>
+    <button class="pri" style="width:100%" onclick="salvaQuot()">✅ Aggiorna le quotazioni</button></div>`}
+let QIMP=null;
+async function salvaQuot(){if(!QIMP)return;const nuovi=document.getElementById('qf_new')?.checked?QIMP.nuovi:[];
+  const n=chk(await db.rpc('quot_importa',{p_upd:QIMP.match.map(m=>({id:m.id,fc:m.fc,qa:m.qa,qi:m.qi,fvm:m.fvm})),p_new:nuovi.map(r=>({fc:r.fc,nome:r.nome,ru:r.ru,sq:QIMP.sqm[sqN(r.sq)]||r.sq,qa:r.qa,qi:r.qi,fvm:r.fvm}))}));
+  document.getElementById('qf_ris').innerHTML=`<p style="color:var(--green)">✅ Fatto: ${n} giocatori aggiornati o aggiunti.</p>`;QIMP=null;MK.L=null;TT.L=null;toast('Quotazioni aggiornate')}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -2397,6 +2427,8 @@ async function pAdmin(){
   }
 
   if(ad.tab==='giocatori'){
+    h+=`<div class="card" style="border-color:var(--green)"><h3>📗 Quotazioni ufficiali Fantacalcio.it</h3><p class="muted" style="font-size:13px">Scarica l'Excel da <b>fantacalcio.it/quotazioni-fantacalcio</b> e caricalo qui. Aggiorna la <b>quotazione attuale</b> (Qt.A), quella <b>iniziale</b> (Qt.I, serve per le frecce ▲▼) e il <b>FVM</b> di tutti i giocatori. Prima ti mostra cosa cambia.</p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;background:#1a7f37">📗 Carica quotazioni (.xlsx)<input type="file" accept=".xlsx,.xls" style="display:none" onchange="fileQuot(this)"></label><div id="qf_ris" style="margin-top:10px"></div></div>`;
     h+=`<div class="card" style="border-color:var(--gold)"><h3>📋 Importa listone da testo</h3>
       <p class="muted">Una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b> (ruolo P, D, C o A)<br>Es: <i>Federico Dimarco;D;Inter;16</i><br>Se il giocatore esiste già (stesso nome e squadra) aggiorna ruolo e quotazione, altrimenti lo crea.</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'lst_txt')"></label>
