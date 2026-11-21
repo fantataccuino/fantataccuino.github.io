@@ -1652,6 +1652,24 @@ function probRender(){
   <button class="pri" style="width:100%;margin-bottom:20px" onclick="probSalva()">💾 Salva probabili formazioni</button>`;
 }
 function probTog(id,v){v?prb.sel.add(id):prb.sel.delete(id);probRender()}
+async function probImporta(gn){const righe=val('pb_txt').split('\n').map(x=>x.trim()).filter(Boolean);if(!righe.length)return toast('Incolla le righe',true);
+  const box=document.getElementById('pb_ris');box.innerHTML='<p class="muted">Carico…</p>';
+  const pp=chk(await db.from('partite_sa').select('api_id,casa,trasferta').eq('giornata',gn));const rep=[];
+  const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
+  for(const r of righe){const i=r.indexOf(':');if(i<0){rep.push('❌ '+r+' → manca "Squadra:"');continue}
+    const sqN=r.slice(0,i).trim(),nomi=r.slice(i+1).split(/[;,]/).map(x=>x.trim()).filter(Boolean);
+    const p=pp.find(x=>norm(x.casa)===norm(sqN)||norm(x.trasferta)===norm(sqN));if(!p){rep.push(`❌ ${sqN}: non gioca nella giornata ${gn}`);continue}
+    const sq=norm(p.casa)===norm(sqN)?p.casa:p.trasferta;
+    const rosa=chk(await db.from('giocatori').select('id,nome,ruolo').eq('squadra',sq).eq('attivo',true));const ok=[],no=[];
+    for(const n of nomi){const pw=parole(n),lw=pw.filter(w=>w.length>2);
+      const c=rosa.map(g=>{const nw=parole(g.nome);let sc=nw.join(' ')===pw.join(' ')?100:0;if(!sc&&lw.some(w=>nw.includes(w)))sc=pw.reduce((a,w)=>a+(nw.includes(w)?3:nw.some(x=>x[0]===w[0])?1:0),0);return {g,sc}}).filter(x=>x.sc>0).sort((a,b)=>b.sc-a.sc);
+      if(!c.length||(c[1]&&c[1].sc===c[0].sc)){no.push(n);continue}ok.push(c[0].g)}
+    const ids=rosa.map(g=>g.id);
+    chk(await db.from('probabili').delete().eq('partita_id',p.api_id).in('giocatore_id',ids));
+    if(ok.length)chk(await db.from('probabili').insert(ok.map(g=>({partita_id:p.api_id,giocatore_id:g.id}))));
+    const np=ok.filter(g=>g.ruolo==='P').length;
+    rep.push(`${ok.length===11&&np===1?'✅':'⚠️'} ${sq}: ${ok.length}/11 · P ${np}${no.length?' · non trovati: '+no.join(', '):''}`)}
+  box.innerHTML=rep.map(esc).join('<br>')}
 async function probSalva(){
   const id=prb.p.api_id;
   chk(await db.from('probabili').delete().eq('partita_id',id));
@@ -1707,7 +1725,7 @@ async function pagelle(id){
   const gg=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto').in('squadra',[p.casa,p.trasferta]));
   const vv=gg.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',gg.map(g=>g.id))):[];
   const pr=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
-  const probHtml=pr.length&&!vv.length?`<div class="card"><h3>📋 Probabili formazioni</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${[p.casa,p.trasferta].map(sq=>`<div><b>${esc(sq)}</b>${gg.filter(g=>g.squadra===sq&&pr.includes(g.id)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(g=>`<div style="font-size:13px;padding:2px 0">${ruolo(g.ruolo)}${esc(g.nome)}</div>`).join('')}</div>`).join('')}</div></div>`:'';
+  const probHtml=pr.length&&!vv.length&&!premOk()?`<div class="card" style="border-color:var(--gold)"><h3>📋 Probabili formazioni</h3><p class="muted">💎 Le probabili formazioni sono riservate agli utenti Premium.</p><button class="pri" onclick="vai('premium')">Scopri il Premium</button></div>`:pr.length&&!vv.length?`<div class="card"><h3>📋 Probabili formazioni</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${[p.casa,p.trasferta].map(sq=>`<div><b>${esc(sq)}</b>${gg.filter(g=>g.squadra===sq&&pr.includes(g.id)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(g=>`<div style="font-size:13px;padding:2px 0">${ruolo(g.ruolo)}${esc(g.nome)}</div>`).join('')}</div>`).join('')}</div></div>`:'';
   const blocco=sq=>{const r=vv.map(v=>({...v,g:gg.find(x=>x.id===v.giocatore_id)})).filter(v=>v.g.squadra===sq).sort((a,b)=>ORD[a.g.ruolo]-ORD[b.g.ruolo]||(b.minuti-a.minuti));
     return `<div class="card"><h3>${esc(sq)}</h3>${r.map(v=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row between"><span>${ruolo(v.g.ruolo)}<b>${esc(v.g.nome)}</b> <small class="muted">${v.minuti??''}'</small></span>
       <span><b style="font-size:18px">${v.voto??'s.v.'}</b> <small class="muted">fv</small> <b style="color:var(--gold)">${v.fantavoto??'-'}</b></span></div>
@@ -1717,12 +1735,25 @@ async function pagelle(id){
 }
 
 let sa={g:null};
+async function probGiornata(g){
+  if(!premOk()){app.innerHTML=`<button onclick="pSerieA()">← Serie A</button><div class="card" style="margin-top:12px;border-color:var(--gold)"><h3>📋 Probabili formazioni</h3><p class="muted">💎 Le probabili formazioni di tutte le partite, con l'allarme se un tuo titolare non gioca, sono riservate agli utenti Premium.</p><button class="pri" onclick="vai('premium')">Scopri il Premium</button></div>`;return}
+  const pp=chk(await db.from('partite_sa').select('api_id,casa,trasferta,data').eq('giornata',g).order('data'));
+  const pr=pp.length?chk(await db.from('probabili').select('partita_id,giocatore_id').in('partita_id',pp.map(p=>p.api_id))):[];
+  const ids=[...new Set(pr.map(x=>x.giocatore_id))];
+  const gg=ids.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra,stato').in('id',ids)):[];
+  const mie=new Set(chk(await db.from('rose').select('giocatore_id').eq('utente_id',utente.id)).map(x=>x.giocatore_id));
+  const lista=(pid,sq)=>{const l=gg.filter(x=>x.squadra===sq&&pr.some(y=>y.partita_id===pid&&y.giocatore_id===x.id)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]);
+    return l.length?l.map(x=>`<div style="padding:2px 0;${mie.has(x.id)?'color:var(--gold);font-weight:700':''}">${ruolo(x.ruolo)}${esc(x.nome)}${mie.has(x.id)?' ⭐':''}</div>`).join(''):'<p class="muted">Non ancora uscite</p>'};
+  app.innerHTML=`<button onclick="pSerieA()">← Serie A</button><h2 style="margin-top:12px">📋 Probabili · giornata ${g}</h2><p class="muted" style="font-size:13px">⭐ = giocatori delle tue squadre</p>
+  ${pp.map(p=>`<details class="card" ${pr.some(x=>x.partita_id===p.api_id)?'':''}><summary style="color:var(--txt);font-weight:800">${esc(p.casa)} – ${esc(p.trasferta)} <small class="muted">${fmt(p.data)}</small></summary>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px"><div><b>${esc(p.casa)}</b>${lista(p.api_id,p.casa)}</div><div><b>${esc(p.trasferta)}</b>${lista(p.api_id,p.trasferta)}</div></div></details>`).join('')}`}
 async function pSerieA(){
   const fg=chk(await db.from('fanta_giornate').select('numero,scadenza').order('numero'));
   if(!fg.length){app.innerHTML='<h2>Serie A</h2><p class="muted">Calendario non ancora caricato.</p>';return}
   if(!fg.find(g=>g.numero==sa.g)){const prox=fg.find(g=>new Date(g.scadenza)>new Date());sa.g=(prox||fg[fg.length-1]).numero}
   const pp=chk(await db.from('partite_sa').select('*').eq('giornata',sa.g).order('data'));
   app.innerHTML=`<h2>Serie A</h2><select onchange="sa.g=this.value;pSerieA()">${fg.map(g=>`<option value="${g.numero}" ${g.numero==sa.g?'selected':''}>Giornata ${g.numero}</option>`).join('')}</select>
+  <button class="pri" style="width:100%;margin:8px 0" onclick="probGiornata(${sa.g})">📋 Probabili formazioni della giornata 💎</button>
   <div class="card">${pp.map(p=>`<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="pagelle(${p.api_id})"><span>${esc(p.casa)} – ${esc(p.trasferta)}<br><small class="muted">${fmt(p.data)}</small></span><span class="ris">${p.gol_casa!==null?p.gol_casa+'-'+p.gol_trasferta:''}</span></div>`).join('')}</div>`;
 }
 
@@ -1796,6 +1827,11 @@ async function pAdmin(){
       <div class="row" style="margin-top:12px"><button onclick="ad.tab='voti';pAdmin()">Controlla voti</button>
       <button class="${g.pubblicata?'del':'ok'}" onclick="pubblica(${g.numero},${!g.pubblicata})">${g.pubblicata?'Ritira voti':'Pubblica voti'}</button></div>
       <p id="prog" class="muted"></p></div>
+    <div class="card" style="border-color:var(--green)"><details><summary style="color:var(--txt);font-weight:800">📋 Carica tutte le probabili della giornata</summary>
+      <p class="muted" style="font-size:13px;margin-top:8px">Una riga per squadra: <b>Squadra: Nome; Nome; Nome…</b> (gli 11 titolari). Le squadre che scrivi sostituiscono le loro probabili, le altre restano come sono.<br>Es: <i>Inter: Sommer; Bisseck; Acerbi; Bastoni; …</i></p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'pb_txt')"></label>
+      <textarea id="pb_txt" rows="6" placeholder="Squadra: Nome; Nome; …"></textarea>
+      <button class="pri" onclick="probImporta(${g.numero})">Carica probabili</button><div id="pb_ris" style="margin-top:8px"></div></details></div>
     <div class="card">${pp.map(p=>`<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(p.casa)} – ${esc(p.trasferta)} ${p.gol_casa!==null?`<b style="color:var(--gold)">${p.gol_casa}-${p.gol_trasferta}</b>`:''}<br><small class="muted">${fmt(p.data)}</small></span>
       </div>`).join('')}</div>`;
   }
