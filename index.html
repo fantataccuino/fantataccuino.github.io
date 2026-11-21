@@ -427,12 +427,13 @@ async function impRoseLibere(lid,righe,box){
   const sv=document.getElementById('tr_svuota').checked;
   const presi=new Set(chk(await db.from('rose').select('giocatore_id').eq('lega_id',lid)).map(x=>x.giocatore_id));
   const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
-  const no=[],dubbi=[],conta={},nuove={};let cur=null;
+  const no=[],dubbi=[],conta={},nuove={},lette={};let cur=null;
   for(const riga of righe){
     const m=riga.match(/^(.*?)[\s,]+(\d+)\s*$/);
     if(!m){cur=riga.replace(/[:\-–]+$/,'').trim();if(membri.includes(norm(cur).trim())){no.push(`"${cur}" è già una squadra con un utente: saltata`);cur=null;continue}
       if(sv||!at[cur])at[cur]={rosa:[],pz:(at[cur]&&at[cur].pz)||{}};nuove[cur]=1;continue}
     if(!cur){no.push(riga+' → manca il nome della squadra sopra');continue}
+    lette[cur]=(lette[cur]||0)+1;
     const gn=m[1].replace(/^[PDCA]\s+/,'').trim(),pr=+m[2]||1,pw=parole(gn);
     const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;const lw=pw.filter(w=>w.length>2);if(!lw.some(w=>nw.includes(w)))return 0;let p=0;for(const w of pw){if(nw.includes(w))p+=w.length>2?3:2;else if(nw.some(x=>x[0]===w[0]&&(x.length<=2||w.length<=2)))p+=1}return p};
     const cand=tutti.map(g=>({g,p:sc(g)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p);
@@ -441,11 +442,11 @@ async function impRoseLibere(lid,righe,box){
     if(top.length>1){dubbi.push({riga,sq:cur,pr,c:top.slice(0,6).map(x=>x.g)});continue}
     const g=cand[0].g,giaA=Object.entries(at).find(([k,v])=>v.rosa.some(r=>r[0]===g.id));
     if(presi.has(g.id)||(giaA&&giaA[0]!==cur)){no.push(`${cur}: ${riga} → ${g.nome} è già in un'altra rosa`);continue}
-    if(giaA)continue;
+    if(giaA){no.push(`${cur}: ${riga} → ${g.nome} è già in questa rosa (doppione)`);continue}
     at[cur].rosa.push([g.id,pr]);conta[cur]=(conta[cur]||0)+1;
   }
   chk(await db.from('leghe').update({attesa:at}).eq('id',lid));
-  box.innerHTML=`<p style="color:var(--green)">✅ Squadre libere salvate: ${Object.keys(nuove).map(k=>`${esc(k)} ${(at[k].rosa||[]).length}`).join(' · ')}</p>`
+  box.innerHTML=`<p style="color:var(--green)">✅ Squadre libere salvate: ${Object.keys(nuove).map(k=>`${esc(k)} ${(at[k].rosa||[]).length}/${lette[k]||0}`).join(' · ')}</p>`
     +dubbi.map(d=>`<div class="card" style="padding:10px"><b>❓ ${esc(d.sq)}: "${esc(d.riga)}"</b> – quale intendi?<br>${d.c.map(g=>`<button style="margin:4px 4px 0 0" onclick="assegnaA(${lid},decodeURIComponent('${encodeURIComponent(d.sq)}'),${g.id},${d.pr},this)">${g.ruolo} · ${esc(g.nome)} (${esc(g.squadra)})</button>`).join('')}</div>`).join('')
     +(no.length?`<div class="card" style="padding:10px;border-color:var(--red)"><b style="color:var(--red)">Da sistemare (${no.length})</b>${no.map(x=>`<div class="muted" style="font-size:13px">• ${esc(x)}</div>`).join('')}</div>`:'')
     +`<button class="pri" style="margin-top:8px" onclick="legaView()">Fatto, aggiorna la pagina</button>`;
@@ -703,6 +704,8 @@ async function legaView(){
   if(fz.tab==='classifica') h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:700">📏 Regolamento di questa lega</summary><div style="margin-top:8px">${riepRegole(lega)}${riepBonus(lega.bonus)}<p class="muted" style="margin-top:8px">⚽ Gol: ${testoFasce(lega)}</p></div></details></div>`;
   if(fz.tab==='gestione'&&pres){
     const PZ=lega.partenza||{};
+    const idsA=Object.values(lega.attesa||{}).flatMap(v=>(v.rosa||[]).map(r=>r[0]));
+    const GA={};if(idsA.length)for(let i=0;i<idsA.length;i+=300)chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('id',idsA.slice(i,i+300))).forEach(g=>GA[g.id]=g);
     if(profilo.ruolo==='admin') h+=`<div class="card" style="border-color:var(--gold)"><h3>👑 Nomina presidente</h3><p class="muted" style="font-size:13px">Passa la gestione della lega a un partecipante: diventerà lui il presidente.</p>
       <select id="np_u">${membri.filter(m=>m.utente_id!==lega.creatore_id).map(m=>`<option value="${m.utente_id}">${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}</option>`).join('')}</select>
       ${membri.some(m=>m.utente_id===utente.id)?'<label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="np_esci" checked> Esci dalla lega (togli la mia squadra)</label>':''}
@@ -710,7 +713,7 @@ async function legaView(){
     if(profilo.ruolo==='admin'){
     h+=`<div class="card" style="border-color:var(--gold)"><details ${rose.length?'':'open'}><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Due modi: fai entrare prima tutti con gli stessi nomi squadra, <b>oppure</b> crea le <b>squadre libere</b>: chi entra col codice invito sceglie la sua squadra e trova già rosa, classifica e calendario.</p>
-      ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b><div class="muted" style="font-size:13px">${Object.entries(lega.attesa).map(([k,v])=>`${esc(k)} (${(v.rosa||[]).length})`).join(' · ')}</div><button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
+      ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b>${Object.entries(lega.attesa).map(([k,v])=>`<details><summary style="color:var(--txt)">${esc(k)} (${(v.rosa||[]).length})</summary><div class="muted" style="font-size:13px">${(v.rosa||[]).map(r=>GA[r[0]]).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome)).map(g=>`${g.ruolo} ${esc(g.nome)} <small>(${esc(g.squadra)})</small>`).join('<br>')}</div></details>`).join('')}<button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
       <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
       <label style="color:var(--txt);display:block;margin:4px 0 6px"><input type="checkbox" id="tr_libere" checked> Crea come <b>squadre libere</b> (ogni giocatore con il prezzo)</label>
