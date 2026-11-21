@@ -653,7 +653,7 @@ async function legaView(){
         if(!gs.includes(+fz.cg))fz.cg=gs.find(x=>!pub.includes(x))||gs[0];
         const mk=n=>esc(n)+(libN.has(n)?' <small class="muted">⏳</small>':'');
         h+=`<div class="card"><h3>📅 Calendario</h3><select onchange="fz.cg=this.value;legaView()">${gs.map(x=>`<option value="${x}" ${x==fz.cg?'selected':''}>Giornata ${x}${pub.includes(x)?' ✅':''}</option>`).join('')}</select>
-          ${calT.filter(x=>+x[0]===+fz.cg).map(x=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid #ffffff14"><span>${mk(x[1])}</span><span class="muted">vs</span><span style="text-align:right">${mk(x[2])}</span></div>`).join('')}
+          ${calT.filter(x=>+x[0]===+fz.cg).map(x=>`<div style="display:grid;grid-template-columns:1fr 34px 1fr;align-items:center;padding:9px 0;border-bottom:1px solid #ffffff14"><span style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mk(x[1])}</span><span class="muted" style="text-align:center">vs</span><span style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libN.has(x[2])?'<small class="muted">⏳</small> ':''}${esc(x[2])}</span></div>`).join('')}
           ${libN.size?'<p class="muted" style="font-size:12px;margin-top:8px">⏳ = squadra non ancora presa da nessuno</p>':''}</div>`}
       if(!pub.length){h+='<p class="muted">Nessuna giornata con voti pubblicati.</p>'}
       else{
