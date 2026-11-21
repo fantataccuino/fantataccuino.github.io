@@ -93,6 +93,15 @@ tr.mod td{background:#ffd44722}
 .campo:after{content:"";position:absolute;left:50%;top:50%;width:110px;height:110px;margin:-55px;border:2px solid #ffffff40;border-radius:50%;pointer-events:none}
 .campo .linea{display:flex;justify-content:space-evenly;position:relative;z-index:1}
 .panca{display:flex;gap:8px;overflow-x:auto;padding:8px 2px}
+.lsel select{background:#0d0826cc;border:1px solid #ffffff2a;border-radius:16px;font-weight:800;font-size:17px;padding:10px 14px;margin:0}
+.dhero{background:linear-gradient(160deg,#5b2bff,#2a0f8a 70%);border-radius:28px;padding:22px 16px 0;text-align:center;overflow:hidden;margin-bottom:14px}
+.stemma{width:96px;height:96px;border-radius:50%;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font:900 38px/1 var(--cond);color:#fff;border:4px solid #ffffff44;box-shadow:0 8px 24px #0006}
+.dstats{display:grid;grid-template-columns:repeat(4,1fr);background:#fff;color:#1a1240;border-radius:20px 20px 0 0;margin:16px -16px 0;padding:14px 4px}
+.dstats div{border-right:1px solid #0001}.dstats div:last-child{border:0}.dstats b{display:block;font:800 26px/1.1 var(--cond)}.dstats small{color:#5b5680}
+.vsr{display:grid;grid-template-columns:1fr 50px 1fr;align-items:center;text-align:center;gap:6px;margin:10px 0}.vsr .vs{width:46px;height:46px;border-radius:50%;background:#ffffff1a;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--muted)}
+.mini{width:58px;height:58px;font-size:22px;border-width:3px;margin-bottom:6px}
+.btnv{display:block;width:100%;background:var(--green);color:#06210f;border:0;border-radius:16px;padding:14px;font:800 18px Inter,sans-serif;margin-top:10px}
+.ticker{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-bottom:14px}.ticker div{flex:none;max-width:80%;background:#ffffff12;border-radius:16px;padding:10px 12px;cursor:pointer}.ticker b{color:#fff;background:var(--red);border-radius:8px;padding:2px 8px;margin-right:6px;font-size:12px}
 .fmods{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.fmod,.ffil{padding:8px 12px;border-radius:999px;background:#ffffff14;border:1px solid #ffffff2a;color:var(--txt);font-weight:700}.fmod.on,.ffil.on{background:var(--gold);color:#1a0f3d;border-color:var(--gold)}
 .frow{display:flex;align-items:center;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:12px}.frow.tit{background:#2ecc7122}.frow.pan{background:#f5c51818}
 .fst{min-width:78px;text-align:center;font-size:11px;font-weight:800;padding:4px 6px;border-radius:999px;background:#ffffff12}.frow.tit .fst{background:var(--green);color:#06210f}.frow.pan .fst{background:var(--gold);color:#1a0f3d}
@@ -160,6 +169,8 @@ async function avvia(session){
   if(!profilo.approvato) return schermata('In attesa di approvazione','La tua registrazione è arrivata. Un admin deve accettarla prima che tu possa entrare: riprova più tardi.');
   await caricaFeat();
   document.getElementById('top').style.display='block';
+  await caricaLeghe();
+  if(pagina==='home'&&LEGHE.length) pagina='dash';
   renderNav(); vai(pagina);
   let visto=true;try{visto=!!localStorage.getItem('benv_'+utente.id)}catch(e){}
   if(!visto) setTimeout(mostraBenvenuto,500);
@@ -233,7 +244,22 @@ function aggSaldo(){const el=document.getElementById('saldo');if(!el||!profilo)r
   if(!on('f_sng')){el.style.display='none';return}
   el.style.display='flex';
   el.innerHTML=`<span title="Palloni gratis">🎁 ${profilo.prova??0}</span><span style="opacity:.4">|</span><span title="Palloni Premium" style="display:flex;align-items:center;gap:4px"><span class="pd"></span>${profilo.gettoni??0}</span>`}
+let LEGHE=[],LG=null;
+async function caricaLeghe(){
+  const a=chk(await db.from('membri_lega').select('lega_id').eq('utente_id',utente.id)).map(x=>x.lega_id);
+  const {data:b}=await db.from('membri_lega').select('lega_id').contains('co',[utente.id]);
+  const ids=[...new Set([...a,...(b||[]).map(x=>x.lega_id)])];
+  LEGHE=ids.length?chk(await db.from('leghe').select('id,nome').in('id',ids).order('creata_il')):[];
+  let s=null;try{s=+localStorage.getItem('lega_att_'+utente.id)}catch(e){}
+  LG=(LEGHE.find(l=>l.id===s)||LEGHE[0]||{}).id||null}
+function setLG(id){LG=+id;try{localStorage.setItem('lega_att_'+utente.id,LG)}catch(e){};if(pagina==='fanta'){fz.lega=LG;legaView()}else vai(pagina)}
+function vaiLega(tab){if(!LG)return vai('fanta');fz.lega=LG;fz.tab=tab;vai('fanta')}
+function selLega(){if(!LEGHE.length)return '';return `<div class="lsel"><select onchange="setLG(this.value)">${LEGHE.map(l=>`<option value="${l.id}" ${l.id===LG?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div>`}
+function navK(){if(pagina==='fanta'&&fz.lega===LG&&['rosa','giornate','classifica'].includes(fz.tab))return fz.tab;if(pagina==='dash')return 'dash';if(pagina==='fanta'&&fz.lega===LG&&['formazione','live'].includes(fz.tab))return 'dash';return 'altro'}
 function renderNav(){aggSaldo();
+  if(LEGHE.length){const k=navK();
+    document.getElementById('nav').innerHTML=[['dash','🏠 Dashboard',"vai('dash')"],['rosa','👕 Squadre',"vaiLega('rosa')"],['giornate','📅 Calendario',"vaiLega('giornate')"],['classifica','🏆 Classifica',"vaiLega('classifica')"],['altro','☰ Altro',"vai('altro')"]]
+      .map(([kk,v,f])=>`<button class="${kk===k?'on':''}" onclick="${f}">${navB(v)}</button>`).join('');return}
   document.getElementById('nav').innerHTML=Object.entries(PAGINE)
     .filter(([k])=>(k!=='admin'||profilo.ruolo==='admin')&&(k!=='sng'||on('f_sng'))&&(k!=='premium'||on('f_premium')))
     .map(([k,v])=>`<button class="${k===pagina?'on':''}" onclick="vai('${k}')">${navB(v)}</button>`).join('')
@@ -244,7 +270,7 @@ function vai(p){
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   if(typeof liveIv!=='undefined'&&liveIv){clearInterval(liveIv);liveIv=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
-  ({home:pHome,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin})[p]();
+  ({home:pHome,dash:pDash,altro:pAltro,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin})[p]();
 }
 
 
@@ -292,6 +318,48 @@ async function eliminaAccount(){
 
 // ---------- notizie ----------
 let ARTS=[];
+function stemma(nome,cl=''){let h=0;for(const c of String(nome||''))h=(h*31+c.charCodeAt(0))%360;const ini=String(nome||'?').replace(/^(fc|ac|as|uc|team|real)\s+/i,'').split(/[\s-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  return `<div class="stemma ${cl}" style="background:linear-gradient(145deg,hsl(${h},70%,52%),hsl(${(h+40)%360},70%,30%))">${esc(ini)}</div>`}
+async function statLega(lega,membri){const {pub,ris}=await datiLega(lega,membri);
+  const inc=chk(await db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata'));
+  const tot={},PZ=lega.partenza||{};membri.forEach(m=>{const z=PZ[m.utente_id]||{};tot[m.utente_id]={pt:+z.fp||0,g:(+z.v||0)+(+z.n||0)+(+z.p||0),v:+z.v||0,n:+z.n||0,p:+z.p||0,gf:+z.gf||0,gs:+z.gs||0,punti:+z.punti||0}});
+  pub.forEach(g=>membri.forEach(m=>tot[m.utente_id].pt+=ris[g][m.utente_id].pt));
+  inc.filter(i=>pub.includes(i.giornata)).forEach(i=>{const [gc,gt]=golMatch(i,ris,lega);const A=tot[i.casa],B=tot[i.trasferta];if(!A||!B)return;
+    A.g++;B.g++;A.gf+=gc;A.gs+=gt;B.gf+=gt;B.gs+=gc;if(gc>gt){A.v++;B.p++;A.punti+=3}else if(gc<gt){B.v++;A.p++;B.punti+=3}else{A.n++;B.n++;A.punti++;B.punti++}});
+  Object.entries(lega.attesa||{}).forEach(([k,v])=>{const z=v.pz||{};tot['n:'+k]={pt:+z.fp||0,g:(+z.v||0)+(+z.n||0)+(+z.p||0),punti:+z.punti||0}});
+  const sd=inc.length||(lega.attesa_cal||[]).length;
+  const cl=Object.keys(tot).sort((a,b)=>sd?(tot[b].punti-tot[a].punti||tot[b].pt-tot[a].pt):tot[b].pt-tot[a].pt);
+  return {tot,cl,inc,sd}}
+async function pDash(){
+  if(!LG){app.innerHTML=`<div class="card"><h2>Benvenuto!</h2><p class="muted">Non sei ancora in nessuna lega.</p><button class="pri" onclick="vai('fanta')">Entra o crea una lega</button></div>`;return}
+  const lega=chk(await db.from('leghe').select('*').eq('id',LG).single());
+  const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino)').eq('lega_id',lega.id));
+  MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
+  const me=membri.find(m=>m.utente_id===MIO),nome=u=>membri.find(m=>m.utente_id===u)?.nome_squadra||String(u).replace(/^n:/,'')||'?';
+  const {tot,cl,sd}=await statLega(lega,membri);const t=tot[MIO]||{pt:0,g:0,punti:0},pos=cl.indexOf(MIO)+1;
+  const arts=(await db.from('articoli').select('id,titolo').order('pubblicato_il',{ascending:false}).limit(6)).data||[];
+  const gg=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').eq('pubblicata',false).order('numero'));
+  const gLive=gg.find(g=>new Date(g.scadenza)<=new Date()),gNext=gg.find(g=>new Date(g.scadenza)>new Date());
+  const avv=async g=>{if(!g)return null;const i=(await db.from('incontri').select('casa,trasferta').eq('lega_id',lega.id).eq('giornata',g.numero).or(`casa.eq.${MIO},trasferta.eq.${MIO}`)).data?.[0];
+    if(i)return [i.casa,i.trasferta];const c=(lega.attesa_cal||[]).find(x=>x[0]===g.numero&&(x[1]===me?.nome_squadra||x[2]===me?.nome_squadra));return c?[c[1]===me?.nome_squadra?MIO:'n:'+c[1],c[2]===me?.nome_squadra?MIO:'n:'+c[2]]:null};
+  const mL=await avv(gLive),mN=await avv(gNext);
+  const fatta=gNext?((await db.from('formazioni').select('giocatore_id',{count:'exact',head:true}).eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',gNext.numero)).count||0)>0:false;
+  const vs=(m)=>`<div class="vsr"><div>${stemma(nome(m[0]),'mini')}<b>${esc(nome(m[0]))}</b></div><div class="vs">VS</div><div>${stemma(nome(m[1]),'mini')}<b>${esc(nome(m[1]))}</b></div></div>`;
+  app.innerHTML=selLega()+`<div class="dhero">${stemma(me?.nome_squadra)}<h2 style="margin:4px 0 0">${esc(me?.nome_squadra||'')}</h2><small class="muted">${esc(lega.nome)}</small>
+    <div class="dstats"><div><b>${pos||'-'}ª</b><small>Posizione</small></div><div><b>${sd?t.punti:'-'}</b><small>Punti</small></div><div><b>${t.g}</b><small>Partite</small></div><div><b>${Math.round(t.pt*10)/10}</b><small>Pt. totali</small></div></div></div>
+  ${arts.length?`<div class="ticker">${arts.map(a=>`<div onclick="ARTS=[];apriArtDa(${a.id})"><b>NEWS</b>${esc(a.titolo)}</div>`).join('')}</div>`:''}
+  ${gLive?`<div class="card"><div class="row between"><b><span style="color:var(--green)">●</span> Live in corso</b><small class="muted">${gLive.numero}ª giornata</small></div>${mL?vs(mL):''}<button class="btnv" onclick="vaiLega('live')">Vai al Live</button></div>`:''}
+  ${gNext?`<div class="card"><div class="row between"><b>Prossima giornata</b><small class="muted">${gNext.numero}ª giornata</small></div>${mN?vs(mN):''}
+    <p class="muted" style="text-align:center;margin:4px 0">⏱️ Formazione entro <b style="color:var(--txt)">${fmt(gNext.scadenza)}</b>${fatta?' · <span style="color:var(--green)">✅ inserita</span>':''}</p>
+    <button class="btnv" style="${fatta?'background:#ffffff22;color:var(--txt)':''}" onclick="vaiLega('formazione')">${fatta?'Modifica formazione':'Inserisci formazione'}</button></div>`:''}
+  <div class="tiles">${[['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
+async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
+async function pAltro(){
+  const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
+  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
+    ...(pres?[['⚙️','Gestione lega',"vaiLega('gestione')"]]:[]),...(on('f_premium')?[['💎','Premium',"vai('premium')"]]:[]),['📜','Termini',"vai('termini')"],...(profilo.ruolo==='admin'?[['🛠️','Admin',"vai('admin')"]]:[]),
+    ...(FEAT.link_donazioni?[['☕','Sostienici',`window.open('${esc(FEAT.link_donazioni)}','_blank')`]]:[])].filter(x=>x[1]!=='Calcetto'||on('f_sng'));
+  app.innerHTML=selLega()+`<h2 style="margin-top:6px">☰ Altro</h2><div class="tiles">${V.map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
 async function pHome(){
   ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
   const LIVE=(await db.from('partite_sa').select('api_id,casa,trasferta,gol_casa,gol_trasferta').eq('live',true)).data||[];
@@ -309,10 +377,11 @@ function apriArt(id){const a=ARTS.find(x=>x.id===id);if(!a)return;
 let fz={lega:null,tab:'classifica',vedi:null,gg:null};
 async function pFanta(){
   if(fz.lega) return legaView();
+  await caricaLeghe();renderNav();
   const leghe=chk(await db.from('leghe').select('*').order('creata_il'));
   app.innerHTML=`<h2>Leghe</h2>
   ${leghe.map(l=>`<div class="card row between"><div><b>${esc(l.nome)}</b><br><small class="muted">${l.creatore_id===utente.id?'Sei il presidente':'Partecipante'} · ${MODALITA[l.modalita]||'Asta'}${l.giornata_da?` · Sprint G${l.giornata_da}–${l.giornata_a||38}`:''}${l.carte?' · 🃏':''}</small></div>
-    <button class="pri" onclick="fz.lega=${l.id};fz.tab='classifica';pFanta()">Apri</button></div>`).join('')||'<p class="muted">Non sei ancora in nessuna lega.</p>'}
+    <button class="pri" onclick="if(LEGHE.some(x=>x.id===${l.id})){setLG(${l.id});vai('dash')}else{fz.lega=${l.id};fz.tab='classifica';pFanta()}">Apri</button></div>`).join('')||'<p class="muted">Non sei ancora in nessuna lega.</p>'}
   <div class="card" style="border-color:var(--gold)"><h3>🚚 Hai già una lega su un'altra app?</h3><p class="muted">Ce ne occupiamo noi: mandaci regolamento, rose e classifica (bastano gli screenshot) e ti prepariamo la lega qui, con tutte le squadre dentro. Voi entrate e giocate.</p>
     ${FEAT.wa_premium?`<button class="pri" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei trasferire la mia lega su FantaTaccuino. Il mio nome utente è: '+profilo.username+'. Ti mando regolamento, rose e classifica.'),'_blank')">💬 Chiedi il trasferimento su WhatsApp</button>`:`<p class="muted">Scrivi a <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}</div>
   <div class="card"><h3>Crea una lega</h3>
@@ -649,11 +718,13 @@ async function legaView(){
   tabs.push(['live','🔴 Live']);
   if(pres) tabs.push(['gestione','Gestione']);
   if(!tabs.find(t=>t[0]===fz.tab)) fz.tab='classifica';
-  let h=`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
+  renderNav();
+  const modoL=LEGHE.length&&fz.lega===LG;
+  let h=modoL?selLega()+`<h2 style="margin-top:6px">${{classifica:'🏆 Classifica',giornate:'📅 Calendario',rosa:'👕 Squadre',formazione:'📋 Formazione',live:'🔴 Live',gestione:'⚙️ Gestione lega',draft:'🎯 Draft'}[fz.tab]||esc(lega.nome)}</h2>`:`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
   <h2 style="margin-top:12px">${esc(lega.nome)}</h2>
   <p class="muted">Codice invito: <b style="color:var(--gold)">${esc(lega.codice_invito)}</b> · <span class="badge">${MODALITA[lega.modalita]||'Asta'}</span>
   ${lega.giornata_da?` <span class="badge">🏆 Sprint G${lega.giornata_da}–${lega.giornata_a||38}</span>`:''}${lega.carte?' <span class="badge">🃏 Carte</span>':''}</p>
-  <div class="tabs">${tabs.map(([k,v])=>`<button class="${fz.tab===k?'on':''}" onclick="fz.tab='${k}';legaView()">${v}</button>`).join('')}</div>`;
+  ${modoL?'':`<div class="tabs">${tabs.map(([k,v])=>`<button class="${fz.tab===k?'on':''}" onclick="fz.tab='${k}';legaView()">${v}</button>`).join('')}</div>`}`;
   const rose=chk(await db.from('rose').select('*, giocatori(*)').eq('lega_id',lega.id));
 
   if(fz.tab==='classifica'||fz.tab==='giornate'){
