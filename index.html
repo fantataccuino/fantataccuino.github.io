@@ -643,6 +643,14 @@ async function legaView(){
         ${cl2.map((m,i)=>`<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b><br><small class="muted">${un(m.profili)}</small></td><td><b>${tot[m.utente_id].pt.toFixed(1)}</b></td></tr>`).join('')}</table>
         <p class="muted" style="font-size:12px">Contano solo le giornate con voti pubblicati${lega.giornata_da?` dalla ${lega.giornata_da} alla ${lega.giornata_a||38}`:''}. Sostituzioni automatiche: massimo ${REG(lega).cambi}, stesso ruolo${REG(lega).sw?" (con switch)":""}, in ordine di panchina.</p></div>`;
     } else {
+      const libN=new Set(Object.keys(lega.attesa||{}));
+      const calT=[...inc.map(i=>[i.giornata,membri.find(m=>m.utente_id===i.casa)?.nome_squadra||'?',membri.find(m=>m.utente_id===i.trasferta)?.nome_squadra||'?']),...(lega.attesa_cal||[])];
+      if(calT.length){const gs=[...new Set(calT.map(x=>+x[0]))].sort((a,b)=>a-b);
+        if(!gs.includes(+fz.cg))fz.cg=gs.find(x=>!pub.includes(x))||gs[0];
+        const mk=n=>esc(n)+(libN.has(n)?' <small class="muted">⏳</small>':'');
+        h+=`<div class="card"><h3>📅 Calendario</h3><select onchange="fz.cg=this.value;legaView()">${gs.map(x=>`<option value="${x}" ${x==fz.cg?'selected':''}>Giornata ${x}${pub.includes(x)?' ✅':''}</option>`).join('')}</select>
+          ${calT.filter(x=>+x[0]===+fz.cg).map(x=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid #ffffff14"><span>${mk(x[1])}</span><span class="muted">vs</span><span style="text-align:right">${mk(x[2])}</span></div>`).join('')}
+          ${libN.size?'<p class="muted" style="font-size:12px;margin-top:8px">⏳ = squadra non ancora presa da nessuno</p>':''}</div>`}
       if(!pub.length){h+='<p class="muted">Nessuna giornata con voti pubblicati.</p>'}
       else{
         if(!pub.includes(+fz.gg)) fz.gg=pub[pub.length-1];
