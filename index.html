@@ -804,8 +804,9 @@ async function fileLeghe(inp,lid){const fs=[...inp.files];if(!fs.length)return;
         const cols=new Set();M.forEach(r=>r&&r.forEach((x,c)=>{if(/giornata lega/i.test(String(x||'')))cols.add(c)}));
         for(const c of cols){let cur=null;for(const r of M){if(!r)continue;const x=r[c];
           if(/giornata lega/i.test(String(x||''))){const ga=parseInt(String(r[c+2]||x));cur=G[ga]=G[ga]||[];continue}
-          if(cur&&x&&r[c+3])cur.push([String(x).trim(),String(r[c+3]).trim(),String(r[c+4]??'').trim()])}}
+          if(cur&&x&&r[c+3])cur.push([String(x).trim(),String(r[c+3]).trim(),String(r[c+4]??'').trim(),+r[c+1]||0,+r[c+2]||0])}}
         const gg=Object.keys(G).map(Number).sort((a,b)=>a-b).filter(g=>G[g].every(m=>!/\d/.test(m[2])));
+        const gio=Object.keys(G).map(Number).sort((a,b)=>a-b).filter(g=>!gg.includes(g));if(gio.length){P.storico=gio.flatMap(g=>G[g].filter(m=>/\d/.test(m[2])).map(m=>[g,m[0],m[1],m[3],m[4],m[2]]));cosa.push(`risultati delle giornate ${gio[0]}-${gio[gio.length-1]}`)}
         if(gg.length){P.calendario={gg,giornate:gg.map(g=>G[g].map(m=>[m[0],m[1]]))};cosa.push(`calendario dalla giornata ${gg[0]} alla ${gg[gg.length-1]}`)}
         else cosa.push('calendario già tutto giocato (nessuna giornata da caricare)');continue}
     }}
@@ -869,6 +870,7 @@ async function applicaPacchetto(lid,P){
     cal=dopo;rep.push(`Calendario: giornate ${GG[0]}-${GG[GG.length-1]}, ${subito.length+dopo.length-(C.gg?dopo.length-dopo.filter(x=>GG.includes(x[0])).length:0)} partite`);
   }
   const up={attesa:at,partenza:pz0};if(cal)up.attesa_cal=cal;
+  if(P.storico&&P.storico.length){up.storico=P.storico;rep.push(`Risultati giornate già giocate: ${P.storico.length} partite`)}
   chk(await db.from('leghe').update(up).eq('id',lid));
   return rep;
 }
@@ -1158,12 +1160,14 @@ async function legaView(){
         const incA=inc.filter(i=>i.giornata===gA.numero);
         h+=`<div class="card"><h3>👀 Formazioni · giornata ${gA.numero}</h3><p class="muted" style="font-size:13px">${iniz?'Le partite sono iniziate: tutte le formazioni sono visibili.':'Scadenza '+fmt(gA.scadenza)+'. Chi ha scelto di nasconderla la mostra al calcio d\'inizio.'}</p>
           ${(incA.length?incA.map(i=>[i.casa,i.trasferta]):membri.map(m=>[m.utente_id])).map(c=>`<details style="border-top:1px solid var(--line);padding:6px 0"><summary style="color:var(--txt);font-weight:700">${c.map(nomeSq).join(' – ')}</summary>${c.map(u=>`<div style="margin:6px 0"><b>${nomeSq(u)}</b>${boxF(u)}</div>`).join('')}</details>`).join('')}</div>`}}
-      const calT=[...inc.map(i=>[i.giornata,membri.find(m=>m.utente_id===i.casa)?.nome_squadra||'?',membri.find(m=>m.utente_id===i.trasferta)?.nome_squadra||'?']),...(lega.attesa_cal||[])];
+      const ST=lega.storico||[],stG=new Set(ST.map(x=>+x[0]));
+      const calT=[...ST,...inc.filter(i=>!stG.has(i.giornata)).map(i=>[i.giornata,membri.find(m=>m.utente_id===i.casa)?.nome_squadra||'?',membri.find(m=>m.utente_id===i.trasferta)?.nome_squadra||'?']),...(lega.attesa_cal||[]).filter(x=>!stG.has(+x[0]))];
       if(calT.length){const gs=[...new Set(calT.map(x=>+x[0]))].sort((a,b)=>a-b);
-        if(!gs.includes(+fz.cg))fz.cg=gs.find(x=>!pub.includes(x))||gs[0];
+        if(!gs.includes(+fz.cg))fz.cg=gs.find(x=>!pub.includes(x)&&!stG.has(x))||gs[gs.length-1];
         const mk=n=>esc(n)+(libN.has(n)?' <small class="muted">⏳</small>':'');
-        h+=`<div class="card"><h3>📅 Calendario</h3><select onchange="fz.cg=this.value;legaView()">${gs.map(x=>`<option value="${x}" ${x==fz.cg?'selected':''}>Giornata ${x}${pub.includes(x)?' ✅':''}</option>`).join('')}</select>
-          ${calT.filter(x=>+x[0]===+fz.cg).map(x=>`<div style="display:grid;grid-template-columns:1fr 34px 1fr;align-items:center;padding:9px 0;border-bottom:1px solid #ffffff14"><span style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mk(x[1])}</span><span class="muted" style="text-align:center">vs</span><span style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libN.has(x[2])?'<small class="muted">⏳</small> ':''}${esc(x[2])}</span></div>`).join('')}
+        h+=`<div class="card"><h3>📅 Calendario</h3><select onchange="fz.cg=this.value;legaView()">${gs.map(x=>`<option value="${x}" ${x==fz.cg?'selected':''}>Giornata ${x}${pub.includes(x)||stG.has(x)?' ✅':''}</option>`).join('')}</select>
+          ${calT.filter(x=>+x[0]===+fz.cg).map(x=>`<div style="display:grid;grid-template-columns:1fr ${x[5]?'58px':'34px'} 1fr;align-items:center;padding:9px 0;border-bottom:1px solid #ffffff14"><span style="text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mk(x[1])}${x[5]?`<br><small class="muted">${x[3]}</small>`:''}</span>${x[5]?`<b style="text-align:center;color:var(--gold);font-size:18px">${esc(x[5])}</b>`:'<span class="muted" style="text-align:center">vs</span>'}<span style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${libN.has(x[2])?'<small class="muted">⏳</small> ':''}${esc(x[2])}${x[5]?`<br><small class="muted">${x[4]}</small>`:''}</span></div>`).join('')}
+          ${stG.has(+fz.cg)?'<p class="muted" style="font-size:12px;margin-top:8px">📜 Risultato importato da Leghe Fantacalcio (sotto i nomi i fantapunti). È già conteggiato nella classifica di partenza.</p>':''}
           ${libN.size?'<p class="muted" style="font-size:12px;margin-top:8px">⏳ = squadra non ancora presa da nessuno</p>':''}</div>`}
       if(!pub.length){h+='<p class="muted">Nessuna giornata con voti pubblicati.</p>'}
       else{
