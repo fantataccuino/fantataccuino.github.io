@@ -510,6 +510,7 @@ async function impRoseLibere(lid,righe,box){
   const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
   const no=[],dubbi=[],conta={},nuove={},lette={};let cur=null;
   for(const riga of righe){
+    if(riga.includes(';')){no.push(riga+' → riga del listone, non di una rosa: saltata');continue}
     const m=riga.match(/^(.*?)[\s,]+(\d+)\s*$/);
     if(!m){cur=riga.replace(/[:\-–]+$/,'').trim();if(membri.includes(norm(cur).trim())){no.push(`"${cur}" è già una squadra con un utente: saltata`);cur=null;continue}
       if(sv||!at[cur])at[cur]={rosa:[],pz:(at[cur]&&at[cur].pz)||{}};nuove[cur]=1;continue}
@@ -809,7 +810,7 @@ async function legaView(){
     const idsA=Object.values(lega.attesa||{}).flatMap(v=>(v.rosa||[]).map(r=>r[0]));
     const GA={};if(idsA.length)for(let i=0;i<idsA.length;i+=300)chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('id',idsA.slice(i,i+300))).forEach(g=>GA[g.id]=g);
     if(profilo.ruolo==='admin'&&Object.keys(lega.attesa||{}).length) h+=`<div class="card" style="border-color:var(--green)"><h3>👤 Assegna una squadra a un utente</h3><p class="muted" style="font-size:13px">L'utente deve essere registrato. Entra nella lega e riceve la squadra con rosa, punti e calendario: non deve fare niente.</p>
-      <label>Squadra libera</label><select id="as_sq">${Object.keys(lega.attesa).map(k=>`<option>${esc(k)}</option>`).join('')}</select>
+      <label>Squadra libera</label><select id="as_sq">${Object.keys(lega.attesa).sort((a,b)=>a.localeCompare(b)).map(k=>`<option>${esc(k)}</option>`).join('')}</select>
       <label>Nome utente</label><input id="as_u" placeholder="es. Mario88">
       <button class="pri" onclick="assegnaSq(${lega.id})">Assegna squadra</button></div>`;
     if(profilo.ruolo==='admin') h+=`<div class="card" style="border-color:var(--gold)"><h3>👑 Nomina presidente</h3><p class="muted" style="font-size:13px">Passa la gestione della lega a un partecipante: diventerà lui il presidente.</p>
