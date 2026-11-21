@@ -614,18 +614,38 @@ async function entraLega(){
 
 function filePacchetto(inp,lid){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{let P;try{P=JSON.parse(r.result)}catch(e){return toast('File non valido: non è un pacchetto',true)}
   caricaP(P,lid)};r.readAsText(f,'utf-8')}
-async function fileLeghe(inp,lid){const f=inp.files[0];if(!f)return;
-  if(!window.XLSX){toast('Leggo il file…');await new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';sc.onload=ok;sc.onerror=ko;document.head.appendChild(sc)})}
-  const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const ws=wb.Sheets['ROSE']||wb.Sheets[wb.SheetNames[0]];
-  const M=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});const sq=[];
-  const hdr=M[0]||[];for(let c=0;c<hdr.length;c++){const nome=hdr[c],k=hdr[c+1];if(!nome||String(k||'').toLowerCase()!=='costo')continue;
-    const rosa=[];for(let r=1;r<M.length;r++){const n=M[r][c],pr=M[r][c+1];if(n==null||n==='')continue;if(String(n).trim().toLowerCase()==='totale')break;rosa.push([String(n).replace(/\*/g,'').trim(),+pr||1])}
-    const RU=rosa.length===25?['P','P','P','D','D','D','D','D','D','D','D','C','C','C','C','C','C','C','C','A','A','A','A','A','A']:null;
-    sq.push({nome:String(nome).trim(),rosa:rosa.map((x,i)=>RU?[x[0],x[1],RU[i]]:x)})}
-  if(!sq.length)return toast('Non trovo le rose nel file: è quello esportato da Leghe Fantacalcio (Esporta XLSX)?',true);
-  const nomeL=document.getElementById('il_nome')?.value?.trim()||f.name.replace(/-rosters.*$/i,'').replace(/[-_]+/g,' ').replace(/\b\w/g,x=>x.toUpperCase()).trim();
-  if(!confirm(`Ho trovato ${sq.length} squadre (${sq.map(x=>x.nome).join(', ')}). Le carico come squadre libere?`))return;
-  caricaP({nome:nomeL,soglia_gol:+document.getElementById('il_sg')?.value||66,passo_gol:+document.getElementById('il_pg')?.value||4,crediti:+document.getElementById('il_cred')?.value||1000,squadre:sq},lid)}
+async function fileLeghe(inp,lid){const fs=[...inp.files];if(!fs.length)return;
+  if(!window.XLSX){toast('Leggo i file…');await new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';sc.onload=ok;sc.onerror=ko;document.head.appendChild(sc)})}
+  const P={squadre:[]},sqDi=n=>{let q=P.squadre.find(x=>norm(x.nome).trim()===norm(n).trim());if(!q){q={nome:String(n).trim()};P.squadre.push(q)}return q};let nomeF='',cosa=[];
+  for(const f of fs){const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+    for(const sn of wb.SheetNames){const M=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null}),t0=String(M[0]?.[0]||'');
+      if(/^(classifica|calendario)\s+/i.test(t0))nomeF=t0.replace(/^(classifica|calendario)\s+/i,'').trim();
+      const hdr=M[0]||[];
+      if(hdr.some((x,c)=>x&&String(hdr[c+1]||'').toLowerCase()==='costo')){let n=0;
+        for(let c=0;c<hdr.length;c++){const nome=hdr[c];if(!nome||String(hdr[c+1]||'').toLowerCase()!=='costo')continue;
+          const rosa=[];for(let r=1;r<M.length;r++){const x=M[r][c],pr=M[r][c+1];if(x==null||x==='')continue;if(String(x).trim().toLowerCase()==='totale')break;rosa.push([String(x).replace(/\*/g,'').trim(),+pr||1])}
+          const RU=rosa.length===25?'PPPDDDDDDDDCCCCCCCCAAAAAA':null;sqDi(nome).rosa=rosa.map((x,i)=>RU?[x[0],x[1],RU[i]]:x);n++}
+        cosa.push(`rose di ${n} squadre`);if(!nomeF)nomeF=f.name.replace(/\.xlsx?$/i,'').replace(/-rosters.*$/i,'').replace(/[-_]+/g,' ').trim();continue}
+      const hi=M.findIndex(r=>r&&String(r[0]||'').trim().toLowerCase()==='pos');
+      if(hi>=0){const H=M[hi].map(x=>String(x||'').trim().toLowerCase()),ix=k=>H.indexOf(k);let n=0;
+        for(const r of M.slice(hi+1)){if(!r||!r[1])continue;sqDi(r[1]).pz={punti:+r[ix('pt.')]||0,fp:+r[ix('pt. totali')]||0,v:+r[ix('v')]||0,n:+r[ix('n')]||0,p:+r[ix('p')]||0,gf:+r[ix('gf')]||0,gs:+r[ix('gs')]||0};n++}
+        cosa.push(`classifica di ${n} squadre`);continue}
+      if(M.some(r=>r&&r.some(x=>/giornata lega/i.test(String(x||''))))){const G={};
+        const cols=new Set();M.forEach(r=>r&&r.forEach((x,c)=>{if(/giornata lega/i.test(String(x||'')))cols.add(c)}));
+        for(const c of cols){let cur=null;for(const r of M){if(!r)continue;const x=r[c];
+          if(/giornata lega/i.test(String(x||''))){const ga=parseInt(String(r[c+2]||x));cur=G[ga]=G[ga]||[];continue}
+          if(cur&&x&&r[c+3])cur.push([String(x).trim(),String(r[c+3]).trim(),String(r[c+4]??'').trim()])}}
+        const gg=Object.keys(G).map(Number).sort((a,b)=>a-b).filter(g=>G[g].every(m=>!/\d/.test(m[2])));
+        if(gg.length){P.calendario={gg,giornate:gg.map(g=>G[g].map(m=>[m[0],m[1]]))};cosa.push(`calendario dalla giornata ${gg[0]} alla ${gg[gg.length-1]}`)}
+        else cosa.push('calendario già tutto giocato (nessuna giornata da caricare)');continue}
+    }}
+  if(!cosa.length)return toast('Non riconosco questi file: usa quelli esportati da Leghe Fantacalcio (Rose, Classifica, Calendario)',true);
+  P.squadre=P.squadre.filter(q=>q.rosa||q.pz);
+  P.nome=document.getElementById('il_nome')?.value?.trim()||nomeF.replace(/\b\w/g,x=>x.toUpperCase());
+  if(!lid&&!P.squadre.some(q=>q.rosa))return toast('Per creare la lega serve anche il file delle Rose (Esporta XLSX nella pagina Rose)',true);
+  if(!confirm(`Ho trovato: ${cosa.join(', ')}.\n\nSquadre: ${P.squadre.map(x=>x.nome).join(', ')}\n\nCarico tutto?`))return;
+  Object.assign(P,{soglia_gol:+document.getElementById('il_sg')?.value||66,passo_gol:+document.getElementById('il_pg')?.value||4,crediti:+document.getElementById('il_cred')?.value||1000});
+  caricaP(P,lid)}
 async function caricaP(P,lid){
   const box=document.getElementById('pk_ris');box.innerHTML='<p class="muted">Carico il pacchetto…</p>';
   try{
@@ -669,11 +689,14 @@ async function applicaPacchetto(lid,P){
   if(P.calendario&&P.calendario.giornate&&P.calendario.giornate.length){
     const C=P.calendario,da=+C.da||1,a=+C.a||38,B=C.giornate,ok=n=>memDi(n)||at[n],subito=[],dopo=[];
     const nomiCal=[...new Set(B.flat(2))].filter(n=>!ok(n));if(nomiCal.length)rep.push('Calendario: squadre sconosciute '+nomiCal.join(', '));
-    for(let g=da;g<=a;g++){const k=g-da+(+C.offset||0),ciclo=Math.floor(k/B.length);
+    const GG=C.gg||Array.from({length:a-da+1},(_,i)=>da+i);
+    GG.forEach((g,i)=>{const k=C.gg?i:g-da+(+C.offset||0),ciclo=C.gg?0:Math.floor(k/B.length);
       B[k%B.length].forEach(([x,y])=>{const c=ciclo%2?y:x,t=ciclo%2?x:y,mc=memDi(c),mt=memDi(t);
-        if(mc&&mt)subito.push({lega_id:lid,giornata:g,casa:mc.utente_id,trasferta:mt.utente_id});else if(ok(c)&&ok(t))dopo.push([g,mc?mc.nome_squadra:c,mt?mt.nome_squadra:t])})}
-    chk(await db.from('incontri').delete().eq('lega_id',lid));if(subito.length)chk(await db.from('incontri').insert(subito));
-    cal=dopo;rep.push(`Calendario: giornate ${da}-${a}, ${subito.length+dopo.length} partite`);
+        if(mc&&mt)subito.push({lega_id:lid,giornata:g,casa:mc.utente_id,trasferta:mt.utente_id});else if(ok(c)&&ok(t))dopo.push([g,mc?mc.nome_squadra:c,mt?mt.nome_squadra:t])})});
+    if(C.gg){chk(await db.from('incontri').delete().eq('lega_id',lid).in('giornata',GG));const Lc=chk(await db.from('leghe').select('attesa_cal').eq('id',lid).single());dopo.unshift(...(Lc.attesa_cal||[]).filter(x=>!GG.includes(x[0])))}
+    else chk(await db.from('incontri').delete().eq('lega_id',lid));
+    if(subito.length)chk(await db.from('incontri').insert(subito));
+    cal=dopo;rep.push(`Calendario: giornate ${GG[0]}-${GG[GG.length-1]}, ${subito.length+dopo.length-(C.gg?dopo.length-dopo.filter(x=>GG.includes(x[0])).length:0)} partite`);
   }
   const up={attesa:at,partenza:pz0};if(cal)up.attesa_cal=cal;
   chk(await db.from('leghe').update(up).eq('id',lid));
@@ -1157,7 +1180,7 @@ async function legaView(){
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Due modi: fai entrare prima tutti con gli stessi nomi squadra, <b>oppure</b> crea le <b>squadre libere</b>: chi entra col codice invito sceglie la sua squadra e trova già rosa, classifica e calendario.</p>
       ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b>${Object.entries(lega.attesa).map(([k,v])=>`<details><summary style="color:var(--txt)">${esc(k)} (${(v.rosa||[]).length})</summary><div class="muted" style="font-size:13px">${(v.rosa||[]).map(r=>GA[r[0]]).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome)).map(g=>`${g.ruolo} ${esc(g.nome)} <small>(${esc(g.squadra)})</small>`).join('<br>')}</div></details>`).join('')}<button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
       <div class="card" style="padding:12px;border-color:var(--green)"><h3 style="margin-top:0">📦 Metodo veloce: carica il pacchetto</h3><p class="muted" style="font-size:13px">Un unico file preparato con Claude dagli screenshot: dentro ci sono rose, classifica e calendario. Si carica tutto in un colpo.</p>
-        <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;margin:0 6px 6px 0;background:#1a7f37">📗 Carica file di Leghe Fantacalcio (.xlsx)<input type="file" accept=".xlsx,.xls" style="display:none" onchange="fileLeghe(this,${lega.id})"></label><label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Carica pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,${lega.id})"></label><div id="pk_ris" style="margin-top:10px"></div></div>
+        <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;margin:0 6px 6px 0;background:#1a7f37">📗 Carica i file di Leghe Fantacalcio (.xlsx)<input type="file" accept=".xlsx,.xls" multiple style="display:none" onchange="fileLeghe(this,${lega.id})"></label><label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Carica pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,${lega.id})"></label><div id="pk_ris" style="margin-top:10px"></div></div>
       <p class="muted" style="font-size:13px">Oppure, a mano, un pezzo alla volta:</p>
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'tr_rose')"></label>
@@ -2170,7 +2193,7 @@ async function pAdmin(){
       <label style="color:var(--txt);display:block;margin:6px 0 12px"><input type="checkbox" id="il_gioco"> Partecipo anch'io con una squadra (la prenderò dall'elenco col codice)</label>
       <button class="pri" onclick="creaImportata()">Crea lega importata</button>
       <p class="muted" style="font-size:13px;margin-top:14px">Oppure, più veloce: se hai il <b>pacchetto</b> preparato con Claude, crea la lega e carica tutto in un colpo (nome e soglie li prende dal file; la casella "Partecipo anch'io" sopra vale anche qui).</p>
-      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;margin:0 6px 6px 0;background:#1a7f37">📗 Carica file di Leghe Fantacalcio (.xlsx)<input type="file" accept=".xlsx,.xls" style="display:none" onchange="fileLeghe(this,0)"></label><label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Crea lega da pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,0)"></label><div id="pk_ris" style="margin-top:10px"></div></div>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;margin:0 6px 6px 0;background:#1a7f37">📗 Carica i file di Leghe Fantacalcio (.xlsx)<input type="file" accept=".xlsx,.xls" multiple style="display:none" onchange="fileLeghe(this,0)"></label><label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Crea lega da pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,0)"></label><div id="pk_ris" style="margin-top:10px"></div></div>
       ${tutte.length?`<div class="card"><h3>Le leghe create da te</h3>${tutte.map(l=>`<div class="row between" style="padding:6px 0"><span><b>${esc(l.nome)}</b> · <span style="color:var(--gold)">${esc(l.codice_invito||'')}</span>${Object.keys(l.attesa||{}).length?` · ⏳ ${Object.keys(l.attesa).length} libere`:''}</span><button onclick="fz.lega=${l.id};fz.tab='gestione';vai('fanta')">Apri</button></div>`).join('')}</div>`:''}`;
   }
   if(ad.tab==='dati'){
