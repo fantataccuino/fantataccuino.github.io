@@ -339,6 +339,12 @@ async function entraLega(){
   toast('Sei entrato nella lega!');fz.lega=id;pFanta();
 }
 
+async function creaImportata(){
+  const nome=val('il_nome');if(!nome)return toast('Scrivi il nome della lega',true);
+  const l=chk(await db.from('leghe').insert({nome,crediti:+val('il_cred')||500,modalita:'asta',carte:false,bonus:{},soglia_gol:+val('il_sg')||66,passo_gol:+val('il_pg')||6}).select().single());
+  if(!document.getElementById('il_gioco').checked){await db.from('membri_lega').delete().eq('lega_id',l.id).eq('utente_id',utente.id)}
+  toast('Lega creata! Ora carica rose, classifica e calendario');fz.lega=l.id;fz.tab='gestione';vai('fanta');
+}
 async function prendiSq(cod,n){if(!confirm(`Confermi che "${n}" è la tua squadra? Non potrai cambiarla.`))return;
   const id=chk(await db.rpc('prendi_squadra',{p_codice:cod,p_nome:n}));toast('Benvenuto in '+n+'!');fz.lega=id;pFanta()}
 const MODULI={'3-4-3':[3,4,3],'3-5-2':[3,5,2],'4-3-3':[4,3,3],'4-4-2':[4,4,2],'4-5-1':[4,5,1],'5-3-2':[5,3,2],'5-4-1':[5,4,1]};
@@ -702,12 +708,12 @@ async function legaView(){
       ${membri.some(m=>m.utente_id===utente.id)?'<label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="np_esci" checked> Esci dalla lega (togli la mia squadra)</label>':''}
       <button class="pri" onclick="nominaPres(${lega.id})">Nomina presidente</button></div>`;
     if(profilo.ruolo==='admin'){
-    h+=`<div class="card" style="border-color:var(--gold)"><details><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
+    h+=`<div class="card" style="border-color:var(--gold)"><details ${rose.length?'':'open'}><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Due modi: fai entrare prima tutti con gli stessi nomi squadra, <b>oppure</b> crea le <b>squadre libere</b>: chi entra col codice invito sceglie la sua squadra e trova già rosa, classifica e calendario.</p>
       ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b><div class="muted" style="font-size:13px">${Object.entries(lega.attesa).map(([k,v])=>`${esc(k)} (${(v.rosa||[]).length})`).join(' · ')}</div><button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
       <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
-      <label style="color:var(--txt);display:block;margin:4px 0 6px"><input type="checkbox" id="tr_libere"> Crea come <b>squadre libere</b> (ogni giocatore con il prezzo)</label>
+      <label style="color:var(--txt);display:block;margin:4px 0 6px"><input type="checkbox" id="tr_libere" checked> Crea come <b>squadre libere</b> (ogni giocatore con il prezzo)</label>
       <label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="tr_svuota"> Svuota prima le rose già presenti in questa lega</label>
       <button class="pri" onclick="impRoseLega(${lega.id})">Importa rose</button><div id="tr_ris" style="margin-top:10px"></div>
       <h3 style="margin-top:18px">2. Classifica di partenza</h3><p class="muted" style="font-size:13px">I numeri che ogni squadra ha già nell'altra app. Le giornate giocate qui si sommano a questi.<br><b>Pt</b> = punti in classifica · <b>FP</b> = fantapunti totali · V N P · GF GS = gol fatti e subiti</p>
@@ -1517,7 +1523,7 @@ async function pSerieA(){
 let ad={tab:'redazione',g:null,vsq:null};
 async function pAdmin(){
   if(profilo.ruolo!=='admin') return vai('home');
-  const T=[['redazione','📝 Redazione'],['utenti','Utenti'],['funzioni','Funzioni'],['dati','📅 Calendario'],['giornate','Giornate'],['voti','Voti'],['giocatori','Giocatori'],['articoli','Articoli']];
+  const T=[['redazione','📝 Redazione'],['utenti','Utenti'],['funzioni','Funzioni'],['dati','📅 Calendario'],['importa','🚚 Importa lega'],['giornate','Giornate'],['voti','Voti'],['giocatori','Giocatori'],['articoli','Articoli']];
   let h=`<h2>Admin</h2><div class="tabs">${T.map(([k,v])=>`<button class="${ad.tab===k?'on':''}" onclick="ad.tab='${k}';pAdmin()">${v}</button>`).join('')}</div>`;
 
   if(ad.tab==='redazione'){ if(prb) return probRender(); if(red) return redRender(); app.innerHTML=await redLista(h); return; }
@@ -1552,6 +1558,16 @@ async function pAdmin(){
         <button class="del" onclick="rifiuta('${u.id}')">${u.approvato?'Elimina':'Rifiuta'}</button></div>`}</div>`).join('');
   }
 
+  if(ad.tab==='importa'){
+    const tutte=chk(await db.from('leghe').select('id,nome,codice_invito,attesa').eq('creatore_id',utente.id).order('creata_il',{ascending:false}));
+    h+=`<div class="card" style="border-color:var(--gold)"><h3>🚚 Crea una lega importata</h3><p class="muted" style="font-size:13px">Per una lega già iniziata su un'altra app. La crei tu, poi carichi rose, classifica e calendario come <b>squadre libere</b>: ogni partecipante entra col codice invito e sceglie la sua squadra. Gli utenti normali non possono importare.</p>
+      <label>Nome lega</label><input id="il_nome" placeholder="es. FantaMicizia K27">
+      <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>⚽ Punti 1° gol</label><input id="il_sg" type="number" step="0.5" value="66"></div><div style="flex:1"><label>Ogni gol in più</label><input id="il_pg" type="number" step="0.5" value="4"></div></div>
+      <label>Crediti iniziali</label><input id="il_cred" type="number" value="500">
+      <label style="color:var(--txt);display:block;margin:6px 0 12px"><input type="checkbox" id="il_gioco"> Partecipo anch'io con una squadra (la prenderò dall'elenco col codice)</label>
+      <button class="pri" onclick="creaImportata()">Crea lega importata</button></div>
+      ${tutte.length?`<div class="card"><h3>Le leghe create da te</h3>${tutte.map(l=>`<div class="row between" style="padding:6px 0"><span><b>${esc(l.nome)}</b> · <span style="color:var(--gold)">${esc(l.codice_invito||'')}</span>${Object.keys(l.attesa||{}).length?` · ⏳ ${Object.keys(l.attesa).length} libere`:''}</span><button onclick="fz.lega=${l.id};fz.tab='gestione';vai('fanta')">Apri</button></div>`).join('')}</div>`:''}`;
+  }
   if(ad.tab==='dati'){
     const {count:np}=await db.from('partite_sa').select('*',{count:'exact',head:true});
     h+=`    <div class="card" style="border-color:var(--gold)"><h3>📅 Importa calendario da testo</h3><p class="muted">${np||0} partite caricate. Mandami il calendario e ti preparo le righe.</p>
