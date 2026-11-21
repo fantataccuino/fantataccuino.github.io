@@ -1389,7 +1389,7 @@ async function pSng(){
   const {data:pr}=await db.from('profili').select('gettoni,premium_fino,prova').eq('id',utente.id).single();if(pr)Object.assign(profilo,pr);aggSaldo();
   if(sg.tav) return tavoloView();
   const PROVA=!premOk();
-  {let v=true;try{v=!!localStorage.getItem('gsng_'+utente.id)}catch(e){}if(!v&&!sg.tav)setTimeout(guidaSngOverlay,300)}
+  {let v=true;try{v=!!localStorage.getItem('gsng2_'+utente.id)}catch(e){}if(!v&&!sg.tav)setTimeout(guidaSngOverlay,300)}
   let h=`<h2>⚽ Calcetto</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
     <div class="card" style="margin:0;border-color:#5dff7a88"><small class="muted">🎁 Palloni gratis</small><div style="font:800 32px var(--cond);color:var(--green)">${profilo.prova??0}</div><small class="muted">Per i tavoli 🎁 Gratis. Le vincite non vengono accreditate.</small></div>
     <div class="card" style="margin:0;border-color:#ffd44788"><small class="muted"><span class="pd"></span> Palloni Premium</small><div style="font:800 32px var(--cond);color:var(--gold)">${profilo.gettoni??0}</div><small class="muted">Per i tavoli normali, riservati ai 💎 Premium.</small></div></div>
@@ -1400,6 +1400,7 @@ async function pSng(){
     const ids=[...new Set(tav.flatMap(t=>t.partite||[]))];
     const pp=ids.length?chk(await db.from('partite_sa').select('api_id,casa,trasferta,data').in('api_id',ids)):[];
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:''}).join(', ');
+    h+=`<button style="width:100%;margin-bottom:10px" onclick="guidaSngOverlay()">❓ Come si gioca al Calcetto</button>`;
     if(profilo.ruolo==='admin') h+=`<button class="pri" style="width:100%;margin-bottom:12px" onclick="sg.tab='gestisci';pSng()">🛠️ Gestisci tavoli (admin)</button>`;
     h+=tav.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
       return `<div class="card" ${t.gratis?'style="border-color:#5dff7a88"':''}><div class="row between"><b>${t.gratis?'🎁 ':''}${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</b><span class="badge">${t.gratis?'GRATIS · ':''}G${t.giornata}</span></div>
@@ -1475,16 +1476,18 @@ async function pSng(){
     • <b>Tavoli normali</b>: si giocano con i palloni Premium, riservati ai 💎 Premium e assegnati dall'amministratore. I palloni non sono soldi e non si convertono in premi reali.</p></div>`;
   app.innerHTML=h;
 }
-function guidaCalcetto(){const P=[['🎟️','Scegli un tavolo','Nella <b>Lobby</b> trovi i tavoli aperti: ognuno vale per una o più partite di Serie A. Con i palloni gratis entri nei tavoli <b>🎁 Gratis</b>.'],
-  ['🃏','Draft a carte','Quando il tavolo è pieno parte il draft: a turno scegli 6 giocatori tra i titolari probabili. Chi prende un giocatore lo toglie agli altri. Hai 60 secondi a scelta. Il draft parte 30 minuti prima della partita: se non puoi esserci, prepara la tua <b>squadra di riserva ⭐</b> (un giocatore per giro) e il sito sceglie per te.'],
-  ['⚽','Si gioca in campo','I tuoi 5 titolari fanno punti con i loro fantavoti delle partite vere. La riserva entra se un titolare non gioca.'],
-  ['🏆','Vince chi fa più punti','Circa 3 ore dopo il calcio d\'inizio, quando i voti sono definitivi, chi ha più punti si prende il montepremi in palloni. Nei tavoli da 6 e 8 premiati i primi due.']];
+function guidaCalcetto(){const P=[['🎟️','Entra in un tavolo','Nella <b>Lobby</b> trovi i tavoli: ognuno vale per una o più partite di Serie A. Con i palloni gratis entri nei tavoli <b>🎁 Gratis</b>.'],
+  ['⭐','Prepara la tua squadra di riserva','Appena entri, scegli <b>un giocatore per ogni giro</b> (portiere, difensore, centrocampista, attaccante, jolly, riserva). Ti serve solo se al tuo turno non ci sei: il sito prende lui per te.'],
+  ['🕒','Quando parte il draft','Il draft parte <b>30 minuti prima della partita</b>. Se siete tutti online e premete <b>⚡ Pronto</b>, parte subito. Attenzione: Pronto è un impegno, se poi esci il draft va avanti lo stesso.'],
+  ['🃏','Il draft a turni','A turno ognuno sceglie una carta tra i titolari probabili: chi la prende la toglie agli altri. Hai <b>60 secondi</b>: quando tocca a te il telefono vibra e la barra in alto si illumina. L\'ordine si inverte a ogni giro (serpentone).'],
+  ['🤖','Se non scegli in tempo','Il sito prende il giocatore della tua ⭐ squadra di riserva per quel giro. Se è già stato preso, prende il <b>migliore ancora libero</b>: conta metà la forma delle ultime 5 giornate e metà la quotazione.'],
+  ['🏆','Risultato dopo circa 3 ore','I tuoi 5 titolari fanno punti con i voti delle partite vere (la riserva entra se uno non gioca). I voti diventano definitivi circa <b>3 ore dopo il calcio d\'inizio</b>: allora il tavolo si chiude e chi ha più punti vince il montepremi.']];
   return `<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">⚽ Come funziona il Calcetto</h3><p class="muted" style="font-size:14px">Un mini-fanta veloce, partita per partita, contro altri utenti.</p>
   ${P.map((x,i)=>`<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:44px;height:44px;border-radius:22px;background:var(--gold);color:#1a0f3d;display:flex;align-items:center;justify-content:center;font-size:22px">${x[0]}</div><div><b>${i+1}. ${x[1]}</b><div class="muted" style="font-size:14px;margin-top:2px">${x[2]}</div></div></div>`).join('')}
   <p class="muted" style="font-size:13px;margin-bottom:0">🎁 Palloni gratis = solo per provare (le vincite non si accumulano). <span class="pd"></span> Palloni Premium = tavoli normali, per i 💎 Premium.</p></div>`}
 function guidaSngOverlay(){if(document.getElementById('gsng'))return;const o=document.createElement('div');o.id='gsng';
   o.style.cssText='position:fixed;inset:0;z-index:101;background:#0b0628f0;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
-  o.innerHTML=`<div style="max-width:460px;width:100%;margin:auto">${guidaCalcetto()}<button class="pri" style="width:100%" onclick="try{localStorage.setItem('gsng_'+utente.id,'1')}catch(e){};document.getElementById('gsng').remove()">Ho capito, giochiamo!</button></div>`;
+  o.innerHTML=`<div style="max-width:460px;width:100%;margin:auto">${guidaCalcetto()}<button class="pri" style="width:100%" onclick="try{localStorage.setItem('gsng2_'+utente.id,'1')}catch(e){};document.getElementById('gsng').remove()">Ho capito, giochiamo!</button></div>`;
   document.body.appendChild(o)}
 async function salvaTavolo(id,vuoto){
   const cp=[...document.querySelectorAll('.mp:checked')];
@@ -1543,7 +1546,7 @@ async function tavoloView(){
   sg.squadre=[...new Set(pt.flatMap(p=>[p.casa,p.trasferta]))];
   const sec=t.scadenza_scelta?Math.max(0,Math.round((new Date(t.scadenza_scelta)-new Date())/1000)):0;
   const mie=sc.filter(s=>s.utente_id===utente.id);
-  let h=`<button onclick="sg.tav=null;pSng()">← Calcetto</button><h2 style="margin-top:12px">${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</h2>
+  let h=`<div class="row between"><button onclick="sg.tav=null;pSng()">← Calcetto</button><button onclick="guidaSngOverlay()">❓ Come si gioca</button></div><h2 style="margin-top:12px">${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</h2>
   ${errAv?`<p style="color:var(--red)">❌ ${esc(errAv.message)}</p>`:''}<p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso <span class="pd"></span> ${t.ingresso} · Montepremi <span class="pd"></span> ${montepremi(t)}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
   if(isc.find(i=>i.utente_id===utente.id)?.prova) h+=`<div class="card" style="border-color:var(--gold)"><p style="margin:0">🎁 <b>Partita di prova</b>: giochi con i palloni dorati di prova e le eventuali vincite non vengono accreditate.</p></div>`;
   const onl=i=>i.visto_il&&(new Date()-new Date(i.visto_il))<20000,ioP=isc.find(i=>i.utente_id===utente.id)?.pronto,pieno=isc.length>=t.posti;
