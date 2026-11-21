@@ -1256,7 +1256,7 @@ async function pSng(){
     <p class="muted" style="font-size:13px;margin:10px 2px 14px">I palloni gratis: 100 all'iscrizione più quelli dei 🎁 pacchi giornalieri. I palloni Premium li assegna l'amministratore. <a href="#" onclick="mostraBenvenuto();return false">Come funzionano?</a></p>`;
   h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole'],...(profilo.ruolo==='admin'?[['gestisci','🛠️ Gestisci tavoli']]:[])].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
   if(sg.tab==='lobby'){
-    const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso'));
+    const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso')).filter(t=>!t.chiusura||new Date(t.chiusura)>new Date()||t.sng_iscritti.some(x=>x.utente_id===utente.id));
     const ids=[...new Set(tav.flatMap(t=>t.partite||[]))];
     const pp=ids.length?chk(await db.from('partite_sa').select('api_id,casa,trasferta,data').in('api_id',ids)):[];
     const desc=t=>(t.partite||[]).map(id=>{const p=pp.find(x=>x.api_id===id);return p?`${esc(p.casa)}-${esc(p.trasferta)}`:''}).join(', ');
@@ -1325,7 +1325,8 @@ async function pSng(){
     • <b>Una volta iscritto non puoi più uscire</b>, come nel Sit & Go del poker.<br>
     • Il draft ha 6 giri: 🧤 Portiere, 🛡️ Difensore, ⚙️ Centrocampista, ⚡ Attaccante, 🃏 Jolly (D, C o A) e 🪑 Riserva (D, C o A). Le carte sono i <b>titolari probabili</b>, uguali per tutti: chi prende un giocatore lo toglie agli altri.<br>
     • <b>Serpentone</b>: chi sceglie per primo in un giro sceglie per ultimo in quello dopo.<br>
-    • Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
+    • Il draft parte <b>30 minuti prima della prima partita</b>, anche se il tavolo si riempie prima. Le iscrizioni chiudono al calcio d'inizio.<br>
+    • Hai <b>60 secondi</b> per scegliere, poi il sito sceglie per te: il primo disponibile della tua <b>lista ⭐</b>, se l'hai preparata, altrimenti il migliore disponibile. Al calcio d'inizio della prima partita il draft si chiude e le scelte mancanti le fa il sito.<br>
     • Punti = somma dei fantavoti dei 5 titolari (il 🃏 Jolly è titolare). La 🪑 Riserva entra una volta sola, al posto del primo titolare di movimento che prende s.v. Il portiere non ha riserva: se prende s.v. vale 0.<br>
     • Il banco trattiene il <b>${+FEAT.rake_calcetto||0}%</b> dei palloni in gioco, il resto è il montepremi. Tavoli da 2 e 4: tutto al vincitore. Tavoli da 6 e 8: 70% al primo e 30% al secondo.<br>
     • Se il tavolo non si riempie entro il calcio d'inizio viene annullato e i palloni tornano indietro.<br>
@@ -1334,7 +1335,7 @@ async function pSng(){
   app.innerHTML=h;
 }
 function guidaCalcetto(){const P=[['🎟️','Scegli un tavolo','Nella <b>Lobby</b> trovi i tavoli aperti: ognuno vale per una o più partite di Serie A. Con i palloni gratis entri nei tavoli <b>🎁 Gratis</b>.'],
-  ['🃏','Draft a carte','Quando il tavolo è pieno parte il draft: a turno scegli 6 giocatori tra i titolari probabili. Chi prende un giocatore lo toglie agli altri. Hai 60 secondi a scelta.'],
+  ['🃏','Draft a carte','Quando il tavolo è pieno parte il draft: a turno scegli 6 giocatori tra i titolari probabili. Chi prende un giocatore lo toglie agli altri. Hai 60 secondi a scelta. Il draft parte 30 minuti prima della partita: se non puoi esserci, prepara la tua <b>lista ⭐</b> e il sito sceglie per te.'],
   ['⚽','Si gioca in campo','I tuoi 5 titolari fanno punti con i loro fantavoti delle partite vere. La riserva entra se un titolare non gioca.'],
   ['🏆','Vince chi fa più punti','A fine partite chi ha più punti si prende il montepremi in palloni. Nei tavoli da 6 e 8 premiati i primi due.']];
   return `<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">⚽ Come funziona il Calcetto</h3><p class="muted" style="font-size:14px">Un mini-fanta veloce, partita per partita, contro altri utenti.</p>
@@ -1402,7 +1403,23 @@ async function tavoloView(){
   let h=`<button onclick="sg.tav=null;pSng()">← Calcetto</button><h2 style="margin-top:12px">${esc(t.nome||'Calcetto')} · ${t.posti} giocatori</h2>
   ${errAv?`<p style="color:var(--red)">❌ ${esc(errAv.message)}</p>`:''}<p class="muted">⚽ ${pt.map(p=>`${esc(p.casa)}-${esc(p.trasferta)}${p.stato_red==='pronta'?' ✅':''}`).join(', ')}<br>Ingresso <span class="pd"></span> ${t.ingresso} · Montepremi <span class="pd"></span> ${montepremi(t)}${t.chiusura?' · Chiude '+fmt(t.chiusura):''}</p>`;
   if(isc.find(i=>i.utente_id===utente.id)?.prova) h+=`<div class="card" style="border-color:var(--gold)"><p style="margin:0">🎁 <b>Partita di prova</b>: giochi con i palloni dorati di prova e le eventuali vincite non vengono accreditate.</p></div>`;
-  if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>• ${un(i.profili)}</div>`).join('')}</div>`;
+  if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>• ${un(i.profili)}</div>`).join('')}
+    ${t.inizio_draft?`<p class="muted" style="margin-top:8px">🕒 Il draft parte <b>${fmt(t.inizio_draft)}</b> (30 minuti prima della prima partita), anche se il tavolo si riempie prima. Le iscrizioni chiudono al calcio d'inizio.</p>`:''}</div>`;
+  const ioIsc=isc.some(i=>i.utente_id===utente.id);
+  if(ioIsc&&['aperto','draft'].includes(t.stato)){
+    const prob0=t.partite?.length?chk(await db.from('probabili').select('giocatore_id').in('partita_id',t.partite)).map(x=>x.giocatore_id):[];
+    const pool0=prob0.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione').in('id',prob0)):chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione').in('squadra',sg.squadre).eq('attivo',true));
+    const pref=chk(await db.from('sng_pref').select('giocatore_id,ordine').eq('tavolo_id',t.id).eq('utente_id',utente.id).order('ordine'));
+    const PS=pref.map(x=>pool0.find(g=>g.id===x.giocatore_id)).filter(Boolean);const presi0=new Set(sc.map(x=>x.giocatore_id));
+    SPOOL={t:t.id,ids:pref.map(x=>x.giocatore_id)};
+    h+=`<div class="card" style="border-color:var(--gold)"><details ${t.stato==='aperto'?'open':''}><summary style="color:var(--txt);font-weight:800">⭐ La tua lista preferiti (${PS.length})</summary>
+      <p class="muted" style="font-size:13px">Non sarai online durante il draft? Metti in ordine i giocatori che vuoi: quando tocca a te e non scegli, il sito prende <b>il primo disponibile della tua lista</b> per quel ruolo. Senza lista sceglie il migliore disponibile.</p>
+      ${PS.length?PS.map((g,i)=>`<div class="row between" style="padding:4px 0;border-bottom:1px solid var(--line);${presi0.has(g.id)?'opacity:.4':''}"><span><small class="muted">${i+1}.</small> ${ruolo(g.ruolo)}${esc(g.nome)} <small class="muted">${esc(g.squadra)}</small></span><span><button onclick="prefMuovi(${g.id},-1)" ${i?'':'disabled'}>▲</button> <button onclick="prefMuovi(${g.id},1)" ${i<PS.length-1?'':'disabled'}>▼</button> <button class="del" onclick="prefTog(${g.id})">✕</button></span></div>`).join(''):'<p class="muted">Lista vuota.</p>'}
+      <h3 style="margin-top:12px">Aggiungi giocatori</h3>
+      <div class="fmods">${['P','D','C','A'].map(k=>`<button class="ffil ${SFIL===k?'on':''}" onclick="SFIL='${k}';tavoloView()">${k}</button>`).join('')}</div>
+      ${pool0.filter(g=>g.ruolo===SFIL).sort((a,b)=>b.quotazione-a.quotazione).map(g=>{const on=SPOOL.ids.includes(g.id);return `<div class="row between" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${ruolo(g.ruolo)}${esc(g.nome)} <small class="muted">${esc(g.squadra)} · Q ${g.quotazione}</small></span><button ${on?'class="ok"':''} onclick="prefTog(${g.id})">${on?'⭐':'☆'}</button></div>`}).join('')}
+    </details></div>`;
+  }
   if(t.stato==='annullato') h+=`<div class="card"><p>↩️ Tavolo annullato: non si è riempito prima del calcio d'inizio. I palloni dorati sono stati restituiti.</p></div>`;
   if(t.stato==='draft'){
     const mio=turno===utente.id,m=(t.ordine||[]).length||1,rd=Math.floor(sc.length/m);
@@ -1446,7 +1463,11 @@ async function tavoloView(){
     sngTimer=setTimeout(()=>{clearInterval(sngIv);if(pagina==='sng'&&sg.tav===t.id)tavoloView()},turno===utente.id?Math.min(15000,(sec+1)*1000):4000);
   } else if(t.stato==='aperto') sngTimer=setTimeout(()=>{if(pagina==='sng'&&sg.tav===t.id)tavoloView()},6000);
 }
-let tSg;
+let tSg,SPOOL={t:null,ids:[]},SFIL='P';
+async function prefSalva(){chk(await db.from('sng_pref').delete().eq('tavolo_id',SPOOL.t).eq('utente_id',utente.id));
+  if(SPOOL.ids.length)chk(await db.from('sng_pref').insert(SPOOL.ids.map((g,i)=>({tavolo_id:SPOOL.t,utente_id:utente.id,giocatore_id:g,ordine:i+1}))));tavoloView()}
+function prefTog(id){const i=SPOOL.ids.indexOf(id);if(i>=0)SPOOL.ids.splice(i,1);else SPOOL.ids.push(id);prefSalva()}
+function prefMuovi(id,d){const i=SPOOL.ids.indexOf(id),j=i+d;if(i<0||j<0||j>=SPOOL.ids.length)return;[SPOOL.ids[i],SPOOL.ids[j]]=[SPOOL.ids[j],SPOOL.ids[i]];prefSalva()}
 function cercaSng(){clearTimeout(tSg);tSg=setTimeout(async()=>{
   const q=val('sg_q'),b=document.getElementById('sg_r');if(q.length<2){b.innerHTML='';return}
   const gg=chk(await db.rpc('cerca_giocatori',{p_q:q})).filter(g=>!sg.squadre||sg.squadre.includes(g.squadra));
