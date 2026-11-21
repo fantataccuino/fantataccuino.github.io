@@ -385,7 +385,7 @@ async function applicaPacchetto(lid,P){
   if(P.calendario&&P.calendario.giornate&&P.calendario.giornate.length){
     const C=P.calendario,da=+C.da||1,a=+C.a||38,B=C.giornate,ok=n=>memDi(n)||at[n],subito=[],dopo=[];
     const nomiCal=[...new Set(B.flat(2))].filter(n=>!ok(n));if(nomiCal.length)rep.push('Calendario: squadre sconosciute '+nomiCal.join(', '));
-    for(let g=da;g<=a;g++){const k=g-da,ciclo=Math.floor(k/B.length);
+    for(let g=da;g<=a;g++){const k=g-da+(+C.offset||0),ciclo=Math.floor(k/B.length);
       B[k%B.length].forEach(([x,y])=>{const c=ciclo%2?y:x,t=ciclo%2?x:y,mc=memDi(c),mt=memDi(t);
         if(mc&&mt)subito.push({lega_id:lid,giornata:g,casa:mc.utente_id,trasferta:mt.utente_id});else if(ok(c)&&ok(t))dopo.push([g,mc?mc.nome_squadra:c,mt?mt.nome_squadra:t])})}
     chk(await db.from('incontri').delete().eq('lega_id',lid));if(subito.length)chk(await db.from('incontri').insert(subito));
