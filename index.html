@@ -339,6 +339,7 @@ async function entraLega(){
   toast('Sei entrato nella lega!');fz.lega=id;pFanta();
 }
 
+function leggiTxt(inp,id){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const t=document.getElementById(id);t.value=r.result;toast(`File caricato: ${r.result.split('\n').filter(x=>x.trim()).length} righe`)};r.readAsText(f,'utf-8')}
 async function creaImportata(){
   const nome=val('il_nome');if(!nome)return toast('Scrivi il nome della lega',true);
   const l=chk(await db.from('leghe').insert({nome,crediti:+val('il_cred')||500,modalita:'asta',carte:false,bonus:{},soglia_gol:+val('il_sg')||66,passo_gol:+val('il_pg')||6}).select().single());
@@ -715,6 +716,7 @@ async function legaView(){
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Due modi: fai entrare prima tutti con gli stessi nomi squadra, <b>oppure</b> crea le <b>squadre libere</b>: chi entra col codice invito sceglie la sua squadra e trova già rosa, classifica e calendario.</p>
       ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b>${Object.entries(lega.attesa).map(([k,v])=>`<details><summary style="color:var(--txt)">${esc(k)} (${(v.rosa||[]).length})</summary><div class="muted" style="font-size:13px">${(v.rosa||[]).map(r=>GA[r[0]]).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome)).map(g=>`${g.ruolo} ${esc(g.nome)} <small>(${esc(g.squadra)})</small>`).join('<br>')}</div></details>`).join('')}<button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'tr_rose')"></label>
       <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
       <label style="color:var(--txt);display:block;margin:4px 0 6px"><input type="checkbox" id="tr_libere" checked> Crea come <b>squadre libere</b> (ogni giocatore con il prezzo)</label>
       <label style="color:var(--txt);display:block;margin:0 0 10px"><input type="checkbox" id="tr_svuota"> Svuota prima le rose già presenti in questa lega</label>
@@ -724,6 +726,7 @@ async function legaView(){
       ${[...membri.map(m=>({u:m.utente_id,n:m.nome_squadra,z:PZ[m.utente_id]||{}})),...Object.entries(lega.attesa||{}).map(([k,v])=>({u:'n:'+k,n:k+' ⏳',z:v.pz||{}}))].map(m=>{const z=m.z;return `<tr><td style="white-space:nowrap"><b>${esc(m.n)}</b></td>${['punti','fp','v','n','p','gf','gs'].map(k=>`<td><input class="pz" data-u="${esc(m.u)}" data-k="${k}" type="number" step="${k==='fp'?'0.5':'1'}" value="${z[k]??''}" style="width:${k==='fp'?70:50}px;margin:0;padding:6px;text-align:center"></td>`).join('')}</tr>`}).join('')}</table></div>
       <button class="pri" style="margin-top:10px" onclick="salvaPartenza(${lega.id})">Salva classifica di partenza</button>
       <h3 style="margin-top:18px">3. Calendario dell'altra app</h3><p class="muted" style="font-size:13px">Incolla le giornate del calendario originale: una riga <b>Giornata 1</b>, sotto le partite <b>Squadra A - Squadra B</b>, poi Giornata 2 e così via. Basta il primo giro (es. le giornate 1-11 con 12 squadre): quando finiscono, si ripetono in ordine.</p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'ci_txt')"></label>
       <textarea id="ci_txt" rows="7" placeholder="Giornata 1&#10;Squadra A - Squadra B&#10;Squadra C - Squadra D"></textarea>
       <div class="row" style="gap:8px"><div style="flex:1"><label>La 1ª giornata incollata va sulla giornata di Serie A</label><input id="ci_da" type="number" min="1" max="38" value="${lega.giornata_da||1}"></div><div style="flex:1"><label>Fino alla giornata di Serie A</label><input id="ci_a" type="number" min="1" max="38" value="38"></div></div>
       <button class="pri" onclick="leggiCalImp(${lega.id})">Leggi calendario</button><div id="ci_map" style="margin-top:10px"></div></details></div>`;
@@ -1621,6 +1624,7 @@ async function pAdmin(){
   if(ad.tab==='giocatori'){
     h+=`<div class="card" style="border-color:var(--gold)"><h3>📋 Importa listone da testo</h3>
       <p class="muted">Una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b> (ruolo P, D, C o A)<br>Es: <i>Federico Dimarco;D;Inter;16</i><br>Se il giocatore esiste già (stesso nome e squadra) aggiorna ruolo e quotazione, altrimenti lo crea.</p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'lst_txt')"></label>
       <textarea id="lst_txt" rows="7"></textarea>
       <label style="color:var(--txt);display:block;margin:8px 0"><input type="checkbox" id="lst_nuova"> Nuova stagione: prima metti fuori listone tutti i giocatori attuali (restano nello storico)</label>
       <button class="pri" onclick="impListTesto()">Importa listone</button><p id="lst_msg" class="muted"></p></div>
