@@ -1423,7 +1423,7 @@ async function tavoloView(){
   if(t.stato==='aperto') h+=`<div class="card"><p>⏳ In attesa di giocatori: <b>${isc.length}/${t.posti}</b></p>${isc.map(i=>`<div>${onl(i)?'🟢':'⚪'} ${un(i.profili)}${i.pronto?' <span style="color:var(--green)">✅ pronto</span>':''}</div>`).join('')}
     ${pieno&&isc.some(i=>i.utente_id===utente.id)?`<p class="muted" style="margin-top:8px;font-size:13px">⚡ Siete tutti qui? Quando <b>tutti</b> hanno premuto <b>Pronto</b> il draft parte subito, senza aspettare l'orario. Attenzione: premere Pronto è un impegno. Se poi esci, il draft va avanti lo stesso e il sito sceglie per te dalla tua lista ⭐.</p>
       <button class="${ioP?'del':'ok'}" style="width:100%" onclick="sngPronto(${t.id},${!ioP})">${ioP?'Annulla: non sono pronto':'⚡ Sono pronto, iniziamo adesso'}</button>`:''}
-    ${t.inizio_draft?`<p class="muted" style="margin-top:8px">🕒 Il draft parte <b>${fmt(t.inizio_draft)}</b> (30 minuti prima della prima partita), anche se il tavolo si riempie prima. Le iscrizioni chiudono al calcio d'inizio.</p>`:''}</div>`;
+    ${t.inizio_draft?`<p class="muted" style="margin-top:8px">🕒 Appena il tavolo è pieno si apre il draft: chi è online può scegliere subito quando tocca a lui. Il tempo di 60 secondi per scelta però parte solo <b>${fmt(t.inizio_draft)}</b> (30 minuti prima della partita), oppure subito se tutti premono ⚡ Pronto. Le iscrizioni chiudono al calcio d'inizio.</p>`:''}</div>`;
   const ioIsc=isc.some(i=>i.utente_id===utente.id);
   if(ioIsc&&['aperto','draft'].includes(t.stato)){
     const prob0=t.partite?.length?chk(await db.from('probabili').select('giocatore_id').in('partita_id',t.partite)).map(x=>x.giocatore_id):[];
@@ -1441,10 +1441,13 @@ async function tavoloView(){
   }
   if(t.stato==='annullato') h+=`<div class="card"><p>↩️ Tavolo annullato: non si è riempito prima del calcio d'inizio. I palloni dorati sono stati restituiti.</p></div>`;
   if(t.stato==='draft'){
-    const mio=turno===utente.id,m=(t.ordine||[]).length||1,rd=Math.floor(sc.length/m);
-    h+=`<div class="card" style="border-color:${mio?'var(--gold)':'var(--line)'}"><div class="row between"><b>Giro ${rd+1} di 6 · ${GIRI[rd]||''}</b><span>⏱️ <b id="cd" style="font-size:20px;color:var(--gold)">${sec}</b>s</span></div>
+    const mio=turno===utente.id,m=(t.ordine||[]).length||1,rd=Math.floor(sc.length/m),attesa=t.inizio_draft&&new Date(t.inizio_draft)>new Date()&&!isc.every(i=>i.pronto);
+    h+=`<div class="card" style="border-color:${mio?'var(--gold)':'var(--line)'}"><div class="row between"><b>Giro ${rd+1} di 6 · ${GIRI[rd]||''}</b>${attesa?`<span class="muted" style="font-size:13px">⏸ timer dalle ${new Date(t.inizio_draft).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</span>`:`<span>⏱️ <b id="cd" style="font-size:20px;color:var(--gold)">${sec}</b>s</span>`}</div>
       <h3 style="margin:8px 0">${mio?'🔥 Tocca a te: scegli una carta!':'Tocca a '+nome(turno)+'…'}</h3>
-      <p class="muted" style="font-size:12px">Ordine del giro: ${(t.ordine||[]).map(nome).join(' → ')} (al giro dopo si inverte)</p></div>`;
+      <p class="muted" style="font-size:12px">Ordine del giro: ${(t.ordine||[]).map(nome).join(' → ')} (al giro dopo si inverte)</p>
+      ${attesa?`<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">${isc.map(i=>`<span style="margin-right:12px">${onl(i)?'🟢':'⚪'} ${un(i.profili)}${i.pronto?' ✅':''}</span>`).join('')}
+        <p class="muted" style="font-size:13px;margin:6px 0">Chi è online può già scegliere. Se tutti premono ⚡ Pronto parte il tempo di 60 secondi; altrimenti parte alle ${new Date(t.inizio_draft).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}. Premere Pronto è un impegno: se poi esci, il sito sceglie per te dalla lista ⭐.</p>
+        ${isc.some(i=>i.utente_id===utente.id)?`<button class="${ioP?'del':'ok'}" style="width:100%" onclick="sngPronto(${t.id},${!ioP})">${ioP?'Annulla: non sono pronto':'⚡ Sono pronto'}</button>`:''}</div>`:''}</div>`;
     const RU=[['P'],['D'],['C'],['A'],['D','C','A'],['D','C','A']][rd]||[];
     const prob=t.partite?.length?chk(await db.from('probabili').select('giocatore_id').in('partita_id',t.partite)).map(x=>x.giocatore_id):[];
     let pool=prob.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto,quotazione').in('id',prob)):chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto,quotazione').in('squadra',sg.squadre).eq('attivo',true));
@@ -1480,6 +1483,7 @@ async function tavoloView(){
     let s=sec;const tick=()=>{const el=document.getElementById('cd');if(!el)return;s=Math.max(0,s-1);el.textContent=s};
     sngIv=setInterval(tick,1000);
     sngTimer=setTimeout(()=>{clearInterval(sngIv);if(pagina==='sng'&&sg.tav===t.id)tavoloView()},turno===utente.id?Math.min(15000,(sec+1)*1000):4000);
+    if(sec>120){clearTimeout(sngTimer);sngTimer=setTimeout(()=>{clearInterval(sngIv);if(pagina==='sng'&&sg.tav===t.id&&!document.querySelector('#dr_q:focus'))tavoloView()},5000)}
   } else if(t.stato==='aperto') sngTimer=setTimeout(()=>{if(pagina==='sng'&&sg.tav===t.id)tavoloView()},5000);
 }
 async function sngPronto(id,v){chk(await db.rpc('sng_presenza',{p_tavolo:id,p_pronto:v}));tavoloView()}
