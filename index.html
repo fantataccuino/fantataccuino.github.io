@@ -253,6 +253,7 @@ async function caricaLeghe(){
   let s=null;try{s=+localStorage.getItem('lega_att_'+utente.id)}catch(e){}
   LG=(LEGHE.find(l=>l.id===s)||LEGHE[0]||{}).id||null}
 function setLG(id){LG=+id;try{localStorage.setItem('lega_att_'+utente.id,LG)}catch(e){};if(pagina==='fanta'){fz.lega=LG;legaView()}else vai(pagina)}
+let FCOP=[];
 function vaiLega(tab){if(!LG)return vai('dash');fz.lega=LG;fz.tab=tab;vai('fanta')}
 function selLega(){if(!LEGHE.length)return '';return `<div class="lsel"><select onchange="setLG(this.value)">${LEGHE.map(l=>`<option value="${l.id}" ${l.id===LG?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div>`}
 function navK(){if(pagina==='fanta'&&fz.lega===LG&&['rosa','giornate','classifica'].includes(fz.tab))return fz.tab;if(pagina==='dash')return 'dash';if(pagina==='fanta'&&fz.lega===LG&&['formazione','live'].includes(fz.tab))return 'dash';return 'altro'}
@@ -403,6 +404,91 @@ async function torneoIscr(id,q){if(!confirm(`Iscriversi pagando ${q} palloni Pre
 async function salvaRosaT(id){if(TT.sel.length!==16)return toast('Servono 16 giocatori',true);const r=chk(await db.rpc('torneo_rosa',{p_t:id,p_ids:TT.sel}));toast('Rosa salvata!'+(r<3?` Cambi rimasti: ${r}`:''));TT.sel=null;TT.g=null;torneoView()}
 async function salvaFormT(id,g){chk(await db.from('tornei_form').upsert({torneo_id:id,utente_id:utente.id,giornata:g,titolari:TT.tit,panchina:TT._pan||[],modulo:TT.mod},{onConflict:'torneo_id,utente_id,giornata'}));toast('Formazione salvata!');TT.salvata=true;torneoView()}
 
+// ---------- coppa ----------
+const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
+function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
+  for(let r=0;r<n-1;r++){const p=[];for(let i=0;i<n/2;i++){const a=t[i],b=t[n-1-i];if(a&&b)p.push(r%2?[b,a]:[a,b])}R.push(p);t.splice(1,0,t.pop())}
+  return ar?[...R,...R.map(p=>p.map(([a,b])=>[b,a]))]:R}
+function seedOrd(n){let o=[1];while(o.length<n){const m=o.length*2;o=o.flatMap(x=>[x,m+1-x])}return o}
+function coppaCalc(C,ris,pub,lega){const K=C.cfg,done=g=>pub.includes(g);
+  const gir=K.gironi.map((ids,gi)=>{const T={};ids.forEach(u=>T[u]={u,g:0,v:0,n:0,p:0,gf:0,gs:0,pu:0,fp:0});
+    K.cal.filter(m=>m.gi===gi&&done(m.g)).forEach(m=>{const [a,b,pa,pb]=golMatch({giornata:m.g,casa:m.c,trasferta:m.t},ris,lega);const A=T[m.c],B=T[m.t];if(!A||!B)return;
+      A.g++;B.g++;A.gf+=a;A.gs+=b;B.gf+=b;B.gs+=a;A.fp+=pa;B.fp+=pb;if(a>b){A.v++;B.p++;A.pu+=3}else if(a<b){B.v++;A.p++;B.pu+=3}else{A.n++;B.n++;A.pu++;B.pu++}});
+    return Object.values(T).sort((x,y)=>y.pu-x.pu||(y.gf-y.gs)-(x.gf-x.gs)||y.gf-x.gf||y.fp-x.fp)});
+  const girFine=K.cal.every(m=>done(m.g));
+  const Q=K.gironi.length*K.passano;let teams=null;
+  {const q=[];for(let pos=0;pos<K.passano;pos++){const l=gir.map((t,gi)=>girFine?{...t[pos],gi,pos}:{u:null,pu:0,gf:0,gs:0,fp:0,gi,pos}).sort((x,y)=>y.pu-x.pu||(y.gf-y.gs)-(x.gf-x.gs)||y.gf-x.gf||y.fp-x.fp);q.push(...l)}
+    const o=seedOrd(Q);teams=o.map(s=>q[s-1]);
+    for(let i=0;i+3<teams.length;i+=4){if(teams[i].gi===teams[i+1].gi){const t=teams[i+1];teams[i+1]=teams[i+3];teams[i+3]=t}else if(teams[i+2].gi===teams[i+3].gi){const t=teams[i+3];teams[i+3]=teams[i+1];teams[i+1]=t}}}
+  const lab=(gi,pos)=>`${pos+1}° Girone ${String.fromCharCode(65+gi)}`;
+  const cur0=teams.map((t,i)=>({u:t.u,lab:lab(t.gi,t.pos),seed:t.pos*100+i}));let cur=cur0;
+  const turni=[];
+  K.ko.forEach((gs,r)=>{const pairs=[];for(let i=0;i<cur.length;i+=2){const A=cur[i],B=cur[i+1];const legs=gs.map((g,li)=>{const casa=gs.length===2&&li===0?B:A,tr=casa===A?B:A;
+        if(!A.u||!B.u||!done(g))return {g,casa,tr};const [a,b,pa,pb]=golMatch({giornata:g,casa:casa.u,trasferta:tr.u},ris,lega);return {g,casa,tr,a,b,pa,pb}});
+      let win=null,agg=null;if(A.u&&B.u&&legs.every(l=>l.a!=null)){const s={A:{g:0,p:0},B:{g:0,p:0}};legs.forEach(l=>{const xa=l.casa===A;s.A.g+=xa?l.a:l.b;s.B.g+=xa?l.b:l.a;s.A.p+=xa?l.pa:l.pb;s.B.p+=xa?l.pb:l.pa});
+        agg=s;win=s.A.g!==s.B.g?(s.A.g>s.B.g?A:B):s.A.p!==s.B.p?(s.A.p>s.B.p?A:B):((A.seed??0)<=(B.seed??0)?A:B)}
+      pairs.push({A,B,legs,win,agg,i:i/2})}
+    turni.push({nome:CUPN(pairs.length),pairs});
+    cur=pairs.map(p=>p.win?{...p.win,lab:p.win.lab}:{u:null,lab:`Vincente ${({2:'semifinale',4:'quarto',8:'ottavo',16:'sedicesimo'})[pairs.length]||'turno'} ${p.i+1}`})});
+  const fin=turni[turni.length-1].pairs[0];
+  return {gir,girFine,turni,campione:fin?.win?.u||null}}
+async function coppaTab(lega,membri,pres,nomeSq){let h='';
+  const CP=chk(await db.from('coppe').select('*').eq('lega_id',lega.id).order('id'));
+  if(!CP.find(c=>c.id===fz.cup))fz.cup=CP[0]?.id||0;
+  if(CP.length>1)h+=`<div class="tabs">${CP.map(c=>`<button class="${c.id===fz.cup?'on':''}" onclick="fz.cup=${c.id};legaView()">${esc(c.nome)}</button>`).join('')}</div>`;
+  const C=CP.find(c=>c.id===fz.cup);
+  if(C){const {pub,ris}=await datiLega({...lega,giornata_da:null,giornata_a:null},membri,{coppa:C.id});const R=coppaCalc(C,ris,pub,lega),K=C.cfg;
+    const sq=u=>u?nomeSq(u):'';const res=(x,y)=>x==null?'<span class="muted">–</span>':`<b>${x}–${y}</b>`;
+    if(R.campione)h+=`<div class="card" style="border-color:var(--gold);text-align:center"><div style="font-size:40px">🏆</div><h3 style="margin:4px 0">${sq(R.campione)}</h3><p class="muted" style="margin:0">vince ${esc(C.nome)}</p></div>`;
+    h+=`<div class="card"><h3 style="margin-top:0">🏆 ${esc(C.nome)}</h3><p class="muted" style="font-size:13px;margin:0">${K.gironi.length} gironi ${K.ar?'andata e ritorno':'solo andata'} (G${K.cal[0]?.g}–G${Math.max(...K.cal.map(m=>m.g))}) · passano le prime ${K.passano} · fase finale andata e ritorno, finale secca (G${K.ko[K.ko.length-1][0]})</p></div>`;
+    R.gir.forEach((t,gi)=>{const L=String.fromCharCode(65+gi);
+      h+=`<div class="card"><h3 style="margin-top:0">Girone ${L}</h3><table class="tab" style="width:100%;font-size:13px"><tr><th></th><th style="text-align:left">Squadra</th><th>G</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th><th>Pt</th></tr>
+      ${t.map((x,i)=>`<tr style="${i<K.passano?'background:#1a7f3722':''}"><td>${i+1}</td><td style="text-align:left"><b>${sq(x.u)}</b></td><td>${x.g}</td><td>${x.v}</td><td>${x.n}</td><td>${x.p}</td><td>${x.gf}</td><td>${x.gs}</td><td><b>${x.pu}</b></td></tr>`).join('')}</table>
+      <details style="margin-top:8px"><summary class="muted">📅 Partite del girone</summary>${[...new Set(K.cal.filter(m=>m.gi===gi).map(m=>m.g))].map(g=>`<p style="margin:8px 0 2px"><b>Giornata ${g}</b></p>${K.cal.filter(m=>m.gi===gi&&m.g===g).map(m=>{const d=pub.includes(g)?golMatch({giornata:g,casa:m.c,trasferta:m.t},ris,lega):[];return `<div class="row between" style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span>${sq(m.c)} – ${sq(m.t)}</span>${res(d[0],d[1])}</div>`}).join('')}`).join('')}</details></div>`});
+    h+=`<h3>⚔️ Fase finale</h3>${R.girFine?'':'<p class="muted" style="font-size:13px">Gli accoppiamenti si completano da soli quando finiscono i gironi.</p>'}`;
+    R.turni.forEach(T=>{h+=`<div class="card"><h3 style="margin-top:0">${T.nome}</h3>${T.pairs.map(p=>{const nm=x=>x.u?sq(x.u):`<span class="muted">${esc(x.lab)}</span>`;
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row between"><span>${p.win===p.A?'✅ ':''}${nm(p.A)}</span>${p.agg?`<b>${p.agg.A.g}–${p.agg.B.g}</b>`:''}<span style="text-align:right">${nm(p.B)}${p.win===p.B?' ✅':''}</span></div>
+      ${p.legs.map((l,li)=>`<div class="muted" style="font-size:12px">${p.legs.length>1?(li?'Ritorno':'Andata'):'Gara unica'} · G${l.g}: ${l.casa.u?sq(l.casa.u):'?'} – ${l.tr.u?sq(l.tr.u):'?'} ${l.a!=null?`<b>${l.a}–${l.b}</b> (${l.pa}–${l.pb} pt)`:''}</div>`).join('')}
+      ${p.win&&p.agg&&p.agg.A.g===p.agg.B.g?`<div class="muted" style="font-size:12px">Parità nei gol: passa chi ha fatto più fantapunti</div>`:''}</div>`}).join('')}</div>`});
+    if(pres)h+=`<button class="del" style="margin-bottom:12px" onclick="eliminaCoppa(${C.id})">🗑️ Elimina questa coppa</button>`;
+  } else h+=`<div class="card"><p class="muted">${pres?'Questa lega non ha ancora una coppa. Creala qui sotto.':'Il presidente non ha ancora creato una coppa.'}</p></div>`;
+  h+=`<div class="card"><details><summary style="color:var(--txt);font-weight:700">❓ Come funziona la coppa</summary><div class="muted" style="font-size:14px;margin-top:6px">
+    <p>• Si gioca nelle stesse giornate di Serie A del campionato, ma con una <b>formazione a parte</b>: in 📋 Formazione scegli <b>🏆 Coppa</b> in alto.</p>
+    <p>• Quando salvi la formazione del campionato puoi spuntare <b>"Salva anche per la coppa"</b> e valgono tutte e due.</p>
+    <p>• Se non metti la formazione di coppa, vale quella del campionato.</p>
+    <p>• <b>Gironi</b>: vittoria 3 punti, pareggio 1. A pari punti contano differenza reti, gol fatti e fantapunti.</p>
+    <p>• <b>Fase finale</b>: andata e ritorno, conta la somma dei gol. Se c'è parità passa chi ha fatto <b>più fantapunti</b> nelle due partite. La <b>finale</b> è secca.</p>
+    <p>• I gol si calcolano con le stesse fasce del campionato.</p></div></details></div>`;
+  if(pres){const nx=chk(await db.from('fanta_giornate').select('numero').gt('scadenza',new Date().toISOString()).order('numero').limit(1))[0]?.numero||1;
+    h+=`<div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">➕ Crea una coppa</h3>
+    <label>Nome</label><input id="cp_nome" value="${CP.length?'Coppa '+(CP.length+1):'Coppa di Lega'}">
+    <div class="row" style="gap:8px"><div style="flex:1"><label>Gironi</label><select id="cp_g" onchange="cpPrev()">${[1,2,4,8].map(n=>`<option ${n===2?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div style="flex:1"><label>Passano per girone</label><select id="cp_p" onchange="cpPrev()">${[1,2,4].map(n=>`<option ${n===2?'selected':''}>${n}</option>`).join('')}</select></div></div>
+    <div class="row" style="gap:8px"><div style="flex:1"><label>Dalla giornata</label><input id="cp_da" type="number" min="1" max="38" value="${nx}" oninput="cpPrev()"></div>
+    <div style="flex:1"><label>Gironi</label><select id="cp_ar" onchange="cpPrev()"><option value="1">Andata e ritorno</option><option value="0">Solo andata</option></select></div></div>
+    <label style="margin-top:8px">Squadre partecipanti</label>${membri.map(m=>`<label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" class="cp_sq" value="${m.utente_id}" checked style="width:auto" onchange="cpPrev()"> ${esc(m.nome_squadra)}</label>`).join('')}
+    ${Object.keys(lega.attesa||{}).length?`<p class="muted" style="font-size:12px">Le squadre libere non ancora prese non possono giocare la coppa: creala quando tutti hanno preso la loro squadra.</p>`:''}
+    <p id="cp_prev" class="muted" style="font-size:13px"></p>
+    <button class="pri" onclick="creaCoppa(${lega.id})">🎲 Sorteggia e crea la coppa</button></div>`;
+    setTimeout(cpPrev,0)}
+  return h}
+function cpPiano(){const G=+document.getElementById('cp_g').value,P=+document.getElementById('cp_p').value,da=+document.getElementById('cp_da').value,ar=document.getElementById('cp_ar').value==='1',ids=[...document.querySelectorAll('.cp_sq:checked')].map(x=>x.value),n=ids.length,Q=G*P;
+  if(n<2)return {err:'Servono almeno 2 squadre'};if(n<G*2)return {err:`Con ${n} squadre fai al massimo ${Math.floor(n/2)} gironi`};
+  const min=Math.floor(n/G);if(P>min)return {err:`Con gironi da ${min} squadre non possono passarne ${P}`};if(Q<2)return {err:'Deve passare almeno una squadra in più: con 1 girone fai passare almeno 2 squadre'};
+  const mx=Math.ceil(n/G),rg=(mx%2?mx:mx-1)*(ar?2:1),nko=Math.log2(Q),fine=da+rg+(nko-1)*2+1-1;
+  if(fine>38)return {err:`Finirebbe alla giornata ${fine}: parti prima o fai meno turni`};
+  return {G,P,da,ar,ids,Q,rg,nko,fine}}
+function cpPrev(){const el=document.getElementById('cp_prev');if(!el)return;const p=cpPiano();if(p.err){el.innerHTML='⚠️ '+p.err;el.style.color='var(--red)';return}el.style.color='';
+  el.innerHTML=`Gironi dalla G${p.da} alla G${p.da+p.rg-1} · poi ${Array.from({length:p.nko},(_,i)=>CUPN(2**(p.nko-1-i))).join(', ')} · finale alla <b>G${p.fine}</b>`}
+async function creaCoppa(lid){const p=cpPiano();if(p.err)return toast(p.err,true);const nome=document.getElementById('cp_nome').value.trim()||'Coppa';
+  const ids=[...p.ids].sort(()=>Math.random()-.5),gironi=Array.from({length:p.G},()=>[]);ids.forEach((u,i)=>gironi[i%p.G].push(u));
+  const cal=[];gironi.forEach((gr,gi)=>rrGir(gr,p.ar).forEach((pp,r)=>pp.forEach(([c,t])=>cal.push({g:p.da+r,gi,c,t}))));
+  let g=p.da+p.rg;const ko=[];for(let r=0;r<p.nko;r++){if(r===p.nko-1)ko.push([g++]);else{ko.push([g,g+1]);g+=2}}
+  if(!confirm(`Creare "${nome}" con ${ids.length} squadre? Il sorteggio dei gironi è casuale.`))return;
+  chk(await db.from('coppe').insert({lega_id:lid,nome,cfg:{gironi,ar:p.ar,cal,passano:p.P,ko}}));toast('Coppa creata! 🏆');legaView()}
+async function eliminaCoppa(id){if(!confirm('Eliminare la coppa? Si perdono anche le formazioni di coppa.'))return;
+  chk(await db.from('formazioni').delete().eq('coppa',id));await db.from('schieramenti').delete().eq('coppa',id);chk(await db.from('coppe').delete().eq('id',id));fz.cup=0;legaView()}
+
 // ---------- notizie ----------
 let ARTS=[];
 function stemma(nome,cl='',url){if(url)return `<div class="stemma ${cl}" style="background:#fff center/cover no-repeat url('${esc(url)}')"></div>`;let h=0;for(const c of String(nome||''))h=(h*31+c.charCodeAt(0))%360;const ini=String(nome||'?').replace(/^(fc|ac|as|uc|team|real)\s+/i,'').split(/[\s-]+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -435,7 +521,7 @@ async function pDash(){
   const avv=async g=>{if(!g)return null;const i=(await db.from('incontri').select('casa,trasferta').eq('lega_id',lega.id).eq('giornata',g.numero).or(`casa.eq.${MIO},trasferta.eq.${MIO}`)).data?.[0];
     if(i)return [i.casa,i.trasferta];const c=(lega.attesa_cal||[]).find(x=>x[0]===g.numero&&(x[1]===me?.nome_squadra||x[2]===me?.nome_squadra));return c?[c[1]===me?.nome_squadra?MIO:'n:'+c[1],c[2]===me?.nome_squadra?MIO:'n:'+c[2]]:null};
   const mL=await avv(gLive),mN=await avv(gNext);
-  const fatta=gNext?((await db.from('formazioni').select('giocatore_id',{count:'exact',head:true}).eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',gNext.numero)).count||0)>0:false;
+  const fatta=gNext?((await db.from('formazioni').select('giocatore_id',{count:'exact',head:true}).eq('lega_id',lega.id).eq('coppa',0).eq('utente_id',MIO).eq('giornata',gNext.numero)).count||0)>0:false;
   const vs=(m)=>`<div class="vsr"><div>${stemma(nome(m[0]),'mini',img(m[0]))}<b>${esc(nome(m[0]))}</b></div><div class="vs">VS</div><div>${stemma(nome(m[1]),'mini',img(m[1]))}<b>${esc(nome(m[1]))}</b></div></div>`;
   app.innerHTML=selLega()+`<div class="dhero"><label style="display:block;width:96px;margin:0 auto;position:relative;cursor:pointer">${stemma(me?.nome_squadra,'',me?.stemma)}<span style="position:absolute;right:-2px;bottom:6px;background:var(--gold);color:#1a0f3d;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px">📷</span><input type="file" accept="image/*" style="display:none" onchange="cambiaStemma(this)"></label><h2 style="margin:4px 0 0">${esc(me?.nome_squadra||'')}</h2><small class="muted">${esc(lega.nome)}</small>
     <div class="dstats"><div><b>${pos||'-'}ª</b><small>Posizione</small></div><div><b>${sd?t.punti:'-'}</b><small>Punti</small></div><div><b>${t.g}</b><small>Partite</small></div><div><b>${Math.round(t.pt*10)/10}</b><small>Pt. totali</small></div></div></div>
@@ -456,7 +542,7 @@ async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e
 async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
 async function pAltro(){
   const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
-  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
+  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🏅','Coppa',"vaiLega('coppa')"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
     ...(pres?[['⚙️','Gestione lega',"vaiLega('gestione')"]]:[]),...(on('f_premium')?[['💎','Premium',"vai('premium')"]]:[]),['📜','Termini',"vai('termini')"],...(profilo.ruolo==='admin'?[['🛠️','Admin',"vai('admin')"]]:[]),
     ...(FEAT.link_donazioni?[['☕','Sostienici',`window.open('${esc(FEAT.link_donazioni)}','_blank')`]]:[])].filter(x=>x[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=selLega()+`<h2 style="margin-top:6px">☰ Altro</h2><div class="tiles">${V.map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
@@ -474,7 +560,7 @@ function apriArt(id){const a=ARTS.find(x=>x.id===id);if(!a)return;
   app.innerHTML=`<button onclick="pHome()">← Home</button><article class="card" style="margin-top:12px">${a.immagine_url?`<img src="${esc(a.immagine_url)}" alt="">`:''}<h2 style="margin:4px 0">${esc(a.titolo)}</h2><small class="muted">${fmt(a.pubblicato_il)}</small><p style="line-height:1.55">${esc(a.testo).replace(/\n/g,'<br>')}</p></article>`;window.scrollTo(0,0)}
 
 // ---------- fantacalcio ----------
-let fz={lega:null,tab:'classifica',vedi:null,gg:null};
+let fz={lega:null,tab:'classifica',vedi:null,gg:null,fc:0,cup:0};
 async function pFanta(){
   if(fz.lega) return legaView();
   await caricaLeghe();renderNav();
@@ -747,7 +833,8 @@ async function salvaBonus(lid){if(!confirm('Salvare i nuovi bonus e malus? Tutti
 async function datiLega(lega,membri,opt={}){
   let pub=opt.gg||chk(await db.from('fanta_giornate').select('numero').eq('pubblicata',true).order('numero')).map(g=>g.numero);
   if(lega.giornata_da) pub=pub.filter(g=>g>=lega.giornata_da&&(!lega.giornata_a||g<=lega.giornata_a));
-  const form=chk(await db.from('formazioni').select('utente_id,giornata,giocatore_id,titolare,ordine').eq('lega_id',lega.id));
+  let form=chk(await db.from('formazioni').select('utente_id,giornata,giocatore_id,titolare,ordine,coppa').eq('lega_id',lega.id).in('coppa',[0,opt.coppa||0]));
+  if(opt.coppa){const hc=new Set(form.filter(f=>f.coppa===opt.coppa).map(f=>f.utente_id+'-'+f.giornata));form=form.filter(f=>f.coppa===opt.coppa||!hc.has(f.utente_id+'-'+f.giornata))}
   const carte=lega.carte?chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id)):[];
   const gids=[...new Set([...form.map(f=>f.giocatore_id),...carte.filter(c=>c.giocatore_id).map(c=>c.giocatore_id)])];
   const voti=gids.length?chk(await db.from('voti').select('giocatore_id,giornata,voto,minuti,gol,assist,ammonizione,espulsione,gol_subiti,rigori_parati,rigori_sbagliati,autogol,rigori_segnati,gol_decisivi,gol_pareggio,potm').in('giocatore_id',gids)):[];
@@ -830,12 +917,12 @@ async function legaView(){
   const isCo=MIO!==utente.id;
   const tabs=[['classifica','Classifica'],['giornate','Giornate'],['rosa','Rose'],['formazione','Formazione']];
   if(lega.modalita==='draft') tabs.splice(2,0,['draft','Draft']);
-  tabs.push(['live','🔴 Live']);
+  tabs.push(['coppa','🏆 Coppa'],['live','🔴 Live']);
   if(pres) tabs.push(['gestione','Gestione']);
   if(!tabs.find(t=>t[0]===fz.tab)) fz.tab='classifica';
   renderNav();
   const modoL=LEGHE.length&&fz.lega===LG;
-  let h=modoL?selLega()+`<h2 style="margin-top:6px">${{classifica:'🏆 Classifica',giornate:'📅 Calendario',rosa:'👕 Squadre',formazione:'📋 Formazione',live:'🔴 Live',gestione:'⚙️ Gestione lega',draft:'🎯 Draft'}[fz.tab]||esc(lega.nome)}</h2>`:`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
+  let h=modoL?selLega()+`<h2 style="margin-top:6px">${{classifica:'🏆 Classifica',giornate:'📅 Calendario',rosa:'👕 Squadre',formazione:'📋 Formazione',live:'🔴 Live',coppa:'🏆 Coppa',gestione:'⚙️ Gestione lega',draft:'🎯 Draft'}[fz.tab]||esc(lega.nome)}</h2>`:`<button onclick="fz.lega=null;pFanta()">← Le mie leghe</button>
   <h2 style="margin-top:12px">${esc(lega.nome)}</h2>
   <p class="muted">Codice invito: <b style="color:var(--gold)">${esc(lega.codice_invito)}</b> · <span class="badge">${MODALITA[lega.modalita]||'Asta'}</span>
   ${lega.giornata_da?` <span class="badge">🏆 Sprint G${lega.giornata_da}–${lega.giornata_a||38}</span>`:''}${lega.carte?' <span class="badge">🃏 Carte</span>':''}</p>
@@ -869,8 +956,8 @@ async function legaView(){
       const libN=new Set(Object.keys(lega.attesa||{}));
       {const gA=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').eq('pubblicata',false).order('numero').limit(1))[0];
        if(gA){const iniz=new Date(gA.scadenza)<=new Date();
-        const fo=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('giornata',gA.numero));
-        const scA=chk(await db.from('schieramenti').select('utente_id,modulo,nascosta').eq('lega_id',lega.id).eq('giornata',gA.numero));
+        const fo=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',gA.numero));
+        const scA=chk(await db.from('schieramenti').select('utente_id,modulo,nascosta').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',gA.numero));
         const boxF=uid=>{const s=scA.find(x=>x.utente_id===uid),r=fo.filter(x=>x.utente_id===uid);
           if(!r.length)return s?.nascosta&&!iniz&&uid!==MIO?'<p class="muted">🔒 Formazione nascosta: si vede al calcio d\'inizio</p>':'<p class="muted">Formazione non ancora inserita</p>';
           const t=r.filter(x=>x.titolare).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]),pn=r.filter(x=>!x.titolare).sort((a,b)=>a.ordine-b.ordine);
@@ -903,6 +990,7 @@ async function legaView(){
     }
   }
 
+  if(fz.tab==='coppa') h+=await coppaTab(lega,membri,pres,nomeSq);
   if(fz.tab==='draft'){
     if(lega.draft_stato==='attesa') h+=`<div class="card"><p class="muted">Il draft non è ancora iniziato. ${pres?'Avvialo dalla scheda Gestione quando sono entrati tutti i partecipanti.':'Aspetta che il presidente lo avvii.'}</p></div>`;
     else{
@@ -953,7 +1041,7 @@ async function legaView(){
         const coppie=incG.map(i=>[i.casa,i.trasferta]);if(!LV.c||!coppie.some(c=>c.join()===LV.c))LV.c=(coppie.find(c=>c.includes(MIO))||coppie[0]||[MIO]).join();
         const cop=LV.c.split(',');
         const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>EV[gid]?evV(EV[gid]):{voto:LV.v[gid]??6}}):null;
-        const form=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('giornata',G).in('utente_id',cop));
+        const form=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',G).in('utente_id',cop));
         const fvDi=(D,uid,gid)=>{const r=(D.ris[G]?.[uid]?.righe||[]).find(x=>x.g?.id===gid);return r?r.fv:undefined};
         const gidsL=form.map(f=>f.giocatore_id),VV={};
         (gidsL.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gidsL)):[]).forEach(v=>{const f=form.find(x=>x.giocatore_id===v.giocatore_id);if(v.voto!=null)VV[v.giocatore_id]=fvL(v,f?.giocatori.ruolo,lega.bonus,null)});
@@ -987,8 +1075,13 @@ async function legaView(){
     else if(!mia.length) h+='<p class="muted">La tua rosa è vuota.</p>';
     else{
       const g=giorn[0];
-      const att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero));
-      const sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
+      const cps=chk(await db.from('coppe').select('id,nome,cfg').eq('lega_id',lega.id)).filter(c=>(c.cfg.cal||[]).some(m=>m.g===g.numero&&(m.c===MIO||m.t===MIO))||(c.cfg.ko||[]).some(x=>x.includes(g.numero)));
+      if(!cps.find(c=>c.id===fz.fc))fz.fc=0;FCOP=cps;
+      if(cps.length)h+=`<div class="tabs">${[{id:0,nome:'⚽ Campionato'},...cps.map(c=>({id:c.id,nome:'🏆 '+c.nome}))].map(c=>`<button class="${fz.fc===c.id?'on':''}" onclick="fz.fc=${c.id};legaView()">${esc(c.nome)}</button>`).join('')}</div>`;
+      let att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('coppa',fz.fc).eq('utente_id',MIO).eq('giornata',g.numero));
+      let sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('coppa',fz.fc).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
+      if(fz.fc&&!att.length){att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('coppa',0).eq('utente_id',MIO).eq('giornata',g.numero));sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('coppa',0).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
+        if(att.length)h+=`<div class="card" style="border-color:var(--gold)"><p class="muted" style="margin:0">Non hai ancora una formazione di coppa: per ora vale quella del campionato (te l'ho già caricata qui sotto, cambiala e salva).</p></div>`}
       const mod=RGf.moduli.includes(sch?.modulo)?sch.modulo:RGf.moduli[0];
       const stato=id=>{const f=att.find(x=>x.giocatore_id===id);return !f?'':f.titolare?'T':'P'+f.ordine};
       const nPan=RGf.panca?(RGf.panca.P+RGf.panca.D+RGf.panca.C+RGf.panca.A):Math.max(12,mia.length-11);
@@ -1020,7 +1113,7 @@ async function legaView(){
           <button class="pri" onclick="applicaCons()">🪄 Applica il consiglio</button><p class="muted" style="font-size:12px">Il consiglio compila la formazione: controllala e poi tocca <b>Salva formazione</b>.</p>`:'<p class="muted">La tua rosa non ha abbastanza giocatori per un modulo completo.</p>'}</div>`;
       } else h+=`<div class="card" style="border-color:var(--gold)"><p class="muted">💎 Con il Premium: consiglio formazione e allarme se un tuo titolare non è nelle probabili.</p></div>`;
       const tag=id=>({ok:' <small style="color:var(--green)">✅ probabile</small>',no:' <small style="color:var(--red)">⚠️ non nelle probabili</small>',out:' <small style="color:var(--red)">⛔ non gioca</small>'})[alr[id]]||'';
-      h+=`<div class="card"><h3>Giornata ${g.numero}</h3><p class="muted">Scadenza: ${fmt(g.scadenza)}</p>
+      h+=`<div class="card"><h3>${fz.fc?'🏆 '+esc(cps.find(c=>c.id===fz.fc).nome)+' · ':''}Giornata ${g.numero}</h3><p class="muted">Scadenza: ${fmt(g.scadenza)}</p>
       <select id="f_mod" style="display:none" onchange="contaForm()">${RGf.moduli.filter(m=>MODULI[m]).map(m=>`<option ${m===mod?'selected':''}>${m}</option>`).join('')}</select>
       <div class="fmods">${RGf.moduli.filter(m=>MODULI[m]).map(m=>`<button class="fmod" data-m="${m}" onclick="setMod('${m}')">${m}</button>`).join('')}</div>
       <p id="f_cnt" class="muted"></p><div id="f_campo"></div>
@@ -1032,7 +1125,8 @@ async function legaView(){
         <option value="">Tribuna</option><option value="T" ${stato(r.giocatore_id)==='T'?'selected':''}>Titolare</option>
         ${Array.from({length:Math.max(nPan,mia.length)},(_,i)=>`<option value="P${i+1}" ${stato(r.giocatore_id)==='P'+(i+1)?'selected':''}>Panchina ${i+1}</option>`).join('')}</select></div>`).join('')}
       <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:12px 0 0"><input type="checkbox" id="f_nasc" style="width:auto" ${sch?.nascosta?'checked':''}> 🙈 Nascondi la mia formazione agli altri fino al calcio d'inizio</label>
-      <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione</button></div>`;
+      ${!fz.fc&&cps.length?cps.map(c=>`<label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:8px 0 0"><input type="checkbox" class="f_cop" value="${c.id}" style="width:auto"> 🏆 Salva anche per ${esc(c.nome)}</label>`).join(''):''}
+      <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione${fz.fc?' di coppa':''}</button></div>`;
       if(lega.carte&&on('f_carte')){
         const mie=chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id).eq('utente_id',MIO));
         h+=`<div class="card"><h3>🃏 Carte Tattiche</h3><p class="muted">Ogni carta si gioca una sola volta in tutta la stagione. Puoi annullarla fino alla scadenza.</p>
@@ -1166,10 +1260,12 @@ async function salvaFormazione(lid,gn){
   }
   if(!(c.P===1&&c.D===mod[0]&&c.C===mod[1]&&c.A===mod[2])) return toast(`I titolari non rispettano il ${modulo} (1 P, ${mod[0]} D, ${mod[1]} C, ${mod[2]} A)`,true);
   if(FREG&&FREG.panca){const pc={P:0,D:0,C:0,A:0};document.querySelectorAll('.fsel').forEach(x=>{if(x.value&&x.value!=='T')pc[x.dataset.r]++});const tr=['P','D','C','A'].find(k=>pc[k]>FREG.panca[k]);if(tr)return toast(`In panchina al massimo ${FREG.panca[tr]} ${tr}`,true)}
-  chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('utente_id',MIO).eq('giornata',gn));
-  chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:MIO,giornata:gn}))));
-  chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,modulo,nascosta:!!document.getElementById('f_nasc')?.checked},{onConflict:'lega_id,utente_id,giornata'}));
-  toast('Formazione salvata!');
+  const dove=[fz.fc||0,...(fz.fc?[]:[...document.querySelectorAll('.f_cop:checked')].map(x=>+x.value))];
+  for(const cp of dove){
+    chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('coppa',cp).eq('utente_id',MIO).eq('giornata',gn));
+    chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:MIO,giornata:gn,coppa:cp}))));
+    chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,coppa:cp,modulo,nascosta:!!document.getElementById('f_nasc')?.checked},{onConflict:'lega_id,utente_id,giornata,coppa'}))}
+  toast(dove.length>1?'Formazione salvata per campionato e coppa!':fz.fc?'Formazione di coppa salvata!':'Formazione salvata!');
 }
 async function usaCarta(lid,gn,k){
   const sel=document.getElementById('cg_'+k);
