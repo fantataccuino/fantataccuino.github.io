@@ -339,6 +339,58 @@ async function entraLega(){
   toast('Sei entrato nella lega!');fz.lega=id;pFanta();
 }
 
+function filePacchetto(inp,lid){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{let P;try{P=JSON.parse(r.result)}catch(e){return toast('File non valido: non è un pacchetto',true)}
+  const box=document.getElementById('pk_ris');box.innerHTML='<p class="muted">Carico il pacchetto…</p>';
+  try{
+    if(!lid){if(!P.nome)return toast('Nel pacchetto manca il nome della lega',true);
+      const l=chk(await db.from('leghe').insert({nome:P.nome,crediti:+P.crediti||1000,modalita:'asta',carte:false,bonus:P.bonus||{},soglia_gol:+P.soglia_gol||66,passo_gol:+P.passo_gol||6}).select().single());
+      if(!document.getElementById('il_gioco')?.checked)await db.from('membri_lega').delete().eq('lega_id',l.id).eq('utente_id',utente.id);
+      lid=l.id}
+    const rep=await applicaPacchetto(lid,P);
+    box.innerHTML=`<p style="color:var(--green)">✅ Pacchetto caricato</p><div class="muted" style="font-size:13px">${rep.map(esc).join('<br>')}</div><button class="pri" style="margin-top:8px" onclick="fz.lega=${lid};fz.tab='gestione';vai('fanta')">Apri la lega</button>`;
+  }catch(e){box.innerHTML=`<p style="color:var(--red)">Errore: ${esc(e.message||e)}</p>`}};r.readAsText(f,'utf-8')}
+async function applicaPacchetto(lid,P){
+  const rep=[],L=chk(await db.from('leghe').select('attesa,partenza').eq('id',lid).single()),at=L.attesa||{},pz0=L.partenza||{};
+  const mem=chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid));
+  const memDi=n=>mem.find(m=>norm(m.nome_squadra).trim()===norm(n).trim());
+  if(P.squadre&&P.squadre.some(q=>q.rosa)){
+    const tutti=chk(await db.from('giocatori').select('id,nome,ruolo,squadra').eq('attivo',true).limit(3000));
+    const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
+    const presi=new Set(chk(await db.from('rose').select('giocatore_id').eq('lega_id',lid)).map(x=>x.giocatore_id));
+    Object.entries(at).forEach(([k,v])=>{if(!P.squadre.some(q=>q.nome===k))(v.rosa||[]).forEach(r=>presi.add(r[0]))});
+    for(const q of P.squadre){if(!q.rosa)continue;
+      if(memDi(q.nome)){rep.push(`${q.nome}: ha già un utente, rosa non toccata`);continue}
+      const ro=[];let nuovi=0,incerti=0;
+      for(const [nome,prezzo,ru,sq] of q.rosa){
+        const pw=parole(nome),lw=pw.filter(w=>w.length>2);
+        const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;if(!lw.some(w=>nw.includes(w)))return 0;let p=0;for(const w of pw){if(nw.includes(w))p+=w.length>2?3:2;else if(nw.some(x=>x[0]===w[0]&&(x.length<=2||w.length<=2)))p+=1}return p};
+        let c=tutti.filter(g=>!presi.has(g.id)&&(!ru||g.ruolo===ru)).map(g=>({g,b:sc(g)})).filter(x=>x.b>0).map(x=>({g:x.g,p:x.b+(sq&&x.g.squadra===sq?5:0)})).sort((a,b)=>b.p-a.p);
+        let g=c[0]&&c[0].g;
+        if(c.length>1&&c[1].p===c[0].p)incerti++;
+        if(!g){if(ru&&sq){g=chk(await db.from('giocatori').insert({nome,ruolo:ru,squadra:sq,quotazione:1,attivo:true}).select().single());tutti.push(g);nuovi++}
+          else{rep.push(`${q.nome}: ${nome} non trovato`);continue}}
+        presi.add(g.id);ro.push([g.id,+prezzo||1]);
+      }
+      at[q.nome]={rosa:ro,pz:q.pz||(at[q.nome]&&at[q.nome].pz)||{}};
+      rep.push(`${q.nome}: ${ro.length} giocatori${nuovi?` (${nuovi} aggiunti al listone)`:''}${incerti?` · ${incerti} da controllare`:''}`);
+    }
+  }
+  (P.squadre||[]).forEach(q=>{if(!q.pz)return;const m=memDi(q.nome);if(m){pz0[m.utente_id]=q.pz}else if(at[q.nome]){at[q.nome].pz=q.pz}else rep.push(`${q.nome}: squadra non trovata per la classifica`)});
+  if(P.squadre&&P.squadre.some(q=>q.pz))rep.push('Classifica di partenza: ok');
+  let cal=null;
+  if(P.calendario&&P.calendario.giornate&&P.calendario.giornate.length){
+    const C=P.calendario,da=+C.da||1,a=+C.a||38,B=C.giornate,ok=n=>memDi(n)||at[n],subito=[],dopo=[];
+    const nomiCal=[...new Set(B.flat(2))].filter(n=>!ok(n));if(nomiCal.length)rep.push('Calendario: squadre sconosciute '+nomiCal.join(', '));
+    for(let g=da;g<=a;g++){const k=g-da,ciclo=Math.floor(k/B.length);
+      B[k%B.length].forEach(([x,y])=>{const c=ciclo%2?y:x,t=ciclo%2?x:y,mc=memDi(c),mt=memDi(t);
+        if(mc&&mt)subito.push({lega_id:lid,giornata:g,casa:mc.utente_id,trasferta:mt.utente_id});else if(ok(c)&&ok(t))dopo.push([g,mc?mc.nome_squadra:c,mt?mt.nome_squadra:t])})}
+    chk(await db.from('incontri').delete().eq('lega_id',lid));if(subito.length)chk(await db.from('incontri').insert(subito));
+    cal=dopo;rep.push(`Calendario: giornate ${da}-${a}, ${subito.length+dopo.length} partite`);
+  }
+  const up={attesa:at,partenza:pz0};if(cal)up.attesa_cal=cal;
+  chk(await db.from('leghe').update(up).eq('id',lid));
+  return rep;
+}
 function leggiTxt(inp,id){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const t=document.getElementById(id);t.value=r.result;toast(`File caricato: ${r.result.split('\n').filter(x=>x.trim()).length} righe`)};r.readAsText(f,'utf-8')}
 async function creaImportata(){
   const nome=val('il_nome');if(!nome)return toast('Scrivi il nome della lega',true);
@@ -715,6 +767,9 @@ async function legaView(){
     h+=`<div class="card" style="border-color:var(--gold)"><details ${rose.length?'':'open'}><summary style="color:var(--txt);font-weight:800;font-size:17px">🚚 Trasferisci lega da un'altra app</summary>
       <p class="muted" style="margin-top:8px">Per portare qui una lega già iniziata. Due modi: fai entrare prima tutti con gli stessi nomi squadra, <b>oppure</b> crea le <b>squadre libere</b>: chi entra col codice invito sceglie la sua squadra e trova già rosa, classifica e calendario.</p>
       ${Object.keys(lega.attesa||{}).length?`<div class="card" style="padding:10px;border-color:var(--gold)"><b>⏳ Squadre libere in attesa (${Object.keys(lega.attesa).length})</b>${Object.entries(lega.attesa).map(([k,v])=>`<details><summary style="color:var(--txt)">${esc(k)} (${(v.rosa||[]).length})</summary><div class="muted" style="font-size:13px">${(v.rosa||[]).map(r=>GA[r[0]]).filter(Boolean).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome)).map(g=>`${g.ruolo} ${esc(g.nome)} <small>(${esc(g.squadra)})</small>`).join('<br>')}</div></details>`).join('')}<button class="del" style="margin-top:8px" onclick="svuotaLibere(${lega.id})">Elimina le squadre libere</button></div>`:''}
+      <div class="card" style="padding:12px;border-color:var(--green)"><h3 style="margin-top:0">📦 Metodo veloce: carica il pacchetto</h3><p class="muted" style="font-size:13px">Un unico file preparato con Claude dagli screenshot: dentro ci sono rose, classifica e calendario. Si carica tutto in un colpo.</p>
+        <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Carica pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,${lega.id})"></label><div id="pk_ris" style="margin-top:10px"></div></div>
+      <p class="muted" style="font-size:13px">Oppure, a mano, un pezzo alla volta:</p>
       <h3>1. Rose</h3><p class="muted" style="font-size:13px">Scrivi il <b>nome della squadra</b> su una riga e sotto i suoi giocatori, uno per riga, con il prezzo dopo il nome (facoltativo). Poi la squadra successiva, e così via.<br>Es:<br><i>${esc(membri[0]?.nome_squadra||'Real Scanga')}<br>Martinez L. 45<br>Svilar 20</i><br>Va bene anche una riga per giocatore nel formato <b>Squadra;Giocatore;Prezzo</b>.</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'tr_rose')"></label>
       <textarea id="tr_rose" rows="7" placeholder="Squadra;Giocatore;Prezzo"></textarea>
@@ -1571,7 +1626,9 @@ async function pAdmin(){
       <div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>⚽ Punti 1° gol</label><input id="il_sg" type="number" step="0.5" value="66"></div><div style="flex:1"><label>Ogni gol in più</label><input id="il_pg" type="number" step="0.5" value="4"></div></div>
       <label>Crediti iniziali</label><input id="il_cred" type="number" value="500">
       <label style="color:var(--txt);display:block;margin:6px 0 12px"><input type="checkbox" id="il_gioco"> Partecipo anch'io con una squadra (la prenderò dall'elenco col codice)</label>
-      <button class="pri" onclick="creaImportata()">Crea lega importata</button></div>
+      <button class="pri" onclick="creaImportata()">Crea lega importata</button>
+      <p class="muted" style="font-size:13px;margin-top:14px">Oppure, più veloce: se hai il <b>pacchetto</b> preparato con Claude, crea la lega e carica tutto in un colpo (nome e soglie li prende dal file; la casella "Partecipo anch'io" sopra vale anche qui).</p>
+      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer">📦 Crea lega da pacchetto<input type="file" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="filePacchetto(this,0)"></label><div id="pk_ris" style="margin-top:10px"></div></div>
       ${tutte.length?`<div class="card"><h3>Le leghe create da te</h3>${tutte.map(l=>`<div class="row between" style="padding:6px 0"><span><b>${esc(l.nome)}</b> · <span style="color:var(--gold)">${esc(l.codice_invito||'')}</span>${Object.keys(l.attesa||{}).length?` · ⏳ ${Object.keys(l.attesa).length} libere`:''}</span><button onclick="fz.lega=${l.id};fz.tab='gestione';vai('fanta')">Apri</button></div>`).join('')}</div>`:''}`;
   }
   if(ad.tab==='dati'){
