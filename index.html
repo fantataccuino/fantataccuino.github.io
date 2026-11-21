@@ -407,7 +407,7 @@ async function impRoseLega(lid){
     if(!mem){no.push(`${riga} → squadra "${sq}" non trovata tra i partecipanti`);continue}
     if(!gn){no.push(riga+' → manca il giocatore');continue}
     const pw=parole(gn);
-    const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;let p=0;for(const w of pw){if(nw.includes(w))p+=3;else if(nw.some(x=>x.length<=2&&x[0]===w[0]))p+=1}return nw.some(x=>pw.includes(x))?p:0};
+    const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;const lw=pw.filter(w=>w.length>2);if(!lw.some(w=>nw.includes(w)))return 0;let p=0;for(const w of pw){if(nw.includes(w))p+=w.length>2?3:2;else if(nw.some(x=>x[0]===w[0]&&(x.length<=2||w.length<=2)))p+=1}return p};
     const cand=tutti.map(g=>({g,p:sc(g)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p);
     if(!cand.length){no.push(riga+' → giocatore non trovato nel listone');continue}
     const top=cand.filter(x=>x.p===cand[0].p);
@@ -434,7 +434,7 @@ async function impRoseLibere(lid,righe,box){
       if(sv||!at[cur])at[cur]={rosa:[],pz:(at[cur]&&at[cur].pz)||{}};nuove[cur]=1;continue}
     if(!cur){no.push(riga+' → manca il nome della squadra sopra');continue}
     const gn=m[1].replace(/^[PDCA]\s+/,'').trim(),pr=+m[2]||1,pw=parole(gn);
-    const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;let p=0;for(const w of pw){if(nw.includes(w))p+=3;else if(nw.some(x=>x.length<=2&&x[0]===w[0]))p+=1}return nw.some(x=>pw.includes(x))?p:0};
+    const sc=g=>{const nw=parole(g.nome);if(nw.join(' ')===pw.join(' '))return 100;const lw=pw.filter(w=>w.length>2);if(!lw.some(w=>nw.includes(w)))return 0;let p=0;for(const w of pw){if(nw.includes(w))p+=w.length>2?3:2;else if(nw.some(x=>x[0]===w[0]&&(x.length<=2||w.length<=2)))p+=1}return p};
     const cand=tutti.map(g=>({g,p:sc(g)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p);
     if(!cand.length){no.push(`${cur}: ${riga} → giocatore non trovato nel listone`);continue}
     const top=cand.filter(x=>x.p===cand[0].p);
