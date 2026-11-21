@@ -1759,17 +1759,26 @@ async function liveEv(id,gid,k,_){const {data:e}=await db.from('live_eventi').se
 async function liveView(id){
   if(!premOk()){app.innerHTML=`<button onclick="vai('seriea')">← Serie A</button><div style="margin-top:12px">${boxPremium('🔴 La diretta live')}</div>`;return}
   const disegna=async()=>{if(pagina!=='seriea')return;const {p,gg,ev}=await liveDati(id);const E={};ev.forEach(e=>E[e.giocatore_id]=e);
-    const sq=g=>g.squadra;let gc=0,gt=0;ev.forEach(x=>{const g=gg.find(y=>y.id===x.giocatore_id);if(!g)return;if(g.squadra===p.casa){gc+=x.gol||0;gt+=x.ag||0}else{gt+=x.gol||0;gc+=x.ag||0}});
+    const VV={};(gg.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',gg.map(g=>g.id))):[]).forEach(v=>VV[v.giocatore_id]=v);
+    const auto=Object.keys(VV).length>0;
+    let gc=p.gol_casa??0,gt=p.gol_trasferta??0;
+    if(!auto&&p.gol_casa==null){gc=0;gt=0;ev.forEach(x=>{const g=gg.find(y=>y.id===x.giocatore_id);if(!g)return;if(g.squadra===p.casa){gc+=x.gol||0;gt+=x.ag||0}else{gt+=x.gol||0;gc+=x.ag||0}})}
     const mie=chk(await db.from('rose').select('giocatore_id').eq('utente_id',utente.id)).map(x=>x.giocatore_id);
-    const miei=gg.filter(g=>mie.includes(g.id));
-    const ic=e=>[...Array(e.gol||0).fill('⚽'),...Array(e.assist||0).fill('🅰️'),e.amm?'🟨':'',e.esp?'🟥':'',...Array(e.rp||0).fill('🧤'),...Array(e.rs||0).fill('❌'),...Array(e.ag||0).fill('🙈'),e.gs?`🥅${e.gs}`:''].join(' ');
-    const r=g=>{const e=E[g.id]||{};return `<div class="row between" style="padding:7px 0;border-bottom:1px solid #ffffff14"><span>${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <small>${ic(e)}</small></span><b style="color:var(--gold)">${fvLive(e)}</b></div>`};
-    const conEv=sqn=>gg.filter(g=>g.squadra===sqn&&E[g.id]).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]);
+    const icV=v=>[...Array(+v.gol||0).fill('⚽'),...Array(+v.assist||0).fill('🅰️'),v.ammonizione?'🟨':'',v.espulsione?'🟥':'',...Array(+v.rigori_parati||0).fill('🧤'),...Array(+v.rigori_sbagliati||0).fill('❌'),...Array(+v.autogol||0).fill('🙈'),+v.gol_subiti?`🥅${v.gol_subiti}`:''].join(' ');
+    const icE=e=>[...Array(e.gol||0).fill('⚽'),...Array(e.assist||0).fill('🅰️'),e.amm?'🟨':'',e.esp?'🟥':'',...Array(e.rp||0).fill('🧤'),...Array(e.rs||0).fill('❌'),...Array(e.ag||0).fill('🙈'),e.gs?`🥅${e.gs}`:''].join(' ');
+    const r=g=>{const v=VV[g.id],e=E[g.id];
+      if(auto){const fv=v?fvL(v,g.ruolo,null,null):null;
+        return `<div class="row between" style="padding:7px 0;border-bottom:1px solid #ffffff14;flex-wrap:nowrap;gap:6px"><span style="min-width:0">${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> ${v?`<small class="muted">${v.minuti}'</small> <small>${icV(v)}</small>`:''}</span>
+        <span style="flex:none;text-align:right">${v&&v.voto!=null?`<small class="muted">V ${v.voto}</small> <b style="color:var(--gold)">${Math.round(fv*10)/10}</b>`:'<span class="muted">-</span>'}</span></div>`}
+      const x=e||{};return `<div class="row between" style="padding:7px 0;border-bottom:1px solid #ffffff14"><span>${ruolo(g.ruolo)}<b>${esc(g.nome)}</b> <small>${icE(x)}</small></span><b style="color:var(--gold)">${fvLive(x)}</b></div>`};
+    const inCampo=sqn=>gg.filter(g=>g.squadra===sqn&&(auto?VV[g.id]:E[g.id])).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||((VV[b.id]?.minuti||0)-(VV[a.id]?.minuti||0)));
+    const miei=gg.filter(g=>mie.includes(g.id)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]);
+    const st={'1H':'1° tempo','HT':'Intervallo','2H':'2° tempo','ET':'Supplementari','P':'Rigori','FT':'Finita','NS':'Non iniziata'}[p.af_stato]||(p.live?'In corso':'Finita');
     app.innerHTML=`<button onclick="vai('seriea')">← Serie A</button>
-    <div class="card" style="margin-top:12px;text-align:center"><b style="color:#ff6b6b">${p.live?'● LIVE':'Finita'}</b><div class="row" style="justify-content:center;gap:16px;margin-top:6px"><h3 style="margin:0">${esc(p.casa)}</h3><span class="ris">${gc} – ${gt}</span><h3 style="margin:0">${esc(p.trasferta)}</h3></div><small class="muted">Si aggiorna da solo ogni 30 secondi</small></div>
-    ${miei.length?`<div class="card" style="border-color:var(--gold)"><h3>⭐ I tuoi giocatori in campo</h3>${miei.sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(r).join('')}<p class="muted" style="font-size:12px">Fantavoto live provvisorio: base 6 più bonus e malus classici. Il voto vero arriva a fine partita.</p></div>`:''}
-    <div class="card"><h3>${esc(p.casa)}</h3>${conEv(p.casa).map(r).join('')||'<p class="muted">Nessun evento</p>'}</div>
-    <div class="card"><h3>${esc(p.trasferta)}</h3>${conEv(p.trasferta).map(r).join('')||'<p class="muted">Nessun evento</p>'}</div>`};
+    <div class="card" style="margin-top:12px;text-align:center"><b style="color:${p.live?'#ff6b6b':'var(--muted)'}">${p.live?'● LIVE · ':''}${st}</b><div class="row" style="justify-content:center;gap:16px;margin-top:6px"><h3 style="margin:0">${esc(p.casa)}</h3><span class="ris">${gc} – ${gt}</span><h3 style="margin:0">${esc(p.trasferta)}</h3></div><small class="muted">Si aggiorna da solo ogni 30 secondi</small></div>
+    ${miei.length?`<div class="card" style="border-color:var(--gold)"><h3>⭐ I tuoi giocatori</h3>${miei.map(r).join('')}<p class="muted" style="font-size:12px">${auto?'V = voto · in giallo il fantavoto con bonus e malus. Si aggiornano durante la partita.':'Fantavoto live provvisorio: base 6 più bonus e malus classici.'}</p></div>`:''}
+    <div class="card"><h3>${esc(p.casa)}</h3>${inCampo(p.casa).map(r).join('')||'<p class="muted">Ancora nessun dato</p>'}</div>
+    <div class="card"><h3>${esc(p.trasferta)}</h3>${inCampo(p.trasferta).map(r).join('')||'<p class="muted">Ancora nessun dato</p>'}</div>`};
   await disegna();clearInterval(liveIv);liveIv=setInterval(disegna,30000)}
 async function pagelle(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
