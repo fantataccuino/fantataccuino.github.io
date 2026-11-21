@@ -816,7 +816,7 @@ async function legaView(){
         return `<details><summary>${esc(m.nome_squadra)} (${rr.length})</summary>${rr.map(r=>`<div class="row between" style="padding:4px 0"><span>${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)} · ${r.prezzo}</span><button class="del" onclick="togliGiocatore(${r.id})">Togli</button></div>`).join('')}</details>`}).join('')}
     </div>
     <div class="card"><h3>Partecipanti</h3>${membri.map(m=>`<div class="row between" style="padding:4px 0"><span>${esc(m.nome_squadra)} <span class="muted">${un(m.profili)}</span></span>
-      ${m.utente_id!==lega.creatore_id?`<button class="del" onclick="togliMembro(${lega.id},'${m.utente_id}')">Rimuovi</button>`:'<span class="badge">Presidente</span>'}</div>`).join('')}
+      ${profilo.ruolo==='admin'?`<button onclick="liberaSq(${lega.id},'${m.utente_id}')">🔓 Rimetti libera</button> `:''}${m.utente_id!==lega.creatore_id?`<button class="del" onclick="togliMembro(${lega.id},'${m.utente_id}')">Rimuovi</button>`:'<span class="badge">Presidente</span>'}</div>`).join('')}
       <button class="del" style="margin-top:14px" onclick="eliminaLega(${lega.id})">Elimina lega</button></div>`;
   }
   app.innerHTML=h;
@@ -1017,6 +1017,20 @@ async function assegna(lid,gid){
   toast('Giocatore assegnato!');legaView();
 }
 async function togliGiocatore(id){if(!confirm('Togliere il giocatore dalla rosa?'))return;chk(await db.from('rose').delete().eq('id',id));legaView()}
+async function liberaSq(lid,uid){
+  const m=chk(await db.from('membri_lega').select('nome_squadra').eq('lega_id',lid).eq('utente_id',uid).single()),n=m.nome_squadra;
+  if(!confirm(`Rimettere libera "${n}"? L'utente esce dalla lega e la squadra (rosa, punti di partenza, calendario) torna nell'elenco: la potrà prendere chi entra col codice.`))return;
+  const L=chk(await db.from('leghe').select('attesa,attesa_cal,partenza').eq('id',lid).single()),at=L.attesa||{},ac=L.attesa_cal||[],pz=L.partenza||{};
+  const ro=chk(await db.from('rose').select('giocatore_id,prezzo').eq('lega_id',lid).eq('utente_id',uid));
+  const nm={};chk(await db.from('membri_lega').select('utente_id,nome_squadra').eq('lega_id',lid)).forEach(x=>nm[x.utente_id]=x.nome_squadra);
+  const inc=chk(await db.from('incontri').select('id,giornata,casa,trasferta').eq('lega_id',lid).or(`casa.eq.${uid},trasferta.eq.${uid}`));
+  at[n]={rosa:ro.map(r=>[r.giocatore_id,r.prezzo]),pz:pz[uid]||{}};delete pz[uid];
+  inc.forEach(i=>ac.push([i.giornata,nm[i.casa],nm[i.trasferta]]));
+  if(inc.length)chk(await db.from('incontri').delete().in('id',inc.map(i=>i.id)));
+  chk(await db.from('rose').delete().eq('lega_id',lid).eq('utente_id',uid));
+  chk(await db.from('membri_lega').delete().eq('lega_id',lid).eq('utente_id',uid));
+  chk(await db.from('leghe').update({attesa:at,attesa_cal:ac,partenza:pz}).eq('id',lid));
+  toast(`"${n}" è di nuovo libera`);legaView()}
 async function togliMembro(lid,uid){if(!confirm('Rimuovere questo partecipante?'))return;chk(await db.from('membri_lega').delete().eq('lega_id',lid).eq('utente_id',uid));chk(await db.from('rose').delete().eq('lega_id',lid).eq('utente_id',uid));legaView()}
 async function eliminaLega(lid){if(!confirm('Eliminare definitivamente la lega?'))return;chk(await db.from('leghe').delete().eq('id',lid));fz.lega=null;pFanta()}
 
