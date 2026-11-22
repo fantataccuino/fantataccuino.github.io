@@ -173,6 +173,7 @@ async function avvia(session){
   await caricaFeat();
   document.getElementById('top').style.display='block';
   await caricaLeghe();
+  ping();if(!window._pingT){window._pingT=setInterval(ping,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)ping()})}
   REDT=!!((await db.from('redattori').select('utente_id').eq('utente_id',utente.id)).data||[]).length;
   if(pagina==='home') pagina='dash';
   {const m=location.hash.match(/^#art=(\d+)/);if(m){history.replaceState(null,'',location.pathname);setTimeout(()=>apriArtDa(+m[1]),500)}}
@@ -748,6 +749,12 @@ async function spostaVinti(){const d=profilo.palloni_vinti||0;const v=prompt(`Qu
   if(!(n>0)||n>d)return toast('Scrivi un numero tra 1 e '+d,true);
   if(!confirm(`Spostare ${n} palloni vinti nei palloni Premium?\n\nNon saranno più tra i palloni vinti: serviranno solo per entrare nei tavoli e nei tornei Premium. L'operazione non si può annullare.`))return;
   const {data,error}=await db.rpc('sposta_vinti',{p_n:n});if(error)return toast(error.message,true);profilo.palloni_vinti=data;profilo.gettoni=(profilo.gettoni||0)+n;aggSaldo();toast(`➡️ ${n} palloni spostati nei Premium`);pSng()}
+// ---------- online ----------
+function ping(){if(utente&&!document.hidden)db.rpc('ping').then(()=>{},()=>{})}
+const isOnline=p=>!!p?.visto&&(Date.now()-new Date(p.visto))<3*60e3;
+const onDot=p=>isOnline(p)?'<span title="Online adesso" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;margin-right:4px;vertical-align:middle"></span>':'';
+const vistoFa=p=>{if(!p?.visto)return 'mai';if(isOnline(p))return 'online adesso';const m=Math.round((Date.now()-new Date(p.visto))/6e4);return m<60?m+' min fa':m<1440?Math.round(m/60)+' ore fa':new Date(p.visto).toLocaleDateString('it-IT')};
+const allen=m=>m?.profili?.username?`<small class="muted" style="font-weight:400">${onDot(m.profili)}👤 ${esc(m.profili.username)}</small>`:'';
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -855,7 +862,7 @@ async function pDash(){
     <div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">🚚 Trasferisci la tua lega</h3><p class="muted">Giochi già su un'altra app? Mandaci gli screenshot e la portiamo qui noi, con rose, classifica e calendario.</p>${wa?`<a href="${wa}" target="_blank" class="btnv" style="text-align:center;text-decoration:none;background:#25d366">💬 Contatta l'amministratore</a>`:`<p class="muted">Scrivici a <b>fantataccuino@gmail.com</b></p>`}</div>
     <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>x[1]!=='Calcetto'||on('f_sng')).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`;return}
   const lega=chk(await db.from('leghe').select('*').eq('id',LG).single());
-  const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino)').eq('lega_id',lega.id));
+  const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino,visto)').eq('lega_id',lega.id));
   MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
   const me=membri.find(m=>m.utente_id===MIO),nome=u=>membri.find(m=>m.utente_id===u)?.nome_squadra||String(u).replace(/^n:/,'')||'?',img=u=>membri.find(m=>m.utente_id===u)?.stemma;
   const {tot,cl,sd}=await statLega(lega,membri);const t=tot[MIO]||{pt:0,g:0,punti:0},pos=cl.indexOf(MIO)+1;
@@ -1305,7 +1312,7 @@ async function legaView(){
   const lega=chk(await db.from('leghe').select('*').eq('id',fz.lega).maybeSingle());
   if(!lega){fz.lega=null;return pFanta()}
   const pres=lega.creatore_id===utente.id||profilo.ruolo==='admin';
-  const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino)').eq('lega_id',lega.id));
+  const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino,visto)').eq('lega_id',lega.id));
   const nomeSq=uid=>esc(membri.find(m=>m.utente_id===uid)?.nome_squadra||'?');
   MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
   const isCo=MIO!==utente.id;
@@ -1339,7 +1346,7 @@ async function legaView(){
       if(inc.length||(lega.attesa_cal||[]).length){
         const cl=[...tutti].sort((a,b)=>tot[b.utente_id].punti-tot[a.utente_id].punti||tot[b.utente_id].pt-tot[a.utente_id].pt);
         h+=`<div class="card" style="overflow-x:auto"><h3>Scontri diretti</h3><table><tr><th>#</th><th>Squadra</th><th>Pt</th><th>G</th><th>V</th><th>N</th><th>P</th><th>GF</th><th>GS</th><th>FP</th></tr>
-        ${cl.map((m,i)=>{const t=tot[m.utente_id];return `<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b></td><td><b style="color:var(--gold)">${t.punti}</b></td><td>${t.g}</td><td>${t.v}</td><td>${t.n}</td><td>${t.p}</td><td>${t.gf}</td><td>${t.gs}</td><td>${t.pt.toFixed(1)}</td></tr>`}).join('')}</table>
+        ${cl.map((m,i)=>{const t=tot[m.utente_id];return `<tr><td>${i+1}</td><td><b>${esc(m.nome_squadra)}</b>${m.libera?'':'<br>'+allen(m)}</td><td><b style="color:var(--gold)">${t.punti}</b></td><td>${t.g}</td><td>${t.v}</td><td>${t.n}</td><td>${t.p}</td><td>${t.gf}</td><td>${t.gs}</td><td>${t.pt.toFixed(1)}</td></tr>`}).join('')}</table>
         <p class="muted" style="font-size:12px">FP = fantapunti totali (primo criterio di spareggio). Gol: ${testoFasce(lega)}.${LIB.length?' ⏳ = squadra non ancora presa da nessuno.':''}</p></div>`;
       }
       const cl2=[...tutti].sort((a,b)=>tot[b.utente_id].pt-tot[a.utente_id].pt);
@@ -1411,7 +1418,7 @@ async function legaView(){
     const mia=rose.filter(r=>r.utente_id===fz.vedi).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]);
     const spesi=mia.reduce((s,r)=>s+r.prezzo,0);
     const ombraMia=lega.modalita==='ombra'&&fz.vedi===MIO;
-    h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)}</option>`).join('')}</select>
+    h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}${isOnline(m.profili)?' 🟢':''}</option>`).join('')}</select>
     <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi+(+((lega.bonus||{}).cred||{})[fz.vedi]||0)}</b>`:''}</p>
     <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}<br>${titG(r.giocatori)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
     const mm=membri.find(m=>m.utente_id===fz.vedi);
@@ -1608,7 +1615,7 @@ async function legaView(){
       ${(CRK=[...membri.map(m=>({k:m.utente_id,n:m.nome_squadra,sp:rose.filter(r=>r.utente_id===m.utente_id).reduce((a,r)=>a+r.prezzo,0)})),...Object.entries(lega.attesa||{}).map(([n,v])=>({k:'n:'+n,n,sp:(v.rosa||[]).reduce((a,r)=>a+(+r[1]||0),0),lib:1}))]).map((m,i)=>{const adj=+((lega.bonus||{}).cred||{})[m.k]||0,res=lega.crediti-m.sp+adj;
         return `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);gap:6px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b>${esc(m.n)}</b>${m.lib?' ⏳':''}<br><small class="muted">rimasti</small> <b style="color:var(--gold)">${res}</b></span>
         <input id="cr_${i}" type="number" placeholder="n." style="width:64px;margin:0;padding:8px;text-align:center"><button onclick="modCred(${lega.id},${i},1)">➕</button><button onclick="modCred(${lega.id},${i},-1)">➖</button><button onclick="modCred(${lega.id},${i},0)">=</button></div>`}).join('')}<p class="muted" style="font-size:12px">⏳ = squadra libera: i crediti passano a chi la prende.</p></div>`:''}
-    <div class="card"><h3>Partecipanti</h3>${membri.map(m=>`<div class="row between" style="padding:4px 0"><span>${esc(m.nome_squadra)} <span class="muted">${un(m.profili)}</span></span>
+    <div class="card"><h3>Partecipanti</h3>${membri.map(m=>`<div class="row between" style="padding:4px 0"><span>${esc(m.nome_squadra)} <span class="muted">${onDot(m.profili)}${un(m.profili)} · ${vistoFa(m.profili)}</span></span>
       ${profilo.ruolo==='admin'?`<button onclick="liberaSq(${lega.id},'${m.utente_id}')">🔓 Rimetti libera</button> `:''}${m.utente_id!==lega.creatore_id?`<button class="del" onclick="togliMembro(${lega.id},'${m.utente_id}')">Rimuovi</button>`:'<span class="badge">Presidente</span>'}</div>`).join('')}
       <button class="del" style="margin-top:14px" onclick="eliminaLega(${lega.id})">Elimina lega</button></div>`;
   }
@@ -2569,8 +2576,11 @@ async function pAdmin(){
 
   if(ad.tab==='utenti'){
     const us=chk(await db.from('profili').select('*').order('approvato').order('creato_il',{ascending:false}));
-    h+=us.map(u=>`<div class="card row between"><div><b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
-      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni} · 🎁 ${u.prova??0} · 🏆 ${u.palloni_vinti??0}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
+    const onl=us.filter(isOnline).sort((a,b)=>new Date(b.visto)-new Date(a.visto)),oggi=us.filter(u=>u.visto&&Date.now()-new Date(u.visto)<864e5).length;
+    h+=`<div class="card" style="border-color:#2ecc71"><h3 style="margin-top:0">🟢 Online adesso: ${onl.length}</h3>${onl.map(u=>`<span class="badge" style="background:#1a7f37;margin:2px">${esc(u.username)}</span>`).join('')||'<p class="muted" style="margin:0">Nessuno in questo momento.</p>'}<p class="muted" style="font-size:12px;margin-bottom:0">Entrati nelle ultime 24 ore: <b>${oggi}</b> · Iscritti: <b>${us.length}</b> · si aggiorna ogni minuto</p><button style="margin-top:6px" onclick="pAdmin()">🔄 Aggiorna</button></div>`;
+    us.sort((a,b)=>(isOnline(b)-isOnline(a))||0);
+    h+=us.map(u=>`<div class="card row between"><div>${onDot(u)}<b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
+      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · 👁️ ${vistoFa(u)} · <span class="pd"></span> ${u.gettoni} · 🎁 ${u.prova??0} · 🏆 ${u.palloni_vinti??0}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
       ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><select id="pw_${u.id}" style="margin:0;width:auto;padding:8px"><option value="gettoni">Premium</option><option value="prova">🎁 Gratis</option><option value="palloni_vinti">🏆 Vinti</option></select><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
       ${u.id===utente.id?'':`<div class="row">${!u.approvato?`<button class="ok" onclick="approva('${u.id}')">Accetta</button>`:''}
         ${u.approvato?`<button onclick="cambiaRuolo('${u.id}','${u.ruolo==='admin'?'utente':'admin'}')">${u.ruolo==='admin'?'Togli admin':'Rendi admin'}</button>`:''}
