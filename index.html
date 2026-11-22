@@ -671,6 +671,21 @@ async function eliminaArt(id){if(!confirm('Eliminare questo articolo?'))return;c
 async function aggRed(){const u=val('gz_ru').trim();if(!u)return;const p=(await db.from('profili').select('id').ilike('username',u).maybeSingle()).data;if(!p)return toast('Utente non trovato',true);
   chk(await db.from('redattori').upsert({utente_id:p.id}));toast(u+' ora è redattore ✍️');pScrivi()}
 async function togliRed(id){if(!confirm('Togliere questo redattore?'))return;chk(await db.from('redattori').delete().eq('utente_id',id));pScrivi()}
+const DSTY='border:1px solid var(--line);border-radius:14px;margin:8px 0;padding:10px 12px;background:#ffffff08';
+function artIndisp(t){const righe=(t||'').split('\n').filter(r=>/^[^:]{2,30}: /.test(r)&&!r.startsWith('🚑'));
+  if(!righe.length)return testoArt(t);
+  return `<p class="muted" style="font-size:14px;margin-top:0">🚑 infortunato · ⛔ squalificato. Tocca una squadra per vedere chi manca.</p>`+righe.map(r=>{const i=r.indexOf(': '),sq=r.slice(0,i),L=r.slice(i+2).split(', ');
+    return `<details style="${DSTY}"><summary style="color:var(--txt);font-weight:800;display:flex;justify-content:space-between;cursor:pointer"><span>${esc(sq)}</span><span class="badge" style="background:var(--red)">${L.length}</span></summary>${L.map(x=>`<div style="padding:5px 0;border-top:1px solid #ffffff10">${esc(x)}</div>`).join('')}</details>`}).join('')}
+async function artProb(a){const box=document.getElementById('art_corpo');if(!box)return;const g=+(String(a.chiave||'').split('-')[1]||0);
+  const pp=g?chk(await db.from('partite_sa').select('api_id,casa,trasferta,data').eq('giornata',g).order('data')):[];
+  const pr=pp.length?((await db.from('probabili').select('partita_id,giocatori(id,nome,ruolo,squadra)').in('partita_id',pp.map(p=>p.api_id))).data||[]):[];
+  const fuori={};(a.testo||'').split('\n').forEach((r,i,A)=>{const m=r.match(/^(.+?) - (.+)$/);if(m&&A[i+1]&&A[i+1].includes('Fuori:'))fuori[m[1].trim()+'|'+m[2].trim()]=A[i+1].split('Fuori:')[1].trim()});
+  if(!pp.length){box.innerHTML=testoArt(a.testo);return}
+  const sq=(p,s)=>{const L=pr.filter(x=>x.partita_id===p.api_id&&x.giocatori?.squadra===s).map(x=>x.giocatori).sort((x,y)=>ORD[x.ruolo]-ORD[y.ruolo]);
+    return `<div style="flex:1;min-width:0"><b>${esc(s)}</b>${L.length?L.map(x=>`<div style="padding:3px 0;font-size:14px">${ruolo(x.ruolo)}${esc(x.nome)}</div>`).join(''):'<p class="muted" style="font-size:13px">Non ancora uscite</p>'}</div>`};
+  box.innerHTML=`<p class="muted" style="font-size:14px;margin-top:0">Tocca una partita per vedere le probabili delle due squadre.</p>`+pp.map(p=>{const f=fuori[p.casa+'|'+p.trasferta];
+    return `<details style="${DSTY}"><summary style="color:var(--txt);font-weight:800;cursor:pointer">${esc(p.casa)} – ${esc(p.trasferta)} <small class="muted" style="font-weight:400">${new Date(p.data).toLocaleString('it-IT',{weekday:'short',hour:'2-digit',minute:'2-digit'})}</small>${f?' <span class="badge" style="background:var(--red)">❓</span>':''}</summary>
+      <div style="display:flex;gap:12px;margin-top:8px">${sq(p,p.casa)}${sq(p,p.trasferta)}</div>${f?`<p style="margin:8px 0 0;font-size:14px">❓ <b>In dubbio / fuori:</b> ${esc(f)}</p>`:''}</details>`}).join('')}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -832,8 +847,8 @@ async function pHome(){
 }
 function notiziaBloccata(){if(confirm('Questa notizia è riservata agli utenti 💎 Premium: Top 11, indisponibili, probabili, quotazioni e le notizie della tua lega.\n\nVuoi scoprire il Premium?'))vai('premium')}
 function apriArt(id){const a=ARTS.find(x=>x.id===id);if(!a)return notiziaBloccata();
-  app.innerHTML=`<button onclick="vai('giornale')">← Il Taccuino</button><article class="card" style="margin-top:12px">${testata(22)}<small style="color:var(--gold);font-weight:700;text-transform:uppercase;font-size:12px">${esc(sezDi(a))}${a.premium?' · 💎 Premium':''}</small><h1 style="font:900 26px Georgia,serif;margin:4px 0 6px">${esc(a.titolo)}</h1><small class="muted">di <b>${esc(autDi(a))}</b> · ${fmt(a.pubblicato_il)}</small>${a.immagine_url?`<img src="${esc(a.immagine_url)}" style="width:100%;border-radius:14px;margin:12px 0" alt="">`:''}<div style="line-height:1.6;font-size:16px;margin-top:10px">${testoArt(a.testo)}</div>
-    <div class="row" style="gap:8px;margin-top:16px"><button class="pri" onclick="condividiArt(${a.id},'${esc(a.titolo).replace(/'/g,"\\'")}')">📤 Condividi</button>${profilo?.ruolo==='admin'||(REDT&&a.autore_id===utente.id&&a.stato!=='pubblicato')?`<button onclick="GZ.ed=${a.id};vai('scrivi')">✏️ Modifica</button>`:''}</div></article>`;window.scrollTo(0,0)}
+  app.innerHTML=`<button onclick="vai('giornale')">← Il Taccuino</button><article class="card" style="margin-top:12px">${testata(22)}<small style="color:var(--gold);font-weight:700;text-transform:uppercase;font-size:12px">${esc(sezDi(a))}${a.premium?' · 💎 Premium':''}</small><h1 style="font:900 26px Georgia,serif;margin:4px 0 6px">${esc(a.titolo)}</h1><small class="muted">di <b>${esc(autDi(a))}</b> · ${fmt(a.pubblicato_il)}</small>${a.immagine_url?`<img src="${esc(a.immagine_url)}" style="width:100%;border-radius:14px;margin:12px 0" alt="">`:''}<div id="art_corpo" style="line-height:1.6;font-size:16px;margin-top:10px">${a.tipo==='indisponibili'?artIndisp(a.testo):a.tipo==='probabili'?'<p class="muted">Carico le probabili…</p>':testoArt(a.testo)}</div>
+    <div class="row" style="gap:8px;margin-top:16px"><button class="pri" onclick="condividiArt(${a.id},'${esc(a.titolo).replace(/'/g,"\\'")}')">📤 Condividi</button>${profilo?.ruolo==='admin'||(REDT&&a.autore_id===utente.id&&a.stato!=='pubblicato')?`<button onclick="GZ.ed=${a.id};vai('scrivi')">✏️ Modifica</button>`:''}</div></article>`;window.scrollTo(0,0);if(a.tipo==='probabili')artProb(a)}
 
 // ---------- fantacalcio ----------
 let fz={lega:null,tab:'classifica',vedi:null,gg:null,fc:0,cup:0};
