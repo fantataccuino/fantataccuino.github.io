@@ -550,36 +550,6 @@ async function assegnaAsta(lid){if(!MK.ag)return toast('Scegli il giocatore dall
 async function proponiScambio(lid){if(!MK.sel.dai.length&&!MK.sel.ric.length)return toast('Scegli almeno un giocatore',true);
   const {error}=await db.rpc('scambio_proponi',{p_lega:lid,p_a:MK.a,p_dai:MK.sel.dai,p_ricevi:MK.sel.ric,p_crediti:+val('sc_cr')||0});if(error)return toast(error.message,true);MK.sel={dai:[],ric:[]};toast('📤 Proposta inviata');legaView()}
 async function rispScambio(id,ok){if(!confirm(ok?'Accettare lo scambio? I giocatori passano subito di squadra.':'Confermi?'))return;const {error}=await db.rpc('scambio_rispondi',{p_id:id,p_ok:ok});if(error)return toast(error.message,true);toast(ok?'🤝 Scambio fatto!':'Fatto');legaView()}
-// ---------- quotazioni fantacalcio.it ----------
-const sqN=s=>norm(s).replace(/\b(ac|as|ssc|ss|us|fc|afc|cfc|calcio|hellas|1907|1913|1919)\b/g,'').replace(/internazionale/,'inter').replace(/[^a-z]/g,'');
-async function fileQuot(inp){const f=inp.files[0];if(!f)return;const box=document.getElementById('qf_ris');box.innerHTML='<p class="muted">Leggo il file…</p>';
-  if(!window.XLSX)await new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';sc.onload=ok;sc.onerror=ko;document.head.appendChild(sc)});
-  const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const ws=wb.Sheets['Tutti']||wb.Sheets[wb.SheetNames[0]];const M=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
-  const hi=M.findIndex(r=>r&&r.includes('Qt.A'));if(hi<0){box.innerHTML='<p style="color:var(--red)">Non è il file delle quotazioni di Fantacalcio.it</p>';return}
-  const H=M[hi],ix=k=>H.indexOf(k);const righe=M.slice(hi+1).filter(r=>r&&r[ix('Nome')]).map(r=>({fc:+r[ix('Id')],ru:r[ix('R')],nome:String(r[ix('Nome')]).trim(),sq:String(r[ix('Squadra')]).trim(),qa:+r[ix('Qt.A')]||1,qi:+r[ix('Qt.I')]||+r[ix('Qt.A')]||1,fvm:+r[ix('FVM')]||0}));
-  const DB=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,quotazione,fc_id').limit(5000));
-  const parole=t=>norm(t).replace(/[.,()'\-]/g,' ').split(/\s+/).filter(Boolean);
-  const usati=new Set(),match=[],nuovi=[],dubbi=[];
-  for(const r of righe){let g=DB.find(x=>x.fc_id===r.fc);
-    if(!g){const pw=parole(r.nome),lw=pw.filter(w=>w.length>2),stesse=DB.filter(x=>!usati.has(x.id)&&sqN(x.squadra)===sqN(r.sq));
-      const sc=x=>{const nw=parole(x.nome);if(nw.join(' ')===pw.join(' '))return 100;if(!lw.some(w=>nw.includes(w)))return 0;let p=0;for(const w of pw){if(nw.includes(w))p+=w.length>2?3:2;else if(nw.some(y=>y[0]===w[0]&&(y.length<=2||w.length<=2)))p+=1}return p+(x.ruolo===r.ru?2:0)};
-      let c=stesse.map(x=>({x,p:sc(x)})).filter(z=>z.p>0).sort((a,b)=>b.p-a.p);
-      if(!c.length)c=DB.filter(x=>!usati.has(x.id)&&x.ruolo===r.ru).map(x=>({x,p:sc(x)})).filter(z=>z.p>=100);
-      if(c.length>1&&c[0].p===c[1].p&&c[0].p<100)dubbi.push(r.nome+' ('+r.sq+')');
-      g=c[0]?.x}
-    if(g){usati.add(g.id);match.push({id:g.id,fc:r.fc,qa:r.qa,qi:r.qi,fvm:r.fvm,prima:g.quotazione,nome:r.nome,sq:r.sq})}else nuovi.push(r)}
-  const sqm={};DB.forEach(x=>{if(x.squadra)sqm[sqN(x.squadra)]=x.squadra});QIMP={match,nuovi,sqm};
-  const cambi=match.filter(m=>m.prima!==m.qa).sort((a,b)=>Math.abs(b.qa-b.prima)-Math.abs(a.qa-a.prima));
-  box.innerHTML=`<div class="card" style="border-color:var(--green)"><p>📗 <b>${righe.length}</b> giocatori nel file · <b>${match.length}</b> trovati sul sito · <b>${nuovi.length}</b> non trovati${dubbi.length?` · ${dubbi.length} da controllare`:''}</p>
-    <p class="muted" style="font-size:13px">Cambiano quotazione in <b>${cambi.length}</b>. I più cambiati:</p>${cambi.slice(0,12).map(m=>`<div style="font-size:13px">${esc(m.nome)} <span class="muted">${esc(m.sq)}</span>: ${m.prima} → <b>${m.qa}</b></div>`).join('')}
-    ${nuovi.length?`<details style="margin-top:8px"><summary class="muted">Non trovati sul sito (${nuovi.length}): li aggiungo al listone</summary><div class="muted" style="font-size:12px">${nuovi.map(r=>`${r.ru} ${esc(r.nome)} (${esc(r.sq)})`).join(', ')}</div></details>`:''}
-    ${dubbi.length?`<details><summary class="muted">Da controllare (${dubbi.length})</summary><div class="muted" style="font-size:12px">${dubbi.map(esc).join(', ')}</div></details>`:''}
-    <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="qf_new" checked style="width:auto"> Aggiungi al listone i ${nuovi.length} non trovati</label>
-    <button class="pri" style="width:100%" onclick="salvaQuot()">✅ Aggiorna le quotazioni</button></div>`}
-let QIMP=null;
-async function salvaQuot(){if(!QIMP)return;const nuovi=document.getElementById('qf_new')?.checked?QIMP.nuovi:[];
-  const n=chk(await db.rpc('quot_importa',{p_upd:QIMP.match.map(m=>({id:m.id,fc:m.fc,qa:m.qa,qi:m.qi,fvm:m.fvm})),p_new:nuovi.map(r=>({fc:r.fc,nome:r.nome,ru:r.ru,sq:QIMP.sqm[sqN(r.sq)]||r.sq,qa:r.qa,qi:r.qi,fvm:r.fvm}))}));
-  document.getElementById('qf_ris').innerHTML=`<p style="color:var(--green)">✅ Fatto: ${n} giocatori aggiornati o aggiunti.</p>`;QIMP=null;MK.L=null;TT.L=null;toast('Quotazioni aggiornate')}
 
 // ---------- installa app ----------
 let INSTP=null;
@@ -698,6 +668,80 @@ async function artProb(a){const box=document.getElementById('art_corpo');if(!box
   box.innerHTML=`<p class="muted" style="font-size:14px;margin-top:0">Tocca una partita per vedere le probabili delle due squadre.</p>`+pp.map(p=>{const f=fuori[p.casa+'|'+p.trasferta];
     return `<details style="${DSTY}"><summary style="color:var(--txt);font-weight:800;cursor:pointer">${esc(p.casa)} – ${esc(p.trasferta)} <small class="muted" style="font-weight:400">${new Date(p.data).toLocaleString('it-IT',{weekday:'short',hour:'2-digit',minute:'2-digit'})}</small>${f?' <span class="badge" style="background:var(--red)">❓</span>':''}</summary>
       <div style="display:flex;gap:12px;margin-top:8px">${sq(p,p.casa)}${sq(p,p.trasferta)}</div>${f?`<p style="margin:8px 0 0;font-size:14px">❓ <b>In dubbio / fuori:</b> ${esc(f)}</p>`:''}</details>`}).join('')}
+// ---------- sistema A ruoli ----------
+const MODR={
+'3-4-3':[['Por'],['Dc','B'],['Dc'],['Dc','B'],['E','W'],['M','C'],['M','C'],['E','W'],['W','A'],['A','Pc'],['W','A']],
+'3-4-2-1':[['Por'],['Dc','B'],['Dc'],['Dc','B'],['E','W'],['M','C'],['M','C'],['E','W'],['T','W'],['T','W'],['A','Pc']],
+'3-4-1-2':[['Por'],['Dc','B'],['Dc'],['Dc','B'],['E','W'],['M','C'],['M','C'],['E','W'],['T'],['A','Pc'],['A','Pc']],
+'3-5-2':[['Por'],['Dc','B'],['Dc'],['Dc','B'],['E','W'],['M','C'],['M'],['M','C'],['E','W'],['A','Pc'],['A','Pc']],
+'3-5-1-1':[['Por'],['Dc','B'],['Dc'],['Dc','B'],['E','W'],['M','C'],['M'],['M','C'],['E','W'],['T','A'],['A','Pc']],
+'4-3-3':[['Por'],['Dd'],['Dc'],['Dc'],['Ds'],['M','C'],['M'],['M','C'],['W','A'],['A','Pc'],['W','A']],
+'4-3-1-2':[['Por'],['Dd'],['Dc'],['Dc'],['Ds'],['M','C'],['M'],['M','C'],['T'],['A','Pc'],['A','Pc']],
+'4-4-2':[['Por'],['Dd'],['Dc'],['Dc'],['Ds'],['E','W'],['M','C'],['M','C'],['E','W'],['A','Pc'],['A','Pc']],
+'4-1-4-1':[['Por'],['Dd'],['Dc'],['Dc'],['Ds'],['M'],['E','W'],['C','T'],['C','T'],['E','W'],['A','Pc']],
+'4-4-1-1':[['Por'],['Dd'],['Dc'],['Dc'],['Ds'],['E','W'],['M','C'],['M','C'],['E','W'],['T','A'],['A','Pc']],
+'4-2-3-1':[['Por'],['Dd'],['Dc'],['Dc'],['Ds'],['M','C'],['M','C'],['W','T'],['T'],['W','T'],['A','Pc']]};
+const VIC={Por:[],Dc:['B','Dd','Ds'],B:['Dc','Dd','Ds','E'],Dd:['Ds','B','E','Dc'],Ds:['Dd','B','E','Dc'],E:['Dd','Ds','M','W','B'],M:['C','E'],C:['M','T','E'],T:['C','W','A'],W:['T','E','A'],A:['Pc','W','T'],Pc:['A']};
+const RCOL={Por:'#f5a623',Dc:'#1fa34a',B:'#1fa34a',Dd:'#1fa34a',Ds:'#1fa34a',E:'#1d7fd1',M:'#1d7fd1',C:'#1d7fd1',T:'#8e44ad',W:'#8e44ad',A:'#d63031',Pc:'#d63031'};
+const RMG=g=>g?.ruoli_m?String(g.ruoli_m).split(/[;,\s]+/).filter(Boolean):({P:['Por'],D:['Dc'],C:['C'],A:['A']}[g?.ruolo]||[]);
+const rchip=r=>`<span style="display:inline-block;background:${RCOL[r]||'#555'};color:#fff;border-radius:6px;padding:0 5px;font:800 11px system-ui;margin-right:3px">${r}</span>`;
+const rchips=g=>RMG(g).map(rchip).join('');
+const lineeMod=m=>{const n=m.split('-').map(Number);const L=[[0]];let i=1;n.forEach(k=>{L.push(Array.from({length:k},(_,j)=>i+j));i+=k});return L};
+let FR=null;
+async function cardRuoli(lega,g,mia,att,sch,cps){
+  const R=chk(await db.from('giocatori').select('id,ruoli_m').in('id',mia.map(r=>r.giocatore_id)));const rm={};R.forEach(x=>rm[x.id]=x.ruoli_m);
+  const P={};mia.forEach(r=>P[r.giocatore_id]={...r.giocatori,id:r.giocatore_id,ruoli_m:rm[r.giocatore_id]});
+  const mod=MODR[sch?.modulo]?sch.modulo:'4-3-3';const sl=Array(11).fill(null);
+  att.filter(x=>x.titolare&&x.ordine>=0&&x.ordine<11&&P[x.giocatore_id]).forEach(x=>sl[x.ordine]=x.giocatore_id);
+  const pan=att.filter(x=>!x.titolare&&P[x.giocatore_id]).sort((a,b)=>a.ordine-b.ordine).map(x=>x.giocatore_id);
+  FR={lid:lega.id,gn:g.numero,mod,sl,pan,sel:null,fil:'',P,nasc:!!sch?.nascosta,cps};
+  return `<div class="card"><h3>${fz.fc?'🏆 '+esc(cps.find(c=>c.id===fz.fc).nome)+' · ':''}Giornata ${g.numero} <span class="badge" style="background:#8e44ad">A ruoli</span></h3><p class="muted">Scadenza: ${fmt(g.scadenza)}</p><div id="fr_box"></div>
+    <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:12px 0 0"><input type="checkbox" id="f_nasc" style="width:auto" ${sch?.nascosta?'checked':''}> 🙈 Nascondi la mia formazione agli altri fino al calcio d'inizio</label>
+    ${!fz.fc&&cps.length?cps.map(c=>`<label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:8px 0 0"><input type="checkbox" class="f_cop" value="${c.id}" style="width:auto"> 🏆 Salva anche per ${esc(c.nome)}</label>`).join(''):''}
+    <button class="pri" style="width:100%;margin-top:12px" onclick="salvaRuoli()">Salva formazione${fz.fc?' di coppa':''}</button>
+    <details style="margin-top:10px"><summary class="muted">❓ Come funziona "A ruoli"</summary><p class="muted" style="font-size:13px">Ogni giocatore ha i suoi ruoli: ${['Por','Dc','B','Dd','Ds','E','M','C','T','W','A','Pc'].map(rchip).join('')}. Ogni posto del modulo accetta solo certi ruoli (scritti sul posto vuoto). Tocca un posto per vedere chi ci può giocare.<br><br><b>Cambi</b>: se un titolare non gioca entra il primo della panchina con un ruolo giusto per quel posto; se non c'è, entra un giocatore di ruolo vicino con <b>-1 (fuori ruolo)</b>. Il portiere si cambia solo con un portiere.</p></details></div>`}
+function frDraw(){const box=document.getElementById('fr_box');if(!box||!FR)return;const S=MODR[FR.mod],P=FR.P;
+  const inC=new Set(FR.sl.filter(Boolean)),inP=new Set(FR.pan);const full=FR.sl.every(Boolean);
+  const slot=k=>{const id=FR.sl[k],on=FR.sel===k;if(id){const g=P[id];return `<div class="chip" style="${on?'outline:2px solid var(--gold)':''};flex-direction:column;align-items:center;padding:4px 8px;border-radius:14px" onclick="frSlot(${k})"><span>${rchips(g)}</span><b style="font-size:12px">${esc(g.nome)}</b></div>`}
+    return `<div class="chip slot" style="${on?'outline:2px solid var(--gold);background:#ffd34d33':''}" onclick="frSlot(${k})">＋ ${S[k].join('/')}</div>`};
+  const filt=FR.sel!==null?S[FR.sel]:null;
+  const lista=Object.values(P).filter(g=>!filt||RMG(g).some(r=>filt.includes(r))).filter(g=>!FR.fil||RMG(g).includes(FR.fil)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]||a.nome.localeCompare(b.nome));
+  box.innerHTML=`<div class="fmods">${Object.keys(MODR).map(m=>`<button class="fmod ${m===FR.mod?'on':''}" onclick="frMod('${m}')">${m}</button>`).join('')}</div>
+    <p class="muted" style="color:${full?'var(--green)':'var(--muted)'}">Titolari ${FR.sl.filter(Boolean).length}/11 · Panchina ${FR.pan.length} ${full?'✅':'❌'}</p>
+    <div class="campo">${lineeMod(FR.mod).reverse().map(L=>`<div class="linea">${[...L].reverse().map(slot).join('')}</div>`).join('')}</div>
+    ${FR.sel!==null?`<p style="margin:8px 0;color:var(--gold)">👇 Scegli chi mettere nel posto <b>${S[FR.sel].join('/')}</b> <button onclick="FR.sel=null;frDraw()">Annulla</button></p>`:''}
+    <h3 style="margin-top:12px">🪑 Panchina ${FR.pan.length?`(${FR.pan.length})`:''}</h3>${FR.pan.length?FR.pan.map((id,i)=>`<div class="row between" style="padding:5px 0;border-bottom:1px solid var(--line)"><span><small class="muted">${i+1}.</small> ${rchips(P[id])}${esc(P[id].nome)}</span><span><button onclick="frMuovi(${i},-1)" ${i?'':'disabled'}>▲</button> <button onclick="frMuovi(${i},1)" ${i<FR.pan.length-1?'':'disabled'}>▼</button> <button class="del" onclick="frTogli(${id})">✕</button></span></div>`).join(''):'<p class="muted" style="font-size:13px">Vuota: tocca un giocatore fuori dal campo per metterlo in panchina.</p>'}
+    <h3 style="margin-top:16px">📋 La tua rosa ${filt?`<small class="muted">· chi può giocare ${S[FR.sel].join('/')}</small>`:''}</h3>
+    ${filt?'':`<div class="fmods" style="overflow-x:auto;flex-wrap:nowrap">${['','Por','Dc','B','Dd','Ds','E','M','C','T','W','A','Pc'].map(k=>`<button class="ffil ${FR.fil===k?'on':''}" onclick="FR.fil='${k}';frDraw()">${k||'Tutti'}</button>`).join('')}</div>`}
+    ${lista.map(g=>{const st=inC.has(g.id)?'IN CAMPO':inP.has(g.id)?'PANCA '+(FR.pan.indexOf(g.id)+1):'—';return `<div class="frow ${inC.has(g.id)?'tit':inP.has(g.id)?'pan':''}" onclick="frTap(${g.id})"><span>${rchips(g)}<b>${esc(g.nome)}</b> <small class="muted">${esc(g.squadra)}</small></span><span class="fst" style="margin-left:auto">${st}</span></div>`}).join('')||'<p class="muted">Nessun giocatore della rosa può giocare in questo posto.</p>'}
+    <p class="muted" style="font-size:12px">Tocca un <b>posto</b> e poi il giocatore. Oppure tocca un giocatore: va nel primo posto libero adatto a lui, se non c'è va in panchina; toccalo ancora per toglierlo.</p>`}
+function frMod(m){const old=FR.sl.filter(Boolean);FR.mod=m;FR.sl=Array(11).fill(null);FR.sel=null;const S=MODR[m];
+  old.forEach(id=>{const R=RMG(FR.P[id]);const k=S.findIndex((s,i)=>!FR.sl[i]&&R.some(r=>s.includes(r)));if(k>=0)FR.sl[k]=id;else if(!FR.pan.includes(id))FR.pan.unshift(id)});frDraw()}
+function frSlot(k){if(FR.sel===k){if(FR.sl[k]){FR.sl[k]=null}FR.sel=null}else FR.sel=k;frDraw();if(FR.sel!==null)document.getElementById('fr_box')?.querySelector('h3:last-of-type')?.scrollIntoView({behavior:'smooth',block:'start'})}
+function frStacca(id){const i=FR.sl.indexOf(id);if(i>=0)FR.sl[i]=null;FR.pan=FR.pan.filter(x=>x!==id)}
+function frTap(id){const S=MODR[FR.mod],R=RMG(FR.P[id]);
+  if(FR.sel!==null){if(!R.some(r=>S[FR.sel].includes(r)))return toast('Questo giocatore non può giocare in quel posto',true);const vecchio=FR.sl[FR.sel];frStacca(id);if(vecchio&&vecchio!==id&&!FR.pan.includes(vecchio))FR.pan.push(vecchio);FR.sl[FR.sel]=id;FR.sel=null;return frDraw()}
+  if(FR.sl.includes(id)){frStacca(id);FR.pan.push(id)}else if(FR.pan.includes(id)){frStacca(id)}
+  else{const k=S.findIndex((s,i)=>!FR.sl[i]&&R.some(r=>s.includes(r)));if(k>=0)FR.sl[k]=id;else FR.pan.push(id)}frDraw()}
+function frTogli(id){frStacca(id);frDraw()}
+function frMuovi(i,d){const j=i+d;if(j<0||j>=FR.pan.length)return;[FR.pan[i],FR.pan[j]]=[FR.pan[j],FR.pan[i]];frDraw()}
+async function salvaRuoli(){if(!FR.sl.every(Boolean))return toast('Completa tutti gli 11 posti del modulo',true);
+  const righe=[...FR.sl.map((id,k)=>({giocatore_id:id,titolare:true,ordine:k})),...FR.pan.map((id,i)=>({giocatore_id:id,titolare:false,ordine:i+1}))];
+  const dove=[fz.fc||0,...(fz.fc?[]:[...document.querySelectorAll('.f_cop:checked')].map(x=>+x.value))];
+  for(const cp of dove){
+    chk(await db.from('formazioni').delete().eq('lega_id',FR.lid).eq('coppa',cp).eq('utente_id',MIO).eq('giornata',FR.gn));
+    chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:FR.lid,utente_id:MIO,giornata:FR.gn,coppa:cp}))));
+    chk(await db.from('schieramenti').upsert({lega_id:FR.lid,utente_id:MIO,giornata:FR.gn,coppa:cp,modulo:FR.mod,nascosta:!!document.getElementById('f_nasc')?.checked},{onConflict:'lega_id,utente_id,giornata,coppa'}))}
+  toast(dove.length>1?'Formazione salvata per campionato e coppa!':fz.fc?'Formazione di coppa salvata!':'Formazione salvata!')}
+async function quotRicalcola(){if(!confirm('Ricalcolare tutte le quotazioni da zero con i voti della stagione? Le frecce ▲▼ ripartono da oggi.'))return;const n=chk(await db.rpc('quot_ricalcola_tutto'));toast(n+' quotazioni ricalcolate');MK.L=null}
+async function ruoliAuto(){toast('Leggo le formazioni ufficiali…');const r=chk(await db.rpc('admin_ruoli_auto'));toast(r)}
+async function ruoliCerca(){const q=val('ru_q').trim(),box=document.getElementById('ru_l');if(q.length<2){box.innerHTML='';return}
+  const L=chk(await db.from('giocatori').select('id,nome,squadra,ruolo,ruoli_m,ruoli_fissi').ilike('nome','%'+q+'%').eq('attivo',true).limit(10));
+  box.innerHTML=L.map(g=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${rchips(g)}<b>${esc(g.nome)}</b> <small class="muted">${esc(g.squadra)}${g.ruoli_fissi?' · 🔒 fissato a mano':''}</small></span><button onclick="ruoliModifica(${g.id},'${esc(g.ruoli_m||'').replace(/'/g,'')}')">✏️</button></div>`).join('')||'<p class="muted">Nessuno trovato</p>'}
+async function ruoliModifica(id,cur){const v=prompt('Ruoli separati da ; (es. M;C). Possibili: Por Dc B Dd Ds E M C T W A Pc\nLascia vuoto per tornare all\'assegnazione automatica.',cur);if(v===null)return;
+  const ok=['Por','Dc','B','Dd','Ds','E','M','C','T','W','A','Pc'];const R=v.split(/[;,\s]+/).map(x=>x.trim()).filter(Boolean).map(x=>ok.find(o=>o.toLowerCase()===x.toLowerCase())||x);
+  if(R.some(x=>!ok.includes(x)))return toast('Ruolo non valido: '+R.find(x=>!ok.includes(x)),true);
+  chk(await db.from('giocatori').update(R.length?{ruoli_m:R.join(';'),ruoli_fissi:true}:{ruoli_fissi:false}).eq('id',id));toast('Ruoli salvati');ruoliCerca()}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -880,6 +924,7 @@ async function pFanta(){
       ${on('f_draft')?'<option value="draft">⚡ Draft a serpentone (si sceglie a turno)</option>':''}
       ${on('f_ombra')?'<option value="ombra">👥 Lega Ombra (ognuno importa la rosa da un\'altra app)</option>':''}</select>
     <div id="nl_cr"><label>Crediti per squadra</label><input id="nl_cred" type="number" value="500"></div>
+    <label>🎮 Sistema di gioco</label><select id="nl_sis"><option value="classic">Classic (P, D, C, A)</option><option value="ruoli">A ruoli (ruoli dettagliati e moduli con posti)</option></select>
     <div class="card" style="background:#0d0826aa;border-color:var(--gold);margin:6px 0 12px"><h3>📖 Prima di creare: le funzioni speciali</h3>
       ${on('f_carte')?`<details><summary style="color:var(--txt);font-weight:700">🃏 Carte Tattiche: cosa sono?</summary><p class="muted" style="font-size:14px;margin-top:6px">Ogni squadra ha 4 carte e ognuna si può giocare <b>una sola volta in tutta la stagione</b>, nella giornata che sceglie. Si gioca dalla scheda Formazione e si può annullare fino alla scadenza.</p>${CARTE.map(c=>`<p style="font-size:14px;margin:6px 0"><b>${c.n}</b><br><span class="muted">${c.d}</span></p>`).join('')}<p class="muted" style="font-size:13px">👍 Rendono la lega più strategica e piena di colpi di scena. 👎 Se preferisci il fantacalcio classico, lasciale spente.</p></details>`:''}
       ${on('f_sprint')?`<details style="margin-top:8px"><summary style="color:var(--txt);font-weight:700">🏆 Mini-torneo Sprint (torneo flash): cos'è?</summary><p class="muted" style="font-size:14px;margin-top:6px">Una lega che vale <b>solo per alcune giornate</b> di Serie A, per esempio dalla 14ª alla 18ª. Si gioca con le stesse regole, ma la classifica conta solo quelle giornate.</p><p class="muted" style="font-size:14px">👍 Perfetta per tornei veloci tra amici, anche a campionato già iniziato, o per un mini-campionato di Natale. 👎 Se vuoi una lega per tutta la stagione, lasciala spenta.</p></details>`:''}
@@ -898,7 +943,7 @@ async function pFanta(){
 async function creaLega(){
   const nome=val('nl_nome');if(!nome) return toast('Scrivi il nome della lega',true);
   if(!premOk()){const {count}=await db.from('leghe').select('*',{count:'exact',head:true}).eq('creatore_id',utente.id);if(count>=2)return toast('Senza Premium puoi creare al massimo 2 leghe 💎',true)}
-  const o={nome,crediti:+val('nl_cred')||500,modalita:val('nl_mod'),carte:!!document.getElementById('nl_carte')?.checked,bonus:leggiBonus('nb'),soglia_gol:+val('nl_sg')||66,passo_gol:+val('nl_pg')||6};
+  const o={nome,crediti:+val('nl_cred')||500,modalita:val('nl_mod'),carte:!!document.getElementById('nl_carte')?.checked,bonus:{...leggiBonus('nb'),sistema:val('nl_sis')||'classic'},soglia_gol:+val('nl_sg')||66,passo_gol:+val('nl_pg')||6};
   if(document.getElementById('nl_sprint')?.checked){
     o.giornata_da=+val('nl_da');o.giornata_a=+val('nl_a');
     if(!o.giornata_da||!o.giornata_a||o.giornata_a<o.giornata_da) return toast('Indica le giornate dello Sprint',true);
@@ -1055,7 +1100,7 @@ function fvL(v,ruolo,B,ctx){if(!v||v.voto===null||v.voto===undefined)return null
   if(ruolo==='P'&&!(+v.gol_subiti)&&(+v.minuti||0)>0)f+=B.inviolata;return Math.round(f*100)/100}
 function campiBonus(pre,B){B={...BONUS_DEF,...(B||{})};return `<p class="muted" style="font-size:12px">Metti i punti che vuoi (anche con la virgola, es. 0.5). I malus vanno col meno (es. -1). Scrivi <b>0</b> per non usare una voce.<br>🛡️ <b>Modificatore difesa</b>: media voto del portiere e dei 3 migliori difensori in campo (servono almeno 4 difensori): da 6 = +1, da 6,5 = +3, da 7 = +6.<br>⚙️ <b>Modificatore centrocampo</b>: media voto dei centrocampisti in campo: da 6 = +1, da 6,5 = +2, da 7 = +3.</p><div style="display:grid;grid-template-columns:1fr 90px;gap:4px 10px;align-items:center">${BONUS_LAB.map(([k,n])=>`<label style="color:var(--txt);font-size:14px">${n}</label><input id="${pre}_${k}" type="number" step="0.5" value="${B[k]}" style="margin:0;text-align:center">`).join('')}</div>`}
 function leggiBonus(pre){const o={};for(const [k] of BONUS_LAB){const v=parseFloat(document.getElementById(pre+'_'+k).value.replace(',','.'));o[k]=isNaN(v)?0:v}return o}
-function riepRegole(lega){const R=REG(lega);return `<p class="muted" style="font-size:14px;line-height:1.6">Rosa: ${R.rosa.P} P · ${R.rosa.D} D · ${R.rosa.C} C · ${R.rosa.A} A<br>Moduli: ${R.moduli.join(', ')}<br>Panchina: ${R.panca?`${R.panca.P} P · ${R.panca.D} D · ${R.panca.C} C · ${R.panca.A} A`:'libera'} · Sostituzioni: ${R.cambi}${R.sw?' · Switch attivo':''}${R.riserva?` · Riserva d'ufficio ${R.riserva_voto}`:''}<br>Formazione chiusa ${R.timeout?R.timeout+' minuti prima':'all'}'inizio della prima partita · Non schierata: ${R.nonsch==='precedente'?'si recupera la precedente':'0 punti'}</p>`}
+function riepRegole(lega){const R=REG(lega);return `<p class="muted" style="font-size:14px;line-height:1.6">Sistema: <b>${R.sistema==='ruoli'?'A ruoli':'Classic'}</b><br>Rosa: ${R.rosa.P} P · ${R.rosa.D} D · ${R.rosa.C} C · ${R.rosa.A} A<br>Moduli: ${R.moduli.join(', ')}<br>Panchina: ${R.panca?`${R.panca.P} P · ${R.panca.D} D · ${R.panca.C} C · ${R.panca.A} A`:'libera'} · Sostituzioni: ${R.cambi}${R.sw?' · Switch attivo':''}${R.riserva?` · Riserva d'ufficio ${R.riserva_voto}`:''}<br>Formazione chiusa ${R.timeout?R.timeout+' minuti prima':'all'}'inizio della prima partita · Non schierata: ${R.nonsch==='precedente'?'si recupera la precedente':'0 punti'}</p>`}
 function riepBonus(B){B={...BONUS_DEF,...(B||{})};return BONUS_LAB.map(([k,n])=>`<div class="row between" style="padding:3px 0;border-bottom:1px solid #ffffff14"><span>${n.replace(/ \(1 = attivo, 0 = spento\)/,'')}</span><b style="color:${B[k]>0?'var(--green)':B[k]<0?'var(--red)':'var(--muted)'}">${B[k]===0?'non usato':['moddif','modcen'].includes(k)?'attivo':(B[k]>0?'+':'')+B[k]}</b></div>`).join('')}
 async function nominaPres(lid){const u=val('np_u');if(!u)return toast('Nessun partecipante da nominare',true);const esci=!!document.getElementById('np_esci')?.checked;
   if(!confirm('Nominare questo partecipante presidente della lega?'+(esci?' Tu uscirai dalla lega.':'')))return;
@@ -1139,9 +1184,11 @@ async function assegnaT(lid,uid,gid,pr,b){const {error}=await db.from('rose').in
 const MOD_ALL=['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'];
 const MOD_EXTRA=['2-1-7','2-7-1','2-2-6','2-6-2','2-3-5','2-5-3','2-4-4','3-1-6','3-6-1','3-2-5','3-3-4','4-1-5','4-2-4','5-2-3','5-1-4','6-2-2','6-3-1','6-1-3'];
 MOD_EXTRA.forEach(m=>{MODULI[m]=m.split('-').map(Number)});
-function REG(lega){const b=(lega&&lega.bonus)||{};return {rosa:b.rosa||{P:3,D:8,C:8,A:6},moduli:(b.moduli&&b.moduli.length)?b.moduli:MOD_ALL,panca:b.panca||null,timeout:+b.timeout||0,sw:!!b.sw,cambi:b.cambi??3,riserva:!!b.riserva,riserva_voto:b.riserva_voto??4,nonsch:b.nonsch||'zero'}}
+function REG(lega){const b=(lega&&lega.bonus)||{};return {rosa:b.rosa||{P:3,D:8,C:8,A:6},moduli:(b.moduli&&b.moduli.length)?b.moduli:MOD_ALL,panca:b.panca||null,timeout:+b.timeout||0,sw:!!b.sw,cambi:b.cambi??3,riserva:!!b.riserva,riserva_voto:b.riserva_voto??4,nonsch:b.nonsch||'zero',sistema:b.sistema==='ruoli'?'ruoli':'classic'}}
 function campiRegole(lega){const R=REG(lega),n=(id,v,st='1')=>`<input id="${id}" type="number" step="${st}" value="${v}" style="margin:0;text-align:center;padding:8px">`;
-  return `<h3 style="margin-top:6px">👥 Configurazione rosa</h3><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_r'+k,R.rosa[k])}</div>`).join('')}</div>
+  return `<h3 style="margin-top:6px">🎮 Sistema di gioco</h3><select id="rg_sis"><option value="classic" ${R.sistema==='classic'?'selected':''}>Classic (P, D, C, A)</option><option value="ruoli" ${R.sistema==='ruoli'?'selected':''}>A ruoli (Por, Dc, Dd, Ds, B, E, M, C, T, W, A, Pc)</option></select>
+  <p class="muted" style="font-size:12px">A ruoli: moduli con posti specifici e cambi per ruolo compatibile, fuori ruolo con -1. I moduli e lo switch qui sotto valgono solo per il Classic.</p>
+  <h3 style="margin-top:6px">👥 Configurazione rosa</h3><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_r'+k,R.rosa[k])}</div>`).join('')}</div>
   <h3 style="margin-top:16px">📐 Moduli consentiti</h3><div class="row">${MOD_ALL.map(m=>`<label style="color:var(--txt);background:#ffffff12;border-radius:12px;padding:6px 10px"><input type="checkbox" class="rg_mod" value="${m}" ${R.moduli.includes(m)?'checked':''}>${m}</label>`).join('')}</div>
   <details style="margin-top:8px"><summary style="color:var(--txt);font-weight:700">Moduli extra</summary><div class="row" style="margin-top:8px">${MOD_EXTRA.map(m=>`<label style="color:var(--txt);background:#ffffff12;border-radius:12px;padding:6px 10px"><input type="checkbox" class="rg_mod" value="${m}" ${R.moduli.includes(m)?'checked':''}>${m}</label>`).join('')}</div></details>
   <h3 style="margin-top:16px">🪑 Configurazione panchina</h3><p class="muted" style="font-size:12px">Quanti giocatori per ruolo si possono mettere in panchina. Tutti a 0 = panchina libera.</p><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${['P','D','C','A'].map(k=>`<div style="text-align:center">${ruolo(k)}${n('rg_p'+k,R.panca?R.panca[k]:0)}</div>`).join('')}</div>
@@ -1154,7 +1201,7 @@ function campiRegole(lega){const R=REG(lega),n=(id,v,st='1')=>`<input id="${id}"
 async function salvaRegole(lid){const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single());const b={...(l.bonus||{})};const g=id=>+document.getElementById(id).value||0;
   b.rosa={P:g('rg_rP'),D:g('rg_rD'),C:g('rg_rC'),A:g('rg_rA')};b.moduli=[...document.querySelectorAll('.rg_mod:checked')].map(x=>x.value);if(!b.moduli.length)return toast('Scegli almeno un modulo',true);
   const p={P:g('rg_pP'),D:g('rg_pD'),C:g('rg_pC'),A:g('rg_pA')};b.panca=(p.P+p.D+p.C+p.A)?p:null;b.timeout=g('rg_to');b.cambi=g('rg_cambi');b.sw=document.getElementById('rg_sw').checked;
-  b.riserva=document.getElementById('rg_ris').checked;b.riserva_voto=parseFloat(document.getElementById('rg_risv').value)||0;b.nonsch=val('rg_ns');
+  b.riserva=document.getElementById('rg_ris').checked;b.riserva_voto=parseFloat(document.getElementById('rg_risv').value)||0;b.nonsch=val('rg_ns');b.sistema=val('rg_sis');
   if(!confirm('Salvare il regolamento? Classifiche e punteggi verranno ricalcolati con le nuove regole.'))return;
   chk(await db.from('leghe').update({bonus:b}).eq('id',lid));toast('Regolamento salvato');legaView()}
 async function salvaBonus(lid){if(!confirm('Salvare i nuovi bonus e malus? Tutti i punteggi della lega, anche delle giornate già giocate, verranno ricalcolati.'))return;const l=chk(await db.from('leghe').select('bonus').eq('id',lid).single());const nb={...(l.bonus||{}),...leggiBonus('lb')};chk(await db.from('leghe').update({bonus:nb}).eq('id',lid));toast('Bonus e malus salvati');legaView()}
@@ -1167,7 +1214,7 @@ async function datiLega(lega,membri,opt={}){
   const gids=[...new Set([...form.map(f=>f.giocatore_id),...carte.filter(c=>c.giocatore_id).map(c=>c.giocatore_id)])];
   const voti=gids.length?chk(await db.from('voti').select('giocatore_id,giornata,voto,minuti,gol,assist,ammonizione,espulsione,gol_subiti,rigori_parati,rigori_sbagliati,autogol,rigori_segnati,gol_decisivi,gol_pareggio,potm').in('giocatore_id',gids)):[];
   const partL=pub.length?chk(await db.from('partite_sa').select('giornata,casa,trasferta,gol_casa,gol_trasferta').in('giornata',pub)):[];
-  const gioc=gids.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra').in('id',gids)):[];
+  const gioc=gids.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra,ruoli_m').in('id',gids)):[];
   const vm={};voti.forEach(v=>vm[v.giocatore_id+'-'+v.giornata]=v);
   const gm={};gioc.forEach(g=>gm[g.id]=g);
   const ctxOf=(sq,g)=>{const p=partL.find(x=>x.giornata===g&&(x.casa===sq||x.trasferta===sq));if(!p||p.gol_casa===null||p.gol_casa===undefined)return null;const mio=p.casa===sq?p.gol_casa:p.gol_trasferta,loro=p.casa===sq?p.gol_trasferta:p.gol_casa;return {res:mio>loro?'V':mio<loro?'P':'N',gs:loro}};
@@ -1175,6 +1222,7 @@ async function datiLega(lega,membri,opt={}){
   voti.forEach(v=>{const gi=gm[v.giocatore_id];v.fantavoto=fvL(v,gi?.ruolo,lega.bonus,ctxOf(gi?.squadra,v.giornata))});
   if(opt.extra)for(const g of pub)form.filter(f=>f.giornata===g).forEach(f=>{const k=f.giocatore_id+'-'+g;if(vm[k])return;const x=opt.extra(f.giocatore_id);if(!x)return;const v={giocatore_id:f.giocatore_id,giornata:g,minuti:90,gol:0,assist:0,ammonizione:false,espulsione:false,gol_subiti:0,rigori_parati:0,rigori_sbagliati:0,autogol:0,rigori_segnati:0,gol_decisivi:0,gol_pareggio:0,potm:false,...x};v.fantavoto=fvL(v,gm[f.giocatore_id]?.ruolo,lega.bonus,null);vm[k]=v});
   const cartaDi=(g,u,c)=>carte.find(x=>x.giornata===g&&x.utente_id===u&&x.carta===c);
+  const SCH={};if(RG.sistema==='ruoli'){chk(await db.from('schieramenti').select('utente_id,giornata,modulo,coppa').eq('lega_id',lega.id).in('coppa',[0,opt.coppa||0])).forEach(x=>{const k=x.utente_id+'-'+x.giornata;if(!SCH[k]||x.coppa)SCH[k]=x.modulo})}
   const ris={};
   for(const g of pub){
     ris[g]={};
@@ -1188,6 +1236,18 @@ async function datiLega(lega,membri,opt={}){
       const pan=mie.filter(f=>!f.titolare).sort((a,b)=>a.ordine-b.ordine);
       const usati=new Set();let cambi=0,pt=0;const righe=[],extra=[],inCampo=new Set();
       tit.forEach(t=>{const rr=gm[t.giocatore_id]?.ruolo;if(cnt[rr]!==undefined)cnt[rr]++});
+      if(RG.sistema==='ruoli'){const MD=MODR[SCH[uid+'-'+(recup||g)]]||MODR['4-3-3'],mancanti=[];
+        for(const t of [...tit].sort((a,b)=>a.ordine-b.ordine)){const gi=gm[t.giocatore_id],v=vm[t.giocatore_id+'-'+g];
+          if(v&&v.fantavoto!==null){pt+=Number(v.fantavoto);righe.push({g:gi,fv:Number(v.fantavoto)});inCampo.add(t.giocatore_id)}else mancanti.push(t)}
+        const adatto=(p,S,fr)=>{const Rr=RMG(gm[p.giocatore_id]);if(S.includes('Por')||Rr.includes('Por'))return !fr&&S.includes('Por')&&Rr.includes('Por');return fr?Rr.some(r=>S.some(x=>(VIC[x]||[]).includes(r))):Rr.some(r=>S.includes(r))};
+        const sost={};
+        for(const fr of [false,true])for(const t of mancanti){if(sost[t.giocatore_id]||cambi>=maxCambi)continue;const S=MD[t.ordine]||[];
+          for(const p of pan){if(usati.has(p.giocatore_id))continue;const vp=vm[p.giocatore_id+'-'+g];if(!vp||vp.fantavoto===null)continue;
+            if(adatto(p,S,fr)){sost[t.giocatore_id]={g:gm[p.giocatore_id],fv:Number(vp.fantavoto)-(fr?1:0),fr};usati.add(p.giocatore_id);inCampo.add(p.giocatore_id);cambi++;break}}}
+        for(const t of mancanti){const gi=gm[t.giocatore_id],e=sost[t.giocatore_id];
+          if(!e&&RG.riserva){pt+=+RG.riserva_voto;righe.push({g:gi,fv:+RG.riserva_voto,uff:true});continue}
+          righe.push({g:gi,fv:null,sv:true});if(e){pt+=e.fv;righe.push({...e,entra:true})}}
+      } else
       for(const t of tit){
         const gi=gm[t.giocatore_id],v=vm[t.giocatore_id+'-'+g];
         if(v&&v.fantavoto!==null){pt+=Number(v.fantavoto);righe.push({g:gi,fv:Number(v.fantavoto)});inCampo.add(t.giocatore_id);continue}
@@ -1308,7 +1368,7 @@ async function legaView(){
         const g=+fz.gg;
         h+=`<select onchange="fz.gg=this.value;legaView()">${pub.map(x=>`<option value="${x}" ${x==g?'selected':''}>Giornata ${x}</option>`).join('')}</select>`;
         const box=uid=>{const r=ris[g][uid];if(!r||r.vuota)return '<p class="muted">Formazione non inserita (0 punti)</p>';
-          return r.righe.map(x=>`<div class="row between" style="padding:3px 0;${x.sv?'opacity:.5;text-decoration:line-through':''}"><span>${x.entra?(x.sw?'🔀 ':'🔄 '):''}${ruolo(x.g?.ruolo)}${esc(x.g?.nome)}${x.uff?' <small class="muted">(riserva d\'ufficio)</small>':''}</span><b>${x.sv?'s.v.':x.fv}</b></div>`).join('')
+          return r.righe.map(x=>`<div class="row between" style="padding:3px 0;${x.sv?'opacity:.5;text-decoration:line-through':''}"><span>${x.entra?(x.sw?'🔀 ':x.fr?'⚠️ ':'🔄 '):''}${ruolo(x.g?.ruolo)}${esc(x.g?.nome)}${x.uff?' <small class="muted">(riserva d\'ufficio)</small>':''}${x.fr?' <small style="color:var(--red)">(fuori ruolo -1)</small>':''}</span><b>${x.sv?'s.v.':x.fv}</b></div>`).join('')
             +(r.extra.length?`<div style="margin-top:6px">${r.extra.map(e=>`<div class="muted">${e}</div>`).join('')}</div>`:'')};
         const incG=inc.filter(i=>i.giornata===g);
         if(incG.length) h+=incG.map(i=>{const [gc,gt,pc,pt]=golMatch(i,ris,lega);
@@ -1417,6 +1477,8 @@ async function legaView(){
       const stato=id=>{const f=att.find(x=>x.giocatore_id===id);return !f?'':f.titolare?'T':'P'+f.ordine};
       const nPan=RGf.panca?(RGf.panca.P+RGf.panca.D+RGf.panca.C+RGf.panca.A):Math.max(12,mia.length-11);
       const alr={};FVM=await votiDi(mia.map(r=>r.giocatore_id));FGM={};mia.forEach(r=>FGM[r.giocatore_id]={...r.giocatori,id:r.giocatore_id});
+      if(RGf.sistema==='ruoli'){h+=await cardRuoli(lega,g,mia,att,sch,cps)}
+      else{
       if(premOk()){
         const pp=chk(await db.from('partite_sa').select('api_id,casa,trasferta').eq('giornata',g.numero));
         const ids=pp.map(p=>p.api_id);
@@ -1458,6 +1520,7 @@ async function legaView(){
       <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:12px 0 0"><input type="checkbox" id="f_nasc" style="width:auto" ${sch?.nascosta?'checked':''}> 🙈 Nascondi la mia formazione agli altri fino al calcio d'inizio</label>
       ${!fz.fc&&cps.length?cps.map(c=>`<label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:8px 0 0"><input type="checkbox" class="f_cop" value="${c.id}" style="width:auto"> 🏆 Salva anche per ${esc(c.nome)}</label>`).join(''):''}
       <button class="pri" style="width:100%;margin-top:12px" onclick="salvaFormazione(${lega.id},${g.numero})">Salva formazione${fz.fc?' di coppa':''}</button></div>`;
+      }
       if(lega.carte&&on('f_carte')){
         const mie=chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id).eq('utente_id',MIO));
         h+=`<div class="card"><h3>🃏 Carte Tattiche</h3><p class="muted">Ogni carta si gioca una sola volta in tutta la stagione. Puoi annullarla fino alla scadenza.</p>
@@ -2573,8 +2636,11 @@ async function pAdmin(){
   }
 
   if(ad.tab==='giocatori'){
-    h+=`<div class="card" style="border-color:var(--green)"><h3>📗 Quotazioni ufficiali Fantacalcio.it</h3><p class="muted" style="font-size:13px">Scarica l'Excel da <b>fantacalcio.it/quotazioni-fantacalcio</b> e caricalo qui. Aggiorna la <b>quotazione attuale</b> (Qt.A), quella <b>iniziale</b> (Qt.I, serve per le frecce ▲▼) e il <b>FVM</b> di tutti i giocatori. Prima ti mostra cosa cambia.</p>
-      <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;cursor:pointer;background:#1a7f37">📗 Carica quotazioni (.xlsx)<input type="file" accept=".xlsx,.xls" style="display:none" onchange="fileQuot(this)"></label><div id="qf_ris" style="margin-top:10px"></div></div>`;
+    h+=`<div class="card" style="border-color:var(--green)"><h3>📊 Quotazioni FantaTaccuino</h3><p class="muted" style="font-size:13px">Le quotazioni sono <b>nostre</b>: le calcola il sito dai voti della stagione (fantamedia, presenze e ruolo) e dopo ogni giornata si aggiornano da sole, al massimo di 3 punti in su o in giù. Non vengono prese da nessun altro sito.</p>
+      <button onclick="quotRicalcola()">🔄 Ricalcola tutte da zero</button> <small class="muted">(azzera anche le frecce ▲▼)</small></div>
+    <div class="card" style="border-color:#8e44ad"><h3>🧩 Ruoli "A ruoli"</h3><p class="muted" style="font-size:13px">I ruoli dettagliati (Por, Dc, B, Dd, Ds, E, M, C, T, W, A, Pc) li assegna il sito da solo, guardando <b>dove ha giocato davvero</b> ogni giocatore nelle formazioni ufficiali delle partite. Si aggiornano ogni notte. Se uno è sbagliato correggilo qui: da quel momento resta come l'hai messo tu.</p>
+      <button onclick="ruoliAuto()">🔄 Aggiorna adesso</button>
+      <input id="ru_q" placeholder="🔎 Cerca giocatore da correggere…" oninput="ruoliCerca()" style="margin-top:10px"><div id="ru_l"></div></div>`;
     h+=`<div class="card" style="border-color:var(--gold)"><h3>📋 Importa listone da testo</h3>
       <p class="muted">Una riga per giocatore: <b>Nome;Ruolo;Squadra;Quotazione</b> (ruolo P, D, C o A)<br>Es: <i>Federico Dimarco;D;Inter;16</i><br>Se il giocatore esiste già (stesso nome e squadra) aggiorna ruolo e quotazione, altrimenti lo crea.</p>
       <label class="pri" style="display:inline-block;padding:10px 14px;border-radius:14px;margin:0 0 8px;cursor:pointer">📂 Carica file .txt<input type="file" accept=".txt,text/plain" style="display:none" onchange="leggiTxt(this,'lst_txt')"></label>
