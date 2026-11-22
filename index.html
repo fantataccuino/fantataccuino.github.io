@@ -173,7 +173,9 @@ async function avvia(session){
   await caricaFeat();
   document.getElementById('top').style.display='block';
   await caricaLeghe();
+  REDT=!!((await db.from('redattori').select('utente_id').eq('utente_id',utente.id)).data||[]).length;
   if(pagina==='home') pagina='dash';
+  {const m=location.hash.match(/^#art=(\d+)/);if(m){history.replaceState(null,'',location.pathname);setTimeout(()=>apriArtDa(+m[1]),500)}}
   renderNav(); vai(pagina);
   let visto=true;try{visto=!!localStorage.getItem('benv_'+utente.id)}catch(e){}
   if(!visto) setTimeout(mostraBenvenuto,500);
@@ -293,7 +295,7 @@ function vai(p){
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   if(typeof liveIv!=='undefined'&&liveIv){clearInterval(liveIv);liveIv=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
-  ({home:pHome,dash:pDash,altro:pAltro,tornei:pTornei,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin,notifiche:pNotif})[p]();
+  ({home:pHome,dash:pDash,altro:pAltro,tornei:pTornei,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin,notifiche:pNotif,giornale:pGiornale,scrivi:pScrivi})[p]();
 }
 
 
@@ -599,6 +601,76 @@ async function installaApp(){
     ${passi.map((p,i)=>`<div style="display:flex;gap:12px;align-items:flex-start;margin:12px 0"><div style="font-size:26px;width:36px;text-align:center">${p[0]}</div><div><b>${i+1}. </b>${p[1]}<br><small class="muted">${p[2]}</small></div></div>`).join('')}
     <button class="pri" style="width:100%;margin-top:6px" onclick="document.getElementById('instov').remove()">Ho capito</button></div>`;
   document.body.appendChild(o)}
+async function newsLega(lega,membri,tot,cl){try{
+  const {pub,ris}=await datiLega(lega,membri);const g=pub[pub.length-1];if(!g)return;const k='lega-'+lega.id+'-'+g;
+  if(((await db.from('articoli').select('id').eq('chiave',k)).data||[]).length)return;
+  const inc=(await db.from('incontri').select('casa,trasferta').eq('lega_id',lega.id).eq('giornata',g)).data||[];
+  const nm=u=>membri.find(m=>m.utente_id===u)?.nome_squadra||String(u).replace(/^n:/,'');
+  const righe=inc.map(i=>{const [a,b,pa,pb]=golMatch({giornata:g,casa:i.casa,trasferta:i.trasferta},ris,lega);return `${nm(i.casa)} ${a}-${b} ${nm(i.trasferta)}  (${pa} - ${pb})`});
+  const best=membri.map(m=>[m.utente_id,ris[g]?.[m.utente_id]?.pt||0]).sort((a,b)=>b[1]-a[1])[0];
+  const testo=(righe.length?'Risultati:\n'+righe.join('\n')+'\n\n':'')+(best?`🔥 Miglior punteggio: ${nm(best[0])} con ${best[1]}\n\n`:'')+'Classifica:\n'+cl.slice(0,5).map((u,i)=>`${i+1}. ${nm(u)}  ${tot[u].punti} pt`).join('\n');
+  await db.from('articoli').insert({titolo:`🏆 ${lega.nome}: com'è andata la ${g}ª giornata`,testo,tipo:'lega',premium:true,lega_id:lega.id,chiave:k})}catch(e){}}
+// ---------- Il Taccuino (giornale) ----------
+const SEZ=['Serie A','Consigli fanta','Mercato','Probabili','Tornei e Calcetto','Novità del sito'];
+const SEZT={risultati:'Serie A',top11:'Consigli fanta',indisponibili:'Serie A',probabili:'Probabili',quotazioni:'Consigli fanta',lega:'La tua lega'};
+const sezDi=a=>a.sezione||SEZT[a.tipo]||'Notizie',autDi=a=>a.autore_nome||(a.tipo&&a.tipo!=='redazione'?'Redazione':'Il Taccuino');
+let REDT=false,GZ={sez:'',ed:null,img:null};
+const isRed=()=>profilo?.ruolo==='admin'||REDT;
+const testata=(s=34)=>`<div style="text-align:center;margin:4px 0 12px"><div style="font:900 ${s}px Georgia,'Times New Roman',serif;letter-spacing:.5px">📰 Il Taccuino</div><div class="muted" style="font-size:12px;letter-spacing:2px;text-transform:uppercase">Il giornale di FantaTaccuino</div></div>`;
+function testoArt(t){return esc(t||'').replace(/^## (.*)$/gm,'<h3 style="margin:16px 0 6px">$1</h3>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')}
+function cardArt(a,big){const img=a.immagine_url?`<img src="${esc(a.immagine_url)}" style="width:${big?'100%':'84px'};height:${big?'190px':'84px'};object-fit:cover;border-radius:12px;flex-shrink:0" alt="">`:'';
+  return `<div class="card" style="cursor:pointer;padding:12px;${big?'':'display:flex;gap:12px;align-items:center'}" onclick="apriArt(${a.id})">${img}<div style="min-width:0;${big?'margin-top:8px':''}"><small style="color:var(--gold);font-weight:700;text-transform:uppercase;font-size:11px">${esc(sezDi(a))}${a.premium?' · 💎':''}</small><div style="font:800 ${big?20:16}px Georgia,serif;margin:2px 0">${esc(a.titolo)}</div><small class="muted">${esc(autDi(a))} · ${new Date(a.pubblicato_il).toLocaleDateString('it-IT',{day:'numeric',month:'short'})}</small></div></div>`}
+async function pGiornale(){ARTS=chk(await db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(60));
+  const BLK=premOk()?[]:((await db.rpc('notizie_bloccate')).data||[]);
+  const sezs=['',...SEZ,'La tua lega'];const L=ARTS.filter(a=>!GZ.sez||sezDi(a)===GZ.sez);
+  app.innerHTML=testata()+`${isRed()?`<button class="pri" style="width:100%;margin-bottom:10px" onclick="GZ.ed=null;vai('scrivi')">✍️ Scrivi un articolo</button>`:''}
+    <div class="fmods" style="overflow-x:auto;flex-wrap:nowrap">${sezs.map(k=>`<button class="ffil ${GZ.sez===k?'on':''}" style="white-space:nowrap" onclick="GZ.sez='${k}';pGiornale()">${k||'Tutto'}</button>`).join('')}</div>
+    ${L.length?cardArt(L[0],1)+L.slice(1).map(a=>cardArt(a)).join(''):'<p class="muted">Nessun articolo in questa sezione.</p>'}
+    ${!GZ.sez&&BLK.length?`<h3 style="margin-top:16px">🔒 Solo per i Premium</h3>${BLK.map(a=>`<div class="card" style="cursor:pointer;padding:12px;border-color:#ffd34d77" onclick="notiziaBloccata()"><small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">🔒 ${esc(sezDi(a))} · 💎 Premium</small><div style="font:800 16px Georgia,serif">${esc(a.titolo)}</div></div>`).join('')}`:''}`}
+function condividiArt(id,t){const u=location.origin+location.pathname+'#art='+id;
+  if(navigator.share)navigator.share({title:t,text:t+' — Il Taccuino',url:u}).catch(()=>{});else window.open('https://wa.me/?text='+encodeURIComponent(t+' '+u),'_blank')}
+async function pScrivi(){if(!isRed())return vai('giornale');const A=profilo.ruolo==='admin';let a={titolo:'',testo:'',sezione:SEZ[0],premium:false,immagine_url:''};
+  if(GZ.ed){a=chk(await db.from('articoli').select('*').eq('id',GZ.ed).single())}GZ.img=a.immagine_url||null;
+  let h=testata(26)+`<div class="card"><h3 style="margin-top:0">${GZ.ed?'✏️ Modifica articolo':'✍️ Nuovo articolo'}</h3>
+    <label>Titolo</label><input id="gz_t" value="${esc(a.titolo||'')}">
+    <label>Sezione</label><select id="gz_s">${SEZ.map(x=>`<option ${x===(a.sezione||sezDi(a))?'selected':''}>${x}</option>`).join('')}</select>
+    <label>Foto</label><div id="gz_prev">${GZ.img?`<img src="${esc(GZ.img)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px">`:''}</div>
+    <label class="pri" style="display:inline-block;padding:9px 14px;border-radius:14px;cursor:pointer;margin:6px 0">📷 ${GZ.img?'Cambia foto':'Carica foto'}<input type="file" accept="image/*" style="display:none" onchange="fotoArt(this)"></label>
+    ${GZ.img?`<button onclick="GZ.img=null;document.getElementById('gz_prev').innerHTML=''">Togli foto</button>`:''}
+    <p class="muted" style="font-size:12px">Usa solo foto tue o con licenza libera: niente foto prese da giornali o da Google.</p>
+    <label>Testo</label><textarea id="gz_x" rows="12">${esc(a.testo||'')}</textarea>
+    <p class="muted" style="font-size:12px">Suggerimenti: una riga che inizia con <b>## </b> diventa un sottotitolo; <b>**parola**</b> diventa grassetto. Lascia una riga vuota tra i paragrafi.</p>
+    <label style="color:var(--txt);display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="gz_p" style="width:auto" ${a.premium?'checked':''}> 💎 Solo per i Premium</label>
+    ${A?`<button class="pri" style="width:100%" onclick="salvaArt('pubblicato')">📰 Pubblica</button>`:`<button class="pri" style="width:100%" onclick="salvaArt('attesa')">📤 Invia alla redazione</button>`}
+    <button style="width:100%;margin-top:8px" onclick="salvaArt('bozza')">💾 Salva bozza</button>
+    ${GZ.ed?`<button class="del" style="width:100%;margin-top:8px" onclick="eliminaArt(${GZ.ed})">🗑️ Elimina</button>`:''}</div>`;
+  const mie=chk(await db.from('articoli').select('id,titolo,stato,pubblicato_il,autore_nome,tipo').or(A?'stato.neq.pubblicato,autore_id.eq.'+utente.id:'autore_id.eq.'+utente.id).order('pubblicato_il',{ascending:false}).limit(40));
+  const ST={bozza:'💾 Bozza',attesa:'⏳ Da approvare',pubblicato:'✅ Pubblicato'};
+  if(mie.length)h+=`<div class="card"><h3 style="margin-top:0">${A?'📝 Bozze, da approvare e i tuoi articoli':'📝 I tuoi articoli'}</h3>${mie.map(x=>`<div class="row between" style="padding:7px 0;border-bottom:1px solid var(--line);gap:6px"><span style="min-width:0"><b>${esc(x.titolo)}</b><br><small class="muted">${ST[x.stato]||x.stato}${x.autore_nome?' · '+esc(x.autore_nome):''}</small></span><span style="white-space:nowrap">${A&&x.stato==='attesa'?`<button class="ok" onclick="pubblicaArt(${x.id})">✅</button> `:''}<button onclick="GZ.ed=${x.id};pScrivi()">✏️</button></span></div>`).join('')}</div>`;
+  if(A){const pub=chk(await db.from('articoli').select('id,titolo,pubblicato_il,autore_nome,tipo').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(30));
+    h+=`<div class="card"><h3 style="margin-top:0">📰 Pubblicati</h3>${pub.map(x=>`<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line);gap:6px"><span style="min-width:0"><b>${esc(x.titolo)}</b><br><small class="muted">${esc(autDi(x))} · ${fmt(x.pubblicato_il)}</small></span><span style="white-space:nowrap"><button onclick="GZ.ed=${x.id};pScrivi()">✏️</button> <button class="del" onclick="eliminaArt(${x.id})">🗑️</button></span></div>`).join('')}</div>`;
+    const rd=chk(await db.from('redattori').select('utente_id'));const pr=rd.length?chk(await db.from('profili').select('id,username').in('id',rd.map(r=>r.utente_id))):[];
+    h+=`<div class="card"><h3 style="margin-top:0">✍️ Redattori</h3><p class="muted" style="font-size:13px">I redattori scrivono articoli con la loro firma; arrivano qui "da approvare" e li pubblichi tu.</p>
+      ${pr.map(p=>`<div class="row between" style="padding:5px 0"><span>✍️ ${esc(p.username)}</span><button class="del" onclick="togliRed('${p.id}')">Togli</button></div>`).join('')||'<p class="muted">Per ora scrivi solo tu.</p>'}
+      <input id="gz_ru" placeholder="Nome utente del nuovo redattore"><button onclick="aggRed()">➕ Aggiungi redattore</button></div>`}
+  app.innerHTML=h}
+async function fotoArt(inp){const f=inp.files[0];if(!f)return;if(f.size>20e6)return toast('Foto troppo grande',true);toast('Carico la foto…');
+  const im=new Image();im.src=URL.createObjectURL(f);await im.decode();const W=Math.min(1200,im.width),H=Math.round(im.height*W/im.width);
+  const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').drawImage(im,0,0,W,H);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
+  const path=`${utente.id}/${Date.now()}.jpg`;const {error}=await db.storage.from('giornale').upload(path,blob,{contentType:'image/jpeg'});if(error)return toast(error.message,true);
+  GZ.img=db.storage.from('giornale').getPublicUrl(path).data.publicUrl;document.getElementById('gz_prev').innerHTML=`<img src="${esc(GZ.img)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px">`;toast('Foto caricata')}
+async function salvaArt(st){const t=val('gz_t').trim(),x=val('gz_x').trim();if(!t||!x)return toast('Titolo e testo obbligatori',true);
+  const r={titolo:t,testo:x,sezione:val('gz_s'),premium:!!document.getElementById('gz_p').checked,immagine_url:GZ.img,stato:st,tipo:'redazione'};
+  if(!GZ.ed){r.autore_id=utente.id;r.autore_nome=profilo.username||'Il Taccuino'}
+  if(st==='pubblicato')r.pubblicato_il=new Date().toISOString();
+  if(GZ.ed){const {data:old}=await db.from('articoli').select('stato,pubblicato_il').eq('id',GZ.ed).single();if(old?.stato==='pubblicato'&&st==='pubblicato')delete r.pubblicato_il;chk(await db.from('articoli').update(r).eq('id',GZ.ed))}
+  else{const n=chk(await db.from('articoli').insert(r).select('id').single());GZ.ed=n.id}
+  toast(st==='pubblicato'?'📰 Pubblicato su Il Taccuino!':st==='attesa'?'📤 Inviato: lo pubblicherà la redazione':'💾 Bozza salvata');if(st!=='bozza'){GZ.ed=null;vai('giornale')}else pScrivi()}
+async function pubblicaArt(id){chk(await db.from('articoli').update({stato:'pubblicato',pubblicato_il:new Date().toISOString()}).eq('id',id));toast('📰 Pubblicato!');pScrivi()}
+async function eliminaArt(id){if(!confirm('Eliminare questo articolo?'))return;chk(await db.from('articoli').delete().eq('id',id));GZ.ed=null;toast('Eliminato');pScrivi()}
+async function aggRed(){const u=val('gz_ru').trim();if(!u)return;const p=(await db.from('profili').select('id').ilike('username',u).maybeSingle()).data;if(!p)return toast('Utente non trovato',true);
+  chk(await db.from('redattori').upsert({utente_id:p.id}));toast(u+' ora è redattore ✍️');pScrivi()}
+async function togliRed(id){if(!confirm('Togliere questo redattore?'))return;chk(await db.from('redattori').delete().eq('utente_id',id));pScrivi()}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -710,7 +782,8 @@ async function pDash(){
   MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
   const me=membri.find(m=>m.utente_id===MIO),nome=u=>membri.find(m=>m.utente_id===u)?.nome_squadra||String(u).replace(/^n:/,'')||'?',img=u=>membri.find(m=>m.utente_id===u)?.stemma;
   const {tot,cl,sd}=await statLega(lega,membri);const t=tot[MIO]||{pt:0,g:0,punti:0},pos=cl.indexOf(MIO)+1;
-  const arts=(await db.from('articoli').select('id,titolo').order('pubblicato_il',{ascending:false}).limit(6)).data||[];
+  newsLega(lega,membri,tot,cl);
+  const arts=(await db.from('articoli').select('id,titolo').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(6)).data||[];
   const gg=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').eq('pubblicata',false).order('numero'));
   const gLive=gg.find(g=>new Date(g.scadenza)<=new Date()),gNext=gg.find(g=>new Date(g.scadenza)>new Date());
   const avv=async g=>{if(!g)return null;const i=(await db.from('incontri').select('casa,trasferta').eq('lega_id',lega.id).eq('giornata',g.numero).or(`casa.eq.${MIO},trasferta.eq.${MIO}`)).data?.[0];
@@ -737,25 +810,30 @@ async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e
   const {error}=await db.storage.from('stemmi').upload(path,blob,{contentType:'image/jpeg',upsert:true});if(error)return toast(error.message,true);
   const url=db.storage.from('stemmi').getPublicUrl(path).data.publicUrl;
   chk(await db.rpc('set_stemma',{p_lega:LG,p_url:url}));toast('Stemma aggiornato!');pDash()}
-async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
+async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').eq('id',id));if(!ARTS.length)return notiziaBloccata();apriArt(id)}
 async function pAltro(){
   const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
-  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🔄','Mercato',"vaiLega('mercato')"],['🏅','Coppa',"vaiLega('coppa')"],['🔔','Notifiche',"vai('notifiche')"],['📲','Installa app',"installaApp()"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
+  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🔄','Mercato',"vaiLega('mercato')"],['🏅','Coppa',"vaiLega('coppa')"],['🔔','Notifiche',"vai('notifiche')"],['📲','Installa app',"installaApp()"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Il Taccuino',"vai('giornale')"],...(isRed()?[['✍️','Scrivi',"GZ.ed=null;vai('scrivi')"]]:[]),['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
     ...(pres?[['⚙️','Gestione lega',"vaiLega('gestione')"]]:[]),...(on('f_premium')?[['💎','Premium',"vai('premium')"]]:[]),['📜','Termini',"vai('termini')"],...(profilo.ruolo==='admin'?[['🛠️','Admin',"vai('admin')"]]:[]),
     ...(FEAT.link_donazioni?[['☕','Sostienici',`window.open('${esc(FEAT.link_donazioni)}','_blank')`]]:[])].filter(x=>x[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=selLega()+`<h2 style="margin-top:6px">☰ Altro</h2><div class="tiles">${V.map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
+const NTIPO0={top11:'⭐ Top 11',indisponibili:'🚑 Indisponibili',quotazioni:'📈 Quotazioni',probabili:'📋 Probabili',lega:'🏆 La tua lega',risultati:'📰 Risultati'};
 async function pHome(){
-  ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
+  ARTS=chk(await db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(30));
+  const BLK=premOk()?[]:((await db.rpc('notizie_bloccate')).data||[]);
   const LIVE=(await db.from('partite_sa').select('api_id,casa,trasferta,gol_casa,gol_trasferta').eq('live',true)).data||[];
   const col=['linear-gradient(180deg,#7a4dff,#2a0f6b)','linear-gradient(180deg,#ff7a59,#5a1030)','linear-gradient(180deg,#3ad1a0,#0e3d4a)','linear-gradient(180deg,#ffb347,#6b2a00)'];
   const T=[['📋','Le tue leghe',"vai('fanta')"],['⚽','Calcetto',"vai('sng')"],['🔎','Giocatori',"vai('giocatori')"],['📅','Serie A',"vai('seriea')"],['💬','Chat',"vai('chat')"],['📈','Chi sale',"gz.ord='su';vai('giocatori')"],['📉','Chi scende',"gz.ord='giu';vai('giocatori')"],['💎','Premium',"vai('premium')"],['📜','Regole',"vai('termini')"]].filter(t=>t[1]!=='Premium'||on('f_premium')).filter(t=>t[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=`${LIVE.map(l=>`<div class="hero" style="border-color:#ff6b6b88;cursor:pointer" onclick="pagina='seriea';renderNav();pagelle(${l.api_id})"><div class="t"><span style="color:#ff6b6b">● LIVE</span> ${esc(l.casa)} ${l.gol_casa??0}–${l.gol_trasferta??0} ${esc(l.trasferta)}<br><small style="font:600 15px system-ui;color:var(--muted)">${premOk()?'Segui i fantavoti in diretta':'💎 Diretta riservata ai Premium'}</small></div><button class="pri">Segui</button></div>`).join('')}${on('f_sng')?`<div class="hero"><div class="t">GIOCA AL <span style="color:var(--green)">CALCETTO</span><br><span style="color:var(--gold)">PALLONI DORATI</span> <span class="pd"></span></div><button class="pri" onclick="vai('sng')">Gioca ora</button></div>`:''}
-  <h3>✉️ Ultime notizie ${ARTS.length?`<span class="badge" style="background:var(--red)">${ARTS.length}</span>`:''}</h3>
-  ${ARTS.length?`<div class="news">${ARTS.slice(0,10).map((a,i)=>`<div onclick="apriArt(${a.id})" style="background-image:linear-gradient(180deg,#0000 35%,#000c),${a.immagine_url?`url('${esc(a.immagine_url)}')`:col[i%4]}">${esc(a.titolo)}</div>`).join('')}</div>`:'<p class="muted">Nessuna notizia ancora.</p>'}
+  <div class="row between" style="margin-top:8px"><h3 style="margin:0;font:900 22px Georgia,serif">📰 Il Taccuino</h3><button onclick="vai('giornale')">Tutte →</button></div>
+  ${ARTS.length||BLK.length?`<div class="news">${ARTS.slice(0,12).map((a,i)=>`<div onclick="apriArt(${a.id})" style="background-image:linear-gradient(180deg,#0000 35%,#000c),${a.immagine_url?`url('${esc(a.immagine_url)}')`:col[i%4]}"><small style="display:block;font:700 11px system-ui;opacity:.85;text-transform:uppercase">${esc(sezDi(a))}${a.premium?' · 💎':''}</small>${esc(a.titolo)}</div>`).join('')}${BLK.map((a,i)=>`<div onclick="notiziaBloccata()" style="background-image:linear-gradient(180deg,#0000 35%,#000c),linear-gradient(180deg,#6b5b1f,#1d0f63)"><small style="display:block;font:700 11px system-ui;color:var(--gold)">🔒 Solo Premium</small>${esc(a.titolo)}</div>`).join('')}</div>`:'<p class="muted">Nessuna notizia ancora.</p>'}
+  ${BLK.length?`<p class="muted" style="font-size:12px;margin:-4px 2px 10px">🔒 Top 11, indisponibili, probabili, quotazioni e notizie della tua lega sono riservate ai 💎 Premium.</p>`:''}
   <div class="tiles">${T.map(t=>`<div class="tile" onclick="${t[2]}"><div>${t[0]}</div><span>${t[1]}</span></div>`).join('')}</div>`;
 }
-function apriArt(id){const a=ARTS.find(x=>x.id===id);if(!a)return;
-  app.innerHTML=`<button onclick="pHome()">← Home</button><article class="card" style="margin-top:12px">${a.immagine_url?`<img src="${esc(a.immagine_url)}" alt="">`:''}<h2 style="margin:4px 0">${esc(a.titolo)}</h2><small class="muted">${fmt(a.pubblicato_il)}</small><p style="line-height:1.55">${esc(a.testo).replace(/\n/g,'<br>')}</p></article>`;window.scrollTo(0,0)}
+function notiziaBloccata(){if(confirm('Questa notizia è riservata agli utenti 💎 Premium: Top 11, indisponibili, probabili, quotazioni e le notizie della tua lega.\n\nVuoi scoprire il Premium?'))vai('premium')}
+function apriArt(id){const a=ARTS.find(x=>x.id===id);if(!a)return notiziaBloccata();
+  app.innerHTML=`<button onclick="vai('giornale')">← Il Taccuino</button><article class="card" style="margin-top:12px">${testata(22)}<small style="color:var(--gold);font-weight:700;text-transform:uppercase;font-size:12px">${esc(sezDi(a))}${a.premium?' · 💎 Premium':''}</small><h1 style="font:900 26px Georgia,serif;margin:4px 0 6px">${esc(a.titolo)}</h1><small class="muted">di <b>${esc(autDi(a))}</b> · ${fmt(a.pubblicato_il)}</small>${a.immagine_url?`<img src="${esc(a.immagine_url)}" style="width:100%;border-radius:14px;margin:12px 0" alt="">`:''}<div style="line-height:1.6;font-size:16px;margin-top:10px">${testoArt(a.testo)}</div>
+    <div class="row" style="gap:8px;margin-top:16px"><button class="pri" onclick="condividiArt(${a.id},'${esc(a.titolo).replace(/'/g,"\\'")}')">📤 Condividi</button>${profilo?.ruolo==='admin'||(REDT&&a.autore_id===utente.id&&a.stato!=='pubblicato')?`<button onclick="GZ.ed=${a.id};vai('scrivi')">✏️ Modifica</button>`:''}</div></article>`;window.scrollTo(0,0)}
 
 // ---------- fantacalcio ----------
 let fz={lega:null,tab:'classifica',vedi:null,gg:null,fc:0,cup:0};
@@ -2481,12 +2559,7 @@ async function pAdmin(){
       <label>Squadra</label><input id="ng_s"><label>Quotazione</label><input id="ng_q" type="number" value="1"><button class="pri" onclick="nuovoG()">Aggiungi</button></div>`;
   }
 
-  if(ad.tab==='articoli'){
-    const art=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));
-    h+=`<div class="card"><h3>Nuovo articolo</h3><label>Titolo</label><input id="ar_t"><label>Link immagine (facoltativo)</label><input id="ar_i">
-      <label>Testo</label><textarea id="ar_x" rows="8"></textarea><button class="pri" onclick="nuovoArt()">Pubblica</button></div>
-      ${art.map(a=>`<div class="card row between"><span><b>${esc(a.titolo)}</b><br><small class="muted">${fmt(a.pubblicato_il)}</small></span><button class="del" onclick="delRiga('articoli',${a.id})">Elimina</button></div>`).join('')}`;
-  }
+  if(ad.tab==='articoli'){h+=`<div class="card" style="text-align:center">${testata(26)}<p class="muted">Gli articoli ora si scrivono, si approvano e si gestiscono nella redazione de Il Taccuino.</p><button class="pri" onclick="GZ.ed=null;vai('scrivi')">✍️ Apri la redazione</button></div>`}
   app.innerHTML=h;
 }
 async function salvaRake(){const v=Math.max(0,Math.min(50,+val('rk')||0));chk(await db.from('impostazioni').upsert({chiave:'rake_calcetto',valore:String(v)}));await caricaFeat();toast('Trattenuta: '+v+'%')}
@@ -2583,7 +2656,7 @@ async function nuovoG(){
 }
 async function nuovoArt(){
   const t=val('ar_t'),x=val('ar_x');if(!t||!x)return toast('Titolo e testo obbligatori',true);
-  chk(await db.from('articoli').insert({titolo:t,testo:x,immagine_url:val('ar_i')||null}));toast('Articolo pubblicato');pAdmin();
+  chk(await db.from('articoli').insert({titolo:t,testo:x,immagine_url:val('ar_i')||null,premium:!!document.getElementById('ar_p')?.checked}));toast('Articolo pubblicato');pAdmin();
 }
 </script>
 
