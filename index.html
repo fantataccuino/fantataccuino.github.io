@@ -871,13 +871,21 @@ async function statLega(lega,membri){const {pub,ris}=await datiLega(lega,membri)
   const sd=inc.length||(lega.attesa_cal||[]).length;
   const cl=Object.keys(tot).sort((a,b)=>sd?(tot[b].punti-tot[a].punti||tot[b].pt-tot[a].pt):tot[b].pt-tot[a].pt);
   return {tot,cl,inc,sd}}
+async function dashGz(){const el=document.getElementById('dgz');if(!el)return;
+  const [A,W]=await Promise.all([db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(3),
+    db.from('notizie_web').select('id,titolo,fonte,link,pubblicato').eq('tipo','news').order('pubblicato',{ascending:false}).limit(5)]);
+  const a=A.data||[],w=W.data||[];if(!a.length&&!w.length)return;if(!document.getElementById('dgz'))return;ARTS=a;
+  el.innerHTML=`<div class="card"><div class="row between" style="margin-bottom:4px"><h3 style="margin:0">📰 Il Taccuino</h3><small class="muted" style="cursor:pointer" onclick="GZ.vista='';vai('giornale')">Vedi tutto ›</small></div>
+    ${a.length?cardArt(a[0],1)+a.slice(1).map(x=>cardArt(x)).join(''):''}
+    ${w.length?`<div class="row between" style="margin:14px 0 2px"><b>🗞️ Ultime dal web</b><small class="muted" style="cursor:pointer" onclick="GZ.vista='web';vai('giornale')">Altre ›</small></div>`+w.map(n=>`<a href="${esc(n.link)}" target="_blank" rel="noopener nofollow" style="display:block;padding:9px 0;border-bottom:1px solid var(--line);color:var(--txt);text-decoration:none"><small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${esc(n.fonte||'')} · ${tempoFa(n.pubblicato)}</small><div style="font:600 14px/1.3 system-ui;margin-top:2px">${esc(n.titolo)} <span class="muted">↗</span></div></a>`).join(''):''}
+    <button class="btnv" style="margin-top:12px" onclick="GZ.vista='';vai('giornale')">Apri Il Taccuino</button></div>`}
 async function pDash(){
   if(!LG){const wa=FEAT.wa_premium?`https://wa.me/${String(FEAT.wa_premium).replace(/\D/g,'')}?text=${encodeURIComponent('Ciao! Vorrei trasferire la mia lega su FantaTaccuino. Il mio nome utente è '+(profilo.username||''))}`:'';
     app.innerHTML=`<div class="dhero" style="padding-bottom:22px">${stemma(profilo.username||'?')}<h2 style="margin:4px 0 0">Ciao ${esc(profilo.username||'')}!</h2><p class="muted" style="margin:6px 0 0">Non sei ancora in nessuna lega. Scegli come iniziare:</p></div>
     <div class="card"><h3 style="margin-top:0">🔑 Entra in una lega</h3><p class="muted">Hai un codice invito da un amico? Inseriscilo e scegli la tua squadra.</p><button class="btnv" onclick="vai('fanta')">Entra con il codice</button></div>
     <div class="card"><h3 style="margin-top:0">➕ Crea una lega</h3><p class="muted">Crea la tua lega, scegli le regole e invita gli amici con il codice.</p><button class="btnv" onclick="vai('fanta')">Crea una lega</button></div>
     <div class="card" style="border-color:var(--gold)"><h3 style="margin-top:0">🚚 Trasferisci la tua lega</h3><p class="muted">Giochi già su un'altra app? Mandaci gli screenshot e la portiamo qui noi, con rose, classifica e calendario.</p>${wa?`<a href="${wa}" target="_blank" class="btnv" style="text-align:center;text-decoration:none;background:#25d366">💬 Contatta l'amministratore</a>`:`<p class="muted">Scrivici a <b>fantataccuino@gmail.com</b></p>`}</div>
-    <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>(x[1]!=='Calcetto'||on('f_sng'))&&(x[1]!=='Tornei'||on('f_tornei'))).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`;return}
+    <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>(x[1]!=='Calcetto'||on('f_sng'))&&(x[1]!=='Tornei'||on('f_tornei'))).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div><div id="dgz"></div>`;dashGz();return}
   const lega=chk(await db.from('leghe').select('*').eq('id',LG).single());
   const membri=chk(await db.from('membri_lega').select('*, profili(username,premium_fino,visto)').eq('lega_id',lega.id));
   MIO=membri.some(m=>m.utente_id===utente.id)?utente.id:(membri.find(m=>(m.co||[]).includes(utente.id))?.utente_id||utente.id);
@@ -901,8 +909,8 @@ async function pDash(){
   ${gLive?`<div class="card"><div class="row between"><b><span style="color:var(--green)">●</span> Live in corso</b><small class="muted">${gLive.numero}ª giornata</small></div>${mL?vs(mL):''}<button class="btnv" onclick="vaiLega('live')">Vai al Live</button></div>`:''}
   ${gNext?`<div class="card"><div class="row between"><b>Prossima giornata</b><small class="muted">${gNext.numero}ª giornata</small></div>${mN?vs(mN):''}
     <p class="muted" style="text-align:center;margin:4px 0">⏱️ Formazione entro <b style="color:var(--txt)">${fmt(gNext.scadenza)}</b>${fatta?' · <span style="color:var(--green)">✅ inserita</span>':''}</p>
-    <button class="btnv" style="${fatta?'background:#ffffff22;color:var(--txt)':''}" onclick="vaiLega('formazione')">${fatta?'Modifica formazione':'Inserisci formazione'}</button></div>`:''}
-  <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>(x[1]!=='Calcetto'||on('f_sng'))&&(x[1]!=='Tornei'||on('f_tornei'))).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
+    <button class="btnv" style="${fatta?'background:#ffffff22;color:var(--txt)':''}" onclick="vaiLega('formazione')">${fatta?'Modifica formazione':'Inserisci formazione'}</button></div>`:''}<div id="dgz"></div>
+  <div class="tiles">${[['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"]].filter(x=>(x[1]!=='Calcetto'||on('f_sng'))&&(x[1]!=='Tornei'||on('f_tornei'))).map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`;dashGz()}
 async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e6)return toast('Immagine troppo grande',true);
   toast('Carico lo stemma…');const im=new Image();im.src=URL.createObjectURL(f);await im.decode();
   const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),m=Math.min(im.width,im.height);
