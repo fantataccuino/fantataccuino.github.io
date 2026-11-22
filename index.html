@@ -731,10 +731,7 @@ function frMuovi(i,d){const j=i+d;if(j<0||j>=FR.pan.length)return;[FR.pan[i],FR.
 async function salvaRuoli(){if(!FR.sl.every(Boolean))return toast('Completa tutti gli 11 posti del modulo',true);
   const righe=[...FR.sl.map((id,k)=>({giocatore_id:id,titolare:true,ordine:k})),...FR.pan.map((id,i)=>({giocatore_id:id,titolare:false,ordine:i+1}))];
   const dove=[fz.fc||0,...(fz.fc?[]:[...document.querySelectorAll('.f_cop:checked')].map(x=>+x.value))];
-  for(const cp of dove){
-    chk(await db.from('formazioni').delete().eq('lega_id',FR.lid).eq('coppa',cp).eq('utente_id',MIO).eq('giornata',FR.gn));
-    chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:FR.lid,utente_id:MIO,giornata:FR.gn,coppa:cp}))));
-    chk(await db.from('schieramenti').upsert({lega_id:FR.lid,utente_id:MIO,giornata:FR.gn,coppa:cp,modulo:FR.mod,nascosta:!!document.getElementById('f_nasc')?.checked},{onConflict:'lega_id,utente_id,giornata,coppa'}))}
+  for(const cp of dove)await scriviForm(FR.lid,FR.gn,cp,righe,FR.mod);
   toast(dove.length>1?'Formazione salvata per campionato e coppa!':fz.fc?'Formazione di coppa salvata!':'Formazione salvata!')}
 async function quotRicalcola(){if(!confirm('Ricalcolare tutte le quotazioni da zero con i voti della stagione? Le frecce ▲▼ ripartono da oggi.'))return;const n=chk(await db.rpc('quot_ricalcola_tutto'));toast(n+' quotazioni ricalcolate');MK.L=null}
 async function ruoliAuto(){toast('Leggo le formazioni ufficiali…');const r=chk(await db.rpc('admin_ruoli_auto'));toast(r)}
@@ -1471,8 +1468,17 @@ async function legaView(){
   }
   if(fz.tab==='formazione'){
     const RGf=REG(lega);
-    const giorn=chk(await db.from('fanta_giornate').select('*').gt('scadenza',new Date(Date.now()+RGf.timeout*60000).toISOString()).order('numero').limit(1));
+    let giorn=chk(await db.from('fanta_giornate').select('*').gt('scadenza',new Date(Date.now()+RGf.timeout*60000).toISOString()).order('numero').limit(1));
     if(giorn.length&&RGf.timeout) giorn[0].scadenza=new Date(new Date(giorn[0].scadenza).getTime()-RGf.timeout*60000).toISOString();
+    FADM=null;
+    if(profilo.ruolo==='admin'){
+      const aperte=chk(await db.from('fanta_giornate').select('*').or('pubblicata.is.null,pubblicata.eq.false').order('numero').limit(4));
+      if(fz.adm&&!membri.find(m=>m.utente_id===fz.adm))fz.adm=null;
+      if(fz.adm){MIO=fz.adm;const gg=aperte.find(x=>x.numero===+fz.ag)||giorn[0]||aperte[0];if(gg){giorn=[gg];FADM={u:fz.adm,g:gg.numero}}}
+      h+=`<div class="card" style="border-color:#e67e22"><h3 style="margin-top:0">🛠️ Admin: inserisci la formazione di…</h3>
+        <select onchange="fz.adm=this.value||null;fz.fc=0;legaView()"><option value="">— la mia squadra —</option>${membri.filter(m=>m.utente_id!==utente.id).map(m=>`<option value="${m.utente_id}" ${fz.adm===m.utente_id?'selected':''}>${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}</option>`).join('')}</select>
+        ${fz.adm?`<label>Giornata</label><select onchange="fz.ag=+this.value;legaView()">${aperte.map(x=>`<option value="${x.numero}" ${FADM&&FADM.g===x.numero?'selected':''}>Giornata ${x.numero}${new Date(x.scadenza)<new Date()?' (scadenza passata)':''}</option>`).join('')}</select>
+        <p class="muted" style="font-size:12px;margin-bottom:0">Stai modificando la formazione di <b>${esc(membri.find(m=>m.utente_id===fz.adm)?.nome_squadra)}</b>. Puoi farlo anche dopo la scadenza, finché la giornata non è pubblicata. Solo tu vedi questo riquadro.</p>`:''}</div>`}
     FREG=RGf;
     const mia=rose.filter(r=>r.utente_id===MIO).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]||a.giocatori.nome.localeCompare(b.giocatori.nome));
     if(!giorn.length) h+='<p class="muted">Nessuna giornata aperta per la formazione.</p>';
@@ -1482,8 +1488,10 @@ async function legaView(){
       const cps=chk(await db.from('coppe').select('id,nome,cfg').eq('lega_id',lega.id)).filter(c=>(c.cfg.cal||[]).some(m=>m.g===g.numero&&(m.c===MIO||m.t===MIO))||(c.cfg.ko||[]).some(x=>x.includes(g.numero)));
       if(!cps.find(c=>c.id===fz.fc))fz.fc=0;FCOP=cps;
       if(cps.length)h+=`<div class="tabs">${[{id:0,nome:'⚽ Campionato'},...cps.map(c=>({id:c.id,nome:'🏆 '+c.nome}))].map(c=>`<button class="${fz.fc===c.id?'on':''}" onclick="fz.fc=${c.id};legaView()">${esc(c.nome)}</button>`).join('')}</div>`;
-      let att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('coppa',fz.fc).eq('utente_id',MIO).eq('giornata',g.numero));
-      let sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('coppa',fz.fc).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
+      let att,sch;
+      if(FADM){const r=chk(await db.rpc('admin_leggi_form',{p_lega:lega.id,p_u:MIO,p_g:g.numero,p_coppa:fz.fc||0}));att=r.map(x=>({giocatore_id:x.giocatore_id,titolare:x.titolare,ordine:x.ordine}));sch=r[0]?{modulo:r[0].modulo,nascosta:r[0].nascosta}:null}
+      else{att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('coppa',fz.fc).eq('utente_id',MIO).eq('giornata',g.numero));
+      sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('coppa',fz.fc).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle())}
       if(fz.fc&&!att.length){att=chk(await db.from('formazioni').select('giocatore_id,titolare,ordine').eq('lega_id',lega.id).eq('coppa',0).eq('utente_id',MIO).eq('giornata',g.numero));sch=chk(await db.from('schieramenti').select('modulo,nascosta').eq('lega_id',lega.id).eq('coppa',0).eq('utente_id',MIO).eq('giornata',g.numero).maybeSingle());
         if(att.length)h+=`<div class="card" style="border-color:var(--gold)"><p class="muted" style="margin:0">Non hai ancora una formazione di coppa: per ora vale quella del campionato (te l'ho già caricata qui sotto, cambiala e salva).</p></div>`}
       const mod=RGf.moduli.includes(sch?.modulo)?sch.modulo:RGf.moduli[0];
@@ -1668,12 +1676,15 @@ async function salvaFormazione(lid,gn){
   if(!(c.P===1&&c.D===mod[0]&&c.C===mod[1]&&c.A===mod[2])) return toast(`I titolari non rispettano il ${modulo} (1 P, ${mod[0]} D, ${mod[1]} C, ${mod[2]} A)`,true);
   if(FREG&&FREG.panca){const pc={P:0,D:0,C:0,A:0};document.querySelectorAll('.fsel').forEach(x=>{if(x.value&&x.value!=='T')pc[x.dataset.r]++});const tr=['P','D','C','A'].find(k=>pc[k]>FREG.panca[k]);if(tr)return toast(`In panchina al massimo ${FREG.panca[tr]} ${tr}`,true)}
   const dove=[fz.fc||0,...(fz.fc?[]:[...document.querySelectorAll('.f_cop:checked')].map(x=>+x.value))];
-  for(const cp of dove){
-    chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('coppa',cp).eq('utente_id',MIO).eq('giornata',gn));
-    chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:MIO,giornata:gn,coppa:cp}))));
-    chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,coppa:cp,modulo,nascosta:!!document.getElementById('f_nasc')?.checked},{onConflict:'lega_id,utente_id,giornata,coppa'}))}
-  toast(dove.length>1?'Formazione salvata per campionato e coppa!':fz.fc?'Formazione di coppa salvata!':'Formazione salvata!');
+  for(const cp of dove)await scriviForm(lid,gn,cp,righe,modulo);
+  toast((FADM?'🛠️ ':'')+(dove.length>1?'Formazione salvata per campionato e coppa!':fz.fc?'Formazione di coppa salvata!':'Formazione salvata!'));
 }
+let FADM=null;
+async function scriviForm(lid,gn,cp,righe,modulo){const nasc=!!document.getElementById('f_nasc')?.checked;
+  if(FADM){chk(await db.rpc('admin_salva_form',{p_lega:lid,p_u:MIO,p_g:gn,p_coppa:cp,p_righe:righe,p_modulo:modulo,p_nasc:nasc}));return}
+  chk(await db.from('formazioni').delete().eq('lega_id',lid).eq('coppa',cp).eq('utente_id',MIO).eq('giornata',gn));
+  chk(await db.from('formazioni').insert(righe.map(r=>({...r,lega_id:lid,utente_id:MIO,giornata:gn,coppa:cp}))));
+  chk(await db.from('schieramenti').upsert({lega_id:lid,utente_id:MIO,giornata:gn,coppa:cp,modulo,nascosta:nasc},{onConflict:'lega_id,utente_id,giornata,coppa'}))}
 async function usaCarta(lid,gn,k){
   const sel=document.getElementById('cg_'+k);
   const c=CARTE.find(x=>x.k===k);
