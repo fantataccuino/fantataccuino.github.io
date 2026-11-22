@@ -1463,14 +1463,17 @@ async function legaView(){
       const gL=chk(await db.from('fanta_giornate').select('numero,scadenza,pubblicata').eq('pubblicata',false).order('numero').limit(1))[0];
       if(!gL||new Date(gL.scadenza)>new Date()) h+=`<div class="card"><h3>🔴 Live</h3><p class="muted">${gL?`La giornata ${gL.numero} inizia ${fmt(gL.scadenza)}: il live si apre al calcio d'inizio.`:'Nessuna giornata in corso.'}</p></div>`;
       else{
-        const G=gL.numero,pps=chk(await db.from('partite_sa').select('api_id,casa,trasferta,gol_casa,gol_trasferta,live,data').eq('giornata',G));
+        const G=gL.numero,pps=chk(await db.from('partite_sa').select('api_id,casa,trasferta,gol_casa,gol_trasferta,live,data,af_stato').eq('giornata',G));
+        const finita=sq=>{const p=pps.find(x=>x.casa===sq||x.trasferta===sq);return !!p&&!p.live&&(['FT','AET','PEN'].includes(p.af_stato)||new Date(p.data)<new Date(Date.now()-150*60e3))};
         const ev=pps.length?chk(await db.from('live_eventi').select('*').in('partita_id',pps.map(p=>p.api_id))):[];const EV={};ev.forEach(e=>EV[e.giocatore_id]=e);
         const evV=e=>({voto:6,gol:e.gol||0,assist:e.assist||0,ammonizione:!!e.amm,espulsione:!!e.esp,gol_subiti:e.gs||0,rigori_parati:e.rp||0,rigori_sbagliati:e.rs||0,autogol:e.ag||0});
         const incG=chk(await db.from('incontri').select('casa,trasferta').eq('lega_id',lega.id).eq('giornata',G));
         const coppie=incG.map(i=>[i.casa,i.trasferta]);if(!LV.c||!coppie.some(c=>c.join()===LV.c))LV.c=(coppie.find(c=>c.includes(MIO))||coppie[0]||[MIO]).join();
         const cop=LV.c.split(',');
-        const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>EV[gid]?evV(EV[gid]):{voto:LV.v[gid]??6}}):null;
         const form=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',G).in('utente_id',cop));
+        const FIN=new Set(form.filter(f=>finita(f.giocatori.squadra)).map(f=>f.giocatore_id));
+        const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>EV[gid]?evV(EV[gid]):FIN.has(gid)?null:{voto:LV.v[gid]??6}}):null;
+        const SUBo={},SUBi={};if(sim)cop.forEach(uid=>{const R=sim.ris[G]?.[uid]?.righe||[];R.forEach((r,k)=>{if(r.entra&&k>0&&R[k-1].g&&r.g){SUBo[R[k-1].g.id]=r.g.nome;SUBi[r.g.id]=R[k-1].g.nome}})});
         const fvDi=(D,uid,gid)=>{const r=(D.ris[G]?.[uid]?.righe||[]).find(x=>x.g?.id===gid);return r?r.fv:undefined};
         const gidsL=form.map(f=>f.giocatore_id),VV={};
         const EVT={};(gidsL.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gidsL)):[]).forEach(v=>{EVT[v.giocatore_id]=v;const f=form.find(x=>x.giocatore_id===v.giocatore_id);if(v.voto!=null)VV[v.giocatore_id]=fvL(v,f?.giocatori.ruolo,lega.bonus,null)});
@@ -1484,8 +1487,8 @@ async function legaView(){
         const stG=sq=>{const p=pps.find(x=>x.casa===sq||x.trasferta===sq);if(!p)return {k:'no'};if(p.live)return {k:'live'};if(new Date(p.data)>new Date())return {k:'dopo',t:new Date(p.data).toLocaleString('it-IT',{weekday:'short',hour:'2-digit',minute:'2-digit'})};return {k:'fine'}};
         const lvC=v=>v==null?'':v>=6.5?'#3ddc84':v<6?'#ff6b6b':'#e8e6ff';
         const lato=(f,dx)=>{if(!f)return '<div></div>';const g=f.giocatore_id,fv=vDi(g),e=EVT[g],vb=e&&e.voto!=null?e.voto:(fv!=null?6:null),st=stG(f.giocatori.squadra);
-          const sv=LV.sim&&fv==null?(LV.v[g]??6):null,ic=icE(g);
-          const sub=fv!=null?(ic?`<div class="lvi">${ic}</div>`:''):sv!=null?'<div class="lvs">simulato</div>':st.k==='fine'?'<div class="lvs">Non ha giocato</div>':st.k==='dopo'?`<div class="lvs">⏳ ${esc(st.t)}</div>`:st.k==='live'?'<div class="lvs">🔴 in corso</div>':'';
+          const sv=LV.sim&&fv==null&&!FIN.has(g)?(LV.v[g]??6):null,ic=icE(g);
+          const sub=SUBi[g]?`<div class="lvs" style="color:#3ddc84">🔄 entra per ${esc(SUBi[g])}</div>${fv!=null&&ic?`<div class="lvi">${ic}</div>`:''}`:SUBo[g]?`<div class="lvs" style="color:#ff9b9b">⊘ Non ha giocato · esce, entra ${esc(SUBo[g])}</div>`:fv!=null?(ic?`<div class="lvi">${ic}</div>`:''):sv!=null?'<div class="lvs">simulato</div>':st.k==='fine'?'<div class="lvs">Non ha giocato</div>':st.k==='dopo'?`<div class="lvs">⏳ ${esc(st.t)}</div>`:st.k==='live'?'<div class="lvs">🔴 in corso</div>':'';
           const box=fv!=null?`<div class="lvb"><div>${vb??'–'}</div><div style="color:${lvC(fv)};background:${lvC(fv)}26">${fv}</div></div>`
             :sv!=null?`<button class="lvb lvbs" onclick="lvVoto(${g})"><div>✎</div><div>${sv}</div></button>`
             :`<div class="lvb lvb0">${st.k==='fine'?'⊘':'–'}</div>`;
@@ -1499,7 +1502,7 @@ async function legaView(){
         h+=`<div class="card" style="border-color:#ff6b6b88"><div class="row between"><h3 style="margin:0">🔴 Live · giornata ${G}</h3>${coppie.length>1?`<select onchange="LV.c=this.value;LV.sim=false;legaView()" style="width:auto;margin:0">${coppie.map(c=>`<option value="${c.join()}" ${c.join()===LV.c?'selected':''}>${c.map(nomeSq).join(' – ')}</option>`).join('')}</select>`:''}</div>
           <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;text-align:center;margin:14px 0"><b>${nomeSq(cop[0])}</b><div><div style="font:800 40px/1 var(--cond)">${cop[1]?gol(cop[0])+' - '+gol(cop[1]):gol(cop[0])}</div><div class="muted">${pts(cop[0])}${cop[1]?' - '+pts(cop[1]):''}</div><small class="muted">${LV.sim?'Risultato simulato':'Parziale titolari'}</small></div><b>${cop[1]?nomeSq(cop[1]):''}</b></div>
           <button class="${LV.sim?'del':'pri'}" style="width:100%" onclick="LV.sim=!LV.sim;legaView()">${LV.sim?'✕ Torna al parziale':'⭐ Simula risultato'}</button>
-          ${LV.sim?'<p class="muted" style="font-size:13px">Chi non ha ancora il voto vale 6: tocca ✎ per cambiarlo. Nella simulazione valgono anche le sostituzioni dalla panchina.</p>':'<p class="muted" style="font-size:13px">Voti in diretta (dal live e dalla redazione). Si aggiorna da solo ogni minuto.</p><details style="font-size:13px;margin:-4px 0 4px"><summary class="muted">ⓘ Legenda icone</summary><div class="muted" style="margin-top:4px;line-height:1.7">⚽ gol · 👟 assist · 🟨 ammonito · 🟥 espulso · 🥅 gol subiti · 🧤 rigore parato · ❌ rigore sbagliato · 🔙 autogol</div></details>'}
+          ${LV.sim?'<p class="muted" style="font-size:13px">Chi deve ancora giocare vale 6: tocca ✎ per cambiarlo. Chi non ha giocato esce ed entra il primo della panchina nel suo ruolo (🔄).</p>':'<p class="muted" style="font-size:13px">Voti in diretta (dal live e dalla redazione). Si aggiorna da solo ogni minuto.</p><details style="font-size:13px;margin:-4px 0 4px"><summary class="muted">ⓘ Legenda icone</summary><div class="muted" style="margin-top:4px;line-height:1.7">⚽ gol · 👟 assist · 🟨 ammonito · 🟥 espulso · 🥅 gol subiti · 🧤 rigore parato · ❌ rigore sbagliato · 🔙 autogol</div></details>'}
           <div style="margin-top:12px;font-size:14px">${specchio()}</div></div>`;
         clearTimeout(LV.t);LV.t=setTimeout(()=>{if(pagina==='fanta'&&fz.tab==='live'&&!LV.sim)legaView()},60000);
       }
