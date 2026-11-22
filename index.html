@@ -604,11 +604,26 @@ const tempoFa=d=>{const m=Math.round((Date.now()-new Date(d))/6e4);return m<60?M
 function cardArt(a,big){
   if(big)return `<div style="position:relative;border-radius:18px;overflow:hidden;cursor:pointer;margin-bottom:12px" onclick="apriArt(${a.id})">${copertina(a,230)}<span style="position:absolute;top:10px;right:10px;background:#000a;border-radius:999px;padding:4px 10px;font:700 11px system-ui;letter-spacing:.5px">IN EVIDENZA</span><div style="position:absolute;left:0;right:0;bottom:0;padding:40px 14px 12px;background:linear-gradient(180deg,transparent,#000d)"><div style="font:800 20px system-ui;line-height:1.25">${esc(a.titolo)}</div><small style="color:#ffffffaa;text-transform:uppercase;font-weight:700;font-size:11px">${esc(sezDi(a))}${a.premium?' · 💎':''} • ${tempoFa(a.pubblicato_il)}</small></div></div>`;
   return `<div style="display:flex;gap:12px;align-items:stretch;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="apriArt(${a.id})"><div style="width:118px;flex-shrink:0;border-radius:12px;overflow:hidden">${copertina(a,84)}</div><div style="min-width:0;display:flex;flex-direction:column;justify-content:space-between"><div style="font:700 15px system-ui;line-height:1.3">${esc(a.titolo)}</div><small class="muted" style="text-transform:uppercase;font-weight:700;font-size:11px;margin-top:6px">${esc(sezDi(a))}${a.premium?' · 💎':''} • ${tempoFa(a.pubblicato_il)}</small></div></div>`}
-async function pGiornale(){ARTS=chk(await db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(60));
+function gzTabs(){return `<div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${[['','📰 Taccuino'],['web','🗞️ Dal web'],['video','🎥 Video']].map(([k,l])=>`<button style="flex:1;padding:9px 4px;font-size:14px;${(GZ.vista||'')===k?'background:var(--green);color:#120a3a;border-color:var(--green)':''}" onclick="GZ.vista='${k}';pGiornale()">${l}</button>`).join('')}</div>`}
+async function pWeb(){const V=GZ.vista==='video';let q=db.from('notizie_web').select('*').eq('tipo',V?'video':'news').order('pubblicato',{ascending:false}).limit(V?40:80);
+  if(GZ.wsq)q=q.eq('squadra',GZ.wsq);const L=chk(await q);
+  const sq=[...new Set(chk(await db.from('partite_sa').select('casa')).map(x=>x.casa))].sort();
+  const filtro=`<select style="width:100%;margin:0 0 10px" onchange="GZ.wsq=this.value;pGiornale()"><option value="">Tutte le squadre</option>${sq.map(x=>`<option ${GZ.wsq===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
+  const vuoto=`<p class="muted">${GZ.wsq?'Niente di nuovo per questa squadra.':'Ancora niente: si aggiorna da solo ogni 20 minuti.'}</p>`;
+  if(!V){app.innerHTML=testata(28)+gzTabs()+filtro+(L.length?L.map(n=>`<a href="${esc(n.link)}" target="_blank" rel="noopener nofollow" class="card" style="display:block;padding:11px 13px;margin-bottom:8px;color:var(--txt);text-decoration:none">
+      <small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${esc(n.fonte||'')} · ${tempoFa(n.pubblicato)}${n.squadra?' · '+esc(n.squadra):''}</small>
+      <div style="font:700 15px/1.3 system-ui;margin-top:3px">${esc(n.titolo)} <span class="muted" style="font-weight:400">↗</span></div></a>`).join(''):vuoto)
+    +`<p class="muted" style="font-size:12px;text-align:center">Titoli e link dalle testate sportive: tocca per leggere l'articolo sul loro sito.</p>`;return}
+  app.innerHTML=testata(28)+gzTabs()+filtro+(L.length?L.map(n=>`<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px">
+      <div id="yv${n.id}" style="position:relative;aspect-ratio:16/9;background:#000 url('https://i.ytimg.com/vi/${encodeURIComponent(n.video_id)}/hqdefault.jpg') center/cover;cursor:pointer" onclick="this.innerHTML='<iframe src=&quot;https://www.youtube-nocookie.com/embed/${encodeURIComponent(n.video_id)}?autoplay=1&amp;rel=0&quot; style=&quot;position:absolute;inset:0;width:100%;height:100%;border:0&quot; allow=&quot;autoplay; encrypted-media; picture-in-picture&quot; allowfullscreen></iframe>';this.onclick=null">
+        <div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:58px;height:58px;border-radius:50%;background:#000a;display:grid;place-items:center;font-size:24px">▶</div></div></div>
+      <div style="padding:10px 12px"><small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${esc(n.fonte||'')} · ${tempoFa(n.pubblicato)}</small><div style="font:700 15px/1.3 system-ui;margin-top:3px">${esc(n.titolo)}</div></div></div>`).join(''):vuoto)
+    +`<p class="muted" style="font-size:12px;text-align:center">Video dai canali YouTube ufficiali delle squadre.</p>`}
+async function pGiornale(){if(GZ.vista==='web'||GZ.vista==='video')return pWeb();ARTS=chk(await db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(60));
   const BLK=premOk()?[]:((await db.rpc('notizie_bloccate')).data||[]);
   const tutte=[...new Set([...SEZ,'Pre-partita','Post-partita','Classifiche','La tua lega'])],nV={},nB={};ARTS.forEach(a=>nV[sezDi(a)]=(nV[sezDi(a)]||0)+1);BLK.forEach(a=>nB[sezDi(a)]=(nB[sezDi(a)]||0)+1);
   const sezs=['',...tutte.filter(k=>nV[k]||nB[k])];if(GZ.sez&&!sezs.includes(GZ.sez))GZ.sez='';const L=ARTS.filter(a=>!GZ.sez||sezDi(a)===GZ.sez),LB=BLK.filter(a=>GZ.sez&&sezDi(a)===GZ.sez);
-  app.innerHTML=testata(28)+`<div class="row between" style="margin-bottom:10px;gap:8px"><b style="font:900 24px system-ui">News</b><select style="width:auto;margin:0;border-radius:999px;padding:8px 14px" onchange="GZ.sez=this.value;pGiornale()">${sezs.map(k=>`<option value="${k}" ${GZ.sez===k?'selected':''}>${k?`${k} (${nV[k]||0})${nB[k]?' · 🔒 '+nB[k]:''}`:'☰ Categorie'}</option>`).join('')}</select></div>
+  app.innerHTML=testata(28)+gzTabs()+`<div class="row between" style="margin-bottom:10px;gap:8px"><b style="font:900 24px system-ui">News</b><select style="width:auto;margin:0;border-radius:999px;padding:8px 14px" onchange="GZ.sez=this.value;pGiornale()">${sezs.map(k=>`<option value="${k}" ${GZ.sez===k?'selected':''}>${k?`${k} (${nV[k]||0})${nB[k]?' · 🔒 '+nB[k]:''}`:'☰ Categorie'}</option>`).join('')}</select></div>
     ${isRed()?`<button class="pri" style="width:100%;margin-bottom:10px" onclick="GZ.ed=null;vai('scrivi')">✍️ Scrivi un articolo</button>`:''}
     ${L.length?cardArt(L[0],1)+`<div>${L.slice(1).map(a=>cardArt(a)).join('')}</div>`:LB.length?'':'<p class="muted">Ancora nessun articolo: arriverà in automatico.</p>'}
     ${LB.length?`<div class="card" style="border-color:#ffd34d77;text-align:center"><p style="margin:0 0 8px">🔒 <b>${LB.length} articol${LB.length>1?'i':'o'} Premium</b> in ${esc(GZ.sez)}</p>${LB.map(a=>`<div style="padding:6px 0;border-top:1px solid var(--line);font:700 15px system-ui">${esc(a.titolo)}</div>`).join('')}<button class="pri" style="margin-top:8px" onclick="vai('premium')">💎 Sblocca con il Premium</button></div>`:''}
@@ -2600,6 +2615,7 @@ async function pAdmin(){
         <input id="lk_don" value="${esc(FEAT.link_donazioni||'')}" placeholder="https://ko-fi.com/..."><button class="pri" onclick="salvaDon()">Salva</button></div>
       <div class="card"><h3>⚽ Trattenuta del banco (Calcetto)</h3><p class="muted">Percentuale dei palloni dorati di ogni tavolo che il banco trattiene. Il resto è il montepremi.</p>
         <div class="row"><input id="rk" class="n" type="number" min="0" max="50" value="${+FEAT.rake_calcetto||0}"> % <button class="pri" onclick="salvaRake()">Salva</button></div></div>`;
+    h+=await fontiCard();
   }
 
   if(ad.tab==='utenti'){
@@ -2711,6 +2727,17 @@ async function modGettoni(id,seg){const n=Math.abs(parseInt(document.getElementB
   if(!confirm(`${seg>0?'Aggiungere':'Togliere'} ${n} ${lab} a ${u.username}? Saldo: ${u[w]||0} → ${nuovo}`))return;
   chk(await db.from('profili').update({[w]:nuovo}).eq('id',id));toast(`${u.username}: ${nuovo} ${lab}`);pAdmin()}
 async function regalaGettoni(id,n){const u=chk(await db.from('profili').select('gettoni').eq('id',id).single());chk(await db.from('profili').update({gettoni:u.gettoni+n}).eq('id',id));toast('+'+n+' palloni dorati');pAdmin()}
+async function fontiCard(){const F=(await db.from('fonti_web').select('*').order('tipo').order('nome')).data||[];
+  return `<div class="card"><h3>🗞️ Notizie dal web e 🎥 Video</h3><p class="muted" style="font-size:13px">Il sito prende da queste fonti solo <b>titolo, fonte e link</b> (niente testi, niente foto). Dai canali YouTube ufficiali prende solo conferenze stampa, allenamenti e interviste. Si aggiorna da solo ogni 20 minuti.</p>
+    ${F.map(f=>`<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row between" style="flex-wrap:nowrap;gap:6px"><div style="min-width:0"><b>${f.tipo==='youtube'?'🎥':'🗞️'} ${esc(f.nome)}</b><br><small class="muted" style="word-break:break-all">${esc(f.url)}</small><br><small style="color:${/^ok/.test(f.esito||'')?'#3ddc84':'#ff6b6b'}">${esc(f.esito||'non ancora controllata')}</small></div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex:none"><button class="${f.attiva?'ok':'del'}" style="padding:5px 8px" onclick="fonteOn(${f.id},${!f.attiva})">${f.attiva?'ATTIVA':'SPENTA'}</button><button style="padding:5px 8px" onclick="fonteDel(${f.id})">🗑️</button></div></div></div>`).join('')}
+    <div style="border-top:1px solid var(--line);padding-top:8px"><label>Aggiungi fonte</label><input id="fw_n" placeholder="Nome (es. Bologna)"><input id="fw_u" placeholder="Link del feed RSS o del canale YouTube (https://www.youtube.com/@...)">
+      <button class="pri" onclick="fonteAdd()">➕ Aggiungi</button> <button onclick="fonteCheck()">🔄 Controlla ora</button></div></div>`}
+async function fonteOn(id,v){chk(await db.from('fonti_web').update({attiva:v}).eq('id',id));pAdmin()}
+async function fonteDel(id){if(!confirm('Togliere questa fonte?'))return;chk(await db.from('fonti_web').delete().eq('id',id));pAdmin()}
+async function fonteAdd(){const n=val('fw_n').trim(),u=val('fw_u').trim();if(!n||!/^https?:\/\//.test(u))return toast('Scrivi nome e link',true);
+  chk(await db.from('fonti_web').insert({nome:n,url:u,tipo:/youtube\.com|youtu\.be/.test(u)?'youtube':'rss'}));toast('Fonte aggiunta');fonteCheck()}
+async function fonteCheck(){toast('Controllo le fonti…');const {error}=await db.rpc('web_aggiorna');if(error)toast(error.message,true);else toast('Fonti controllate');pAdmin()}
 async function toggleFeat(k,v){chk(await db.from('impostazioni').upsert({chiave:k,valore:v?'1':'0'}));await caricaFeat();toast(v?'Funzione attivata':'Funzione spenta');pAdmin()}
 async function approva(id){chk(await db.from('profili').update({approvato:true}).eq('id',id));toast('Utente accettato');pAdmin()}
 async function cambiaRuolo(id,r){chk(await db.from('profili').update({ruolo:r}).eq('id',id));pAdmin()}
