@@ -1472,14 +1472,14 @@ async function legaView(){
         const cop=LV.c.split(',');
         const form=chk(await db.from('formazioni').select('utente_id,giocatore_id,titolare,ordine,giocatori(nome,ruolo,squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',G).in('utente_id',cop));
         const FIN=new Set(form.filter(f=>finita(f.giocatori.squadra)).map(f=>f.giocatore_id));
-        const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>EV[gid]?evV(EV[gid]):FIN.has(gid)?null:{voto:LV.v[gid]??6}}):null;
-        const SUBo={},SUBi={};if(sim)cop.forEach(uid=>{const R=sim.ris[G]?.[uid]?.righe||[];R.forEach((r,k)=>{if(r.entra&&k>0&&R[k-1].g&&r.g){SUBo[R[k-1].g.id]=r.g.nome;SUBi[r.g.id]=R[k-1].g.nome}})});
         const fvDi=(D,uid,gid)=>{const r=(D.ris[G]?.[uid]?.righe||[]).find(x=>x.g?.id===gid);return r?r.fv:undefined};
         const gidsL=form.map(f=>f.giocatore_id),VV={};
         const EVT={};(gidsL.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gidsL)):[]).forEach(v=>{EVT[v.giocatore_id]=v;const f=form.find(x=>x.giocatore_id===v.giocatore_id);if(v.voto!=null)VV[v.giocatore_id]=fvL(v,f?.giocatori.ruolo,lega.bonus,null)});
         form.forEach(f=>{if(VV[f.giocatore_id]==null&&EV[f.giocatore_id]){const v={minuti:90,...evV(EV[f.giocatore_id])};VV[f.giocatore_id]=fvL(v,f.giocatori.ruolo,lega.bonus,null)}});
         form.forEach(f=>{const e=EV[f.giocatore_id];if(e){const o=evV(e),w=EVT[f.giocatore_id];EVT[f.giocatore_id]=w?{...o,...Object.fromEntries(Object.entries(w).filter(([k,x])=>x))}:o}});
         const icE=gid=>{const e=EVT[gid];if(!e)return '';const x=(n,i)=>n>0?(n>1?i+'×'+n:i):'';const t=[x(e.gol,'⚽'),x(e.assist,'👟'),e.ammonizione?'🟨':'',e.espulsione?'🟥':'',e.gol_subiti>0?'🥅-'+e.gol_subiti:'',x(e.rigori_parati,'🧤'),x(e.rigori_sbagliati,'❌'),x(e.autogol,'🔙')].filter(Boolean).join(' ');return t};
+        const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>{const w=EVT[gid];if(w&&w.voto!=null)return {...w};if(EV[gid])return evV(EV[gid]);return FIN.has(gid)?null:{voto:LV.v[gid]??6}}}):null;
+        const SUBo={},SUBi={};if(sim)cop.forEach(uid=>{const R=sim.ris[G]?.[uid]?.righe||[];R.forEach((r,k)=>{if(r.entra&&k>0&&R[k-1].g&&r.g){SUBo[R[k-1].g.id]=r.g.nome;SUBi[r.g.id]=R[k-1].g.nome}})});
         const vDi=gid=>VV[gid]!=null?Math.round(VV[gid]*10)/10:undefined;
         const parz=uid=>Math.round(form.filter(f=>f.utente_id===uid&&f.titolare).reduce((a,f)=>{const v=vDi(f.giocatore_id);return a+(v!=null?v:0)},0)*10)/10;
         const pts=uid=>sim?sim.ris[G]?.[uid]?.pt??0:parz(uid);
