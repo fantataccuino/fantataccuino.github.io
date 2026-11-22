@@ -578,6 +578,27 @@ let QIMP=null;
 async function salvaQuot(){if(!QIMP)return;const nuovi=document.getElementById('qf_new')?.checked?QIMP.nuovi:[];
   const n=chk(await db.rpc('quot_importa',{p_upd:QIMP.match.map(m=>({id:m.id,fc:m.fc,qa:m.qa,qi:m.qi,fvm:m.fvm})),p_new:nuovi.map(r=>({fc:r.fc,nome:r.nome,ru:r.ru,sq:QIMP.sqm[sqN(r.sq)]||r.sq,qa:r.qa,qi:r.qi,fvm:r.fvm}))}));
   document.getElementById('qf_ris').innerHTML=`<p style="color:var(--green)">✅ Fatto: ${n} giocatori aggiornati o aggiunti.</p>`;QIMP=null;MK.L=null;TT.L=null;toast('Quotazioni aggiornate')}
+
+// ---------- installa app ----------
+let INSTP=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();INSTP=e});
+window.addEventListener('appinstalled',()=>{INSTP=null;try{localStorage.setItem('inst_ok','1')}catch(e){};toast('App installata! 🎉 La trovi tra le tue app')});
+function instBanner(){let no=false;try{no=!!localStorage.getItem('inst_no')||!!localStorage.getItem('inst_ok')}catch(e){}
+  if(isApp()||no)return '';
+  return `<div class="card" style="border-color:var(--gold);display:flex;gap:12px;align-items:center"><img src="icona-192.png" style="width:48px;height:48px;border-radius:12px" onerror="this.style.display='none'">
+    <div style="flex:1;min-width:0"><b>📲 Installa FantaTaccuino</b><br><small class="muted">Icona sul telefono, schermo intero e notifiche. Gratis, senza store.</small></div>
+    <div style="display:flex;flex-direction:column;gap:6px"><button class="pri" onclick="installaApp()">Installa</button><button style="padding:4px 8px;font-size:12px" onclick="try{localStorage.setItem('inst_no','1')}catch(e){};this.closest('.card').remove()">Non ora</button></div></div>`}
+async function installaApp(){
+  if(isApp())return toast('Stai già usando l\'app 👍');
+  if(INSTP){INSTP.prompt();const r=await INSTP.userChoice;INSTP=null;if(r.outcome==='accepted'){try{localStorage.setItem('inst_ok','1')}catch(e){}}return}
+  const ios=isIOS(),safari=/safari/i.test(navigator.userAgent)&&!/crios|fxios|edgios/i.test(navigator.userAgent);
+  const passi=ios?[...(safari?[]:[['🧭','Apri il sito con <b>Safari</b>','Su iPhone si installa solo da Safari: copia l\'indirizzo <b>fantataccuino.github.io</b> e aprilo lì.']]),['⬆️','Tocca <b>Condividi</b>','Il quadrato con la freccia in su, in basso al centro (o in alto a destra su iPad).'],['➕','Scegli <b>Aggiungi alla schermata Home</b>','Scorri il menu se non lo vedi subito.'],['✅','Tocca <b>Aggiungi</b>','Trovi l\'icona di FantaTaccuino sulla Home: aprila sempre da lì, anche per le notifiche.']]
+    :[['⋮','Tocca il menu <b>⋮</b> del browser','In alto a destra in Chrome (in basso su Samsung Internet).'],['📲','Scegli <b>Installa app</b>','Oppure <b>Aggiungi a schermata Home</b>.'],['✅','Conferma con <b>Installa</b>','Trovi l\'icona di FantaTaccuino tra le tue app.']];
+  const o=document.createElement('div');o.id='instov';o.style.cssText='position:fixed;inset:0;z-index:102;background:#0b0628f0;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  o.innerHTML=`<div class="card" style="max-width:440px;width:100%;margin:auto"><div style="text-align:center"><img src="icona-192.png" style="width:72px;height:72px;border-radius:18px" onerror="this.style.display='none'"><p style="font:800 26px var(--cond);margin:6px 0">Installa FantaTaccuino</p><p class="muted" style="margin-top:0">${ios?'📱 Su iPhone':'🤖 Su Android'} bastano pochi secondi:</p></div>
+    ${passi.map((p,i)=>`<div style="display:flex;gap:12px;align-items:flex-start;margin:12px 0"><div style="font-size:26px;width:36px;text-align:center">${p[0]}</div><div><b>${i+1}. </b>${p[1]}<br><small class="muted">${p[2]}</small></div></div>`).join('')}
+    <button class="pri" style="width:100%;margin-top:6px" onclick="document.getElementById('instov').remove()">Ho capito</button></div>`;
+  document.body.appendChild(o)}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -701,6 +722,7 @@ async function pDash(){
   app.innerHTML=selLega()+`<div class="dhero"><label style="display:block;width:96px;margin:0 auto;position:relative;cursor:pointer">${stemma(me?.nome_squadra,'',me?.stemma)}<span style="position:absolute;right:-2px;bottom:6px;background:var(--gold);color:#1a0f3d;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px">📷</span><input type="file" accept="image/*" style="display:none" onchange="cambiaStemma(this)"></label><h2 style="margin:4px 0 0">${esc(me?.nome_squadra||'')}</h2><small class="muted">${esc(lega.nome)}</small>
     <div class="dstats"><div><b>${pos||'-'}ª</b><small>Posizione</small></div><div><b>${sd?t.punti:'-'}</b><small>Punti</small></div><div><b>${t.g}</b><small>Partite</small></div><div><b>${Math.round(t.pt*10)/10}</b><small>Pt. totali</small></div></div></div>
   ${arts.length?`<div class="ticker">${arts.map(a=>`<div onclick="ARTS=[];apriArtDa(${a.id})"><b>NEWS</b>${esc(a.titolo)}</div>`).join('')}</div>`:''}
+  ${instBanner()}
   ${MKA?`<div class="card" style="border-color:var(--green);cursor:pointer" onclick="vaiLega('mercato')"><div class="row between"><b>🟢 Mercato aperto</b><small class="muted">${MKA.tipo==='buste'?'✉️ Buste chiuse':'🔨 Asta'}${MKA.chiude?' · fino al '+fmt(MKA.chiude):''}</small></div><button class="pri" style="width:100%;margin-top:8px">Vai al mercato</button></div>`:''}
   ${gLive?`<div class="card"><div class="row between"><b><span style="color:var(--green)">●</span> Live in corso</b><small class="muted">${gLive.numero}ª giornata</small></div>${mL?vs(mL):''}<button class="btnv" onclick="vaiLega('live')">Vai al Live</button></div>`:''}
   ${gNext?`<div class="card"><div class="row between"><b>Prossima giornata</b><small class="muted">${gNext.numero}ª giornata</small></div>${mN?vs(mN):''}
@@ -718,7 +740,7 @@ async function cambiaStemma(inp){const f=inp.files[0];if(!f)return;if(f.size>15e
 async function apriArtDa(id){ARTS=chk(await db.from('articoli').select('*').order('pubblicato_il',{ascending:false}));apriArt(id)}
 async function pAltro(){
   const pres=LG&&(await db.from('leghe').select('creatore_id').eq('id',LG).single()).data?.creatore_id===utente.id||profilo.ruolo==='admin';
-  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🔄','Mercato',"vaiLega('mercato')"],['🏅','Coppa',"vaiLega('coppa')"],['🔔','Notifiche',"vai('notifiche')"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
+  const V=[['📋','Formazione',"vaiLega('formazione')"],['🔴','Live',"vaiLega('live')"],['🔄','Mercato',"vaiLega('mercato')"],['🏅','Coppa',"vaiLega('coppa')"],['🔔','Notifiche',"vai('notifiche')"],['📲','Installa app',"installaApp()"],['🏆','Tornei',"vai('tornei')"],['⚽','Calcetto',"vai('sng')"],['📅','Serie A',"vai('seriea')"],['🔎','Giocatori',"vai('giocatori')"],['💬','Chat',"vai('chat')"],['📰','Notizie',"vai('home')"],['📂','Tutte le leghe',"fz.lega=null;vai('fanta')"],
     ...(pres?[['⚙️','Gestione lega',"vaiLega('gestione')"]]:[]),...(on('f_premium')?[['💎','Premium',"vai('premium')"]]:[]),['📜','Termini',"vai('termini')"],...(profilo.ruolo==='admin'?[['🛠️','Admin',"vai('admin')"]]:[]),
     ...(FEAT.link_donazioni?[['☕','Sostienici',`window.open('${esc(FEAT.link_donazioni)}','_blank')`]]:[])].filter(x=>x[1]!=='Calcetto'||on('f_sng'));
   app.innerHTML=selLega()+`<h2 style="margin-top:6px">☰ Altro</h2><div class="tiles">${V.map(x=>`<div class="tile" onclick="${x[2]}"><div>${x[0]}</div><span>${x[1]}</span></div>`).join('')}</div>`}
