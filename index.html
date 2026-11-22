@@ -267,7 +267,7 @@ function navB(v){const i=v.indexOf(' ');return `<span class="ic">${v.slice(0,i)}
 function aggSaldo(){const el=document.getElementById('saldo');if(!el||!profilo)return;
   if(!on('f_sng')){el.style.display='none';return}
   el.style.display='flex';
-  el.innerHTML=`<span title="Palloni gratis">🎁 ${profilo.prova??0}</span><span style="opacity:.4">|</span><span title="Palloni Premium" style="display:flex;align-items:center;gap:4px"><span class="pd"></span>${profilo.gettoni??0}</span>`}
+  el.innerHTML=`<span title="Palloni gratis">🎁 ${profilo.prova??0}</span><span style="opacity:.4">|</span><span title="Palloni Premium" style="display:flex;align-items:center;gap:4px"><span class="pd"></span>${profilo.gettoni??0}</span>${profilo.palloni_vinti?`<span style="opacity:.4">|</span><span title="Palloni vinti">🏆 ${profilo.palloni_vinti}</span>`:''}`}
 let LEGHE=[],LG=null;
 async function caricaLeghe(){
   const a=chk(await db.from('membri_lega').select('lega_id').eq('utente_id',utente.id)).map(x=>x.lega_id);
@@ -744,6 +744,10 @@ async function ruoliModifica(id,cur){const v=prompt('Ruoli separati da ; (es. M;
   const ok=['Por','Dc','B','Dd','Ds','E','M','C','T','W','A','Pc'];const R=v.split(/[;,\s]+/).map(x=>x.trim()).filter(Boolean).map(x=>ok.find(o=>o.toLowerCase()===x.toLowerCase())||x);
   if(R.some(x=>!ok.includes(x)))return toast('Ruolo non valido: '+R.find(x=>!ok.includes(x)),true);
   chk(await db.from('giocatori').update(R.length?{ruoli_m:R.join(';'),ruoli_fissi:true}:{ruoli_fissi:false}).eq('id',id));toast('Ruoli salvati');ruoliCerca()}
+async function spostaVinti(){const d=profilo.palloni_vinti||0;const v=prompt(`Quanti palloni vinti vuoi spostare nei palloni Premium? (ne hai ${d})`,d);if(v===null)return;const n=parseInt(v);
+  if(!(n>0)||n>d)return toast('Scrivi un numero tra 1 e '+d,true);
+  if(!confirm(`Spostare ${n} palloni vinti nei palloni Premium?\n\nNon saranno più tra i palloni vinti: serviranno solo per entrare nei tavoli e nei tornei Premium. L'operazione non si può annullare.`))return;
+  const {data,error}=await db.rpc('sposta_vinti',{p_n:n});if(error)return toast(error.message,true);profilo.palloni_vinti=data;profilo.gettoni=(profilo.gettoni||0)+n;aggSaldo();toast(`➡️ ${n} palloni spostati nei Premium`);pSng()}
 // ---------- coppa ----------
 const CUPN=n=>({1:'Finale',2:'Semifinali',4:'Quarti di finale',8:'Ottavi di finale',16:'Sedicesimi'})[n]||('Turno a '+n*2);
 function rrGir(ids,ar){const t=[...ids];if(t.length%2)t.push(null);const n=t.length,R=[];
@@ -1987,14 +1991,15 @@ let sg={tab:'lobby',tav:null,g:null,squadre:null,edit:null},sngTimer=null;
 async function pSng(){
   clearTimeout(sngTimer);
   await db.rpc('sng_aggiorna');
-  const {data:pr}=await db.from('profili').select('gettoni,premium_fino,prova').eq('id',utente.id).single();if(pr)Object.assign(profilo,pr);aggSaldo();
+  const {data:pr}=await db.from('profili').select('gettoni,premium_fino,prova,palloni_vinti').eq('id',utente.id).single();if(pr)Object.assign(profilo,pr);aggSaldo();
   if(sg.tav) return tavoloView();
   const PROVA=!premOk();
   {let v=true;try{v=!!localStorage.getItem('gsng2_'+utente.id)}catch(e){}if(!v&&!sg.tav)setTimeout(guidaSngOverlay,300)}
-  let h=`<h2>⚽ Calcetto</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  let h=`<h2>⚽ Calcetto</h2><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
     <div class="card" style="margin:0;border-color:#5dff7a88"><small class="muted">🎁 Palloni gratis</small><div style="font:800 32px var(--cond);color:var(--green)">${profilo.prova??0}</div><small class="muted">Per i tavoli 🎁 Gratis. Le vincite non vengono accreditate.</small></div>
-    <div class="card" style="margin:0;border-color:#ffd44788"><small class="muted"><span class="pd"></span> Palloni Premium</small><div style="font:800 32px var(--cond);color:var(--gold)">${profilo.gettoni??0}</div><small class="muted">Per i tavoli normali, riservati ai 💎 Premium.</small></div></div>
-    <p class="muted" style="font-size:13px;margin:10px 2px 14px">I palloni gratis: 100 all'iscrizione più quelli dei 🎁 pacchi giornalieri. I palloni Premium li assegna l'amministratore. <a href="#" onclick="mostraBenvenuto();return false">Come funzionano?</a></p>`;
+    <div class="card" style="margin:0;border-color:#ffd44788"><small class="muted"><span class="pd"></span> Palloni Premium</small><div style="font:800 32px var(--cond);color:var(--gold)">${profilo.gettoni??0}</div><small class="muted">Per entrare nei tavoli e nei tornei 💎 Premium.</small></div>
+    <div class="card" style="margin:0;border-color:#ff9f4388"><small class="muted">🏆 Palloni vinti</small><div style="font:800 32px var(--cond);color:#ff9f43">${profilo.palloni_vinti??0}</div><small class="muted">Le vincite dei giochi Premium, tenute da parte.</small>${(profilo.palloni_vinti||0)>0?`<button style="width:100%;margin-top:6px;padding:6px;font-size:12px" onclick="spostaVinti()">➡️ Sposta nei Premium</button>`:''}</div></div>
+    <p class="muted" style="font-size:13px;margin:10px 2px 14px">I palloni gratis: 100 all'iscrizione più quelli dei 🎁 pacchi giornalieri. I palloni Premium li assegna l'amministratore e servono per entrare. Le vincite dei giochi Premium vanno nei 🏆 palloni vinti, tenuti da parte: se vuoi usarli per giocare, toccali e spostali nei Premium. I palloni non sono soldi e non si convertono in denaro. <a href="#" onclick="mostraBenvenuto();return false">Come funzionano?</a></p>`;
   h+=`<div class="tabs">${[['lobby','Lobby'],['miei','I miei tavoli'],['classifica','Re del mese'],['regole','Regole'],...(profilo.ruolo==='admin'?[['gestisci','🛠️ Gestisci tavoli']]:[])].map(([k,v])=>`<button class="${sg.tab===k?'on':''}" onclick="sg.tab='${k}';pSng()">${v}</button>`).join('')}</div>`;
   if(sg.tab==='lobby'){
     const tav=chk(await db.from('sng_tavoli').select('*, sng_iscritti(utente_id)').eq('stato','aperto').order('chiusura').order('posti').order('ingresso')).filter(t=>!t.chiusura||new Date(t.chiusura)>new Date()||t.sng_iscritti.some(x=>x.utente_id===utente.id));
@@ -2008,7 +2013,7 @@ async function pSng(){
     h+=`<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:nowrap">
       <button style="flex:1;padding:12px 6px;${sg.tipo==='free'?'background:#1a7f37;color:#fff;border-color:#5dff7a':''}" onclick="sg.tipo='free';pSng()">🎁 Tavoli Free<br><small>${nF} aperti · palloni gratis</small></button>
       <button style="flex:1;padding:12px 6px;${sg.tipo==='pre'?'background:linear-gradient(135deg,#b8860b,#ffd34d);color:#1d0f63;border-color:#ffd34d':''}" onclick="sg.tipo='pre';pSng()">💎 Tavoli Premium<br><small>${nP} aperti · palloni Premium</small></button></div>
-    <p class="muted" style="font-size:13px;margin:0 2px 10px">${sg.tipo==='free'?'🎁 <b>Free</b>: per tutti, si entra con i palloni gratis. Servono per provare: le vincite non si accumulano e non contano per il Re del mese.':'💎 <b>Premium</b>: riservati agli utenti Premium, si entra con i palloni Premium. Le vincite vanno nel saldo e contano per il 👑 Re del mese.'}</p>`;
+    <p class="muted" style="font-size:13px;margin:0 2px 10px">${sg.tipo==='free'?'🎁 <b>Free</b>: per tutti, si entra con i palloni gratis. Servono per provare: le vincite non si accumulano e non contano per il Re del mese.':'💎 <b>Premium</b>: riservati agli utenti Premium, si entra con i palloni Premium. Le vincite vanno nei 🏆 palloni vinti, separati da quelli che ricevi, e contano per il 👑 Re del mese.'}</p>`;
     const tavV=tav.filter(t=>sg.tipo==='free'?t.gratis:!t.gratis);
     if(!tavV.length)h+=`<div class="card"><p class="muted" style="margin:0">${sg.tipo==='free'?'Nessun tavolo Free aperto in questo momento: si creano da soli prima di ogni partita.':'Nessun tavolo Premium aperto in questo momento.'}</p></div>`;
     h+=tavV.map(t=>{const n=t.sng_iscritti.length,io=t.sng_iscritti.some(x=>x.utente_id===utente.id);
@@ -2565,8 +2570,8 @@ async function pAdmin(){
   if(ad.tab==='utenti'){
     const us=chk(await db.from('profili').select('*').order('approvato').order('creato_il',{ascending:false}));
     h+=us.map(u=>`<div class="card row between"><div><b>${esc(u.username)}</b> ${u.ruolo==='admin'?'<span class="badge">Admin</span>':''}<br>
-      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni} · 🎁 ${u.prova??0}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
-      ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><select id="pw_${u.id}" style="margin:0;width:auto;padding:8px"><option value="gettoni">Premium</option><option value="prova">🎁 Gratis</option></select><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
+      <small class="muted">${u.approvato?'Approvato':'⏳ In attesa'} · ${fmt(u.creato_il)} · <span class="pd"></span> ${u.gettoni} · 🎁 ${u.prova??0} · 🏆 ${u.palloni_vinti??0}${u.premium_fino?` · 💎 fino al ${new Date(u.premium_fino).toLocaleDateString('it-IT')}`:''}</small>
+      ${u.approvato?`<div class="row" style="margin-top:6px">${u.premium_fino&&u.premium_fino>=new Date().toISOString().slice(0,10)?`<button onclick="setPremium('${u.id}',0)">Togli 💎</button>`:`<button onclick="setPremium('${u.id}',1)">💎 Premium 1 anno</button>`}</div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><select id="pw_${u.id}" style="margin:0;width:auto;padding:8px"><option value="gettoni">Premium</option><option value="prova">🎁 Gratis</option><option value="palloni_vinti">🏆 Vinti</option></select><input id="pg_${u.id}" type="number" inputmode="numeric" placeholder="es. 50 o -50" style="margin:0;flex:1;min-width:0"><button onclick="modGettoni('${u.id}',1)">➕</button><button class="del" onclick="modGettoni('${u.id}',-1)">➖</button></div>`:''}</div>
       ${u.id===utente.id?'':`<div class="row">${!u.approvato?`<button class="ok" onclick="approva('${u.id}')">Accetta</button>`:''}
         ${u.approvato?`<button onclick="cambiaRuolo('${u.id}','${u.ruolo==='admin'?'utente':'admin'}')">${u.ruolo==='admin'?'Togli admin':'Rendi admin'}</button>`:''}
         <button class="del" onclick="rifiuta('${u.id}')">${u.approvato?'Elimina':'Rifiuta'}</button></div>`}</div>`).join('');
@@ -2663,8 +2668,8 @@ async function salvaDon(){const v=val('lk_don');if(v&&!/^https:\/\//.test(v))ret
 async function setPremium(id,anni){const d=new Date();d.setFullYear(d.getFullYear()+anni);const upd={premium_fino:anni?d.toISOString().slice(0,10):null};
   chk(await db.from('profili').update(upd).eq('id',id));toast(anni?'Premium attivato per 1 anno':'Premium tolto');pAdmin()}
 async function modGettoni(id,seg){const n=Math.abs(parseInt(document.getElementById('pg_'+id).value));if(!n)return toast('Scrivi quanti palloni dorati',true);
-  const w=document.getElementById('pw_'+id).value,lab=w==='prova'?'palloni gratis':'palloni Premium';
-  const u=chk(await db.from('profili').select('gettoni,prova,username').eq('id',id).single());const nuovo=Math.max(0,(u[w]||0)+seg*n);
+  const w=document.getElementById('pw_'+id).value,lab=w==='prova'?'palloni gratis':w==='palloni_vinti'?'palloni vinti':'palloni Premium';
+  const u=chk(await db.from('profili').select('gettoni,prova,palloni_vinti,username').eq('id',id).single());const nuovo=Math.max(0,(u[w]||0)+seg*n);
   if(!confirm(`${seg>0?'Aggiungere':'Togliere'} ${n} ${lab} a ${u.username}? Saldo: ${u[w]||0} → ${nuovo}`))return;
   chk(await db.from('profili').update({[w]:nuovo}).eq('id',id));toast(`${u.username}: ${nuovo} ${lab}`);pAdmin()}
 async function regalaGettoni(id,n){const u=chk(await db.from('profili').select('gettoni').eq('id',id).single());chk(await db.from('profili').update({gettoni:u.gettoni+n}).eq('id',id));toast('+'+n+' palloni dorati');pAdmin()}
