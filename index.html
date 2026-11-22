@@ -274,12 +274,12 @@ async function caricaLeghe(){
   const a=chk(await db.from('membri_lega').select('lega_id').eq('utente_id',utente.id)).map(x=>x.lega_id);
   const {data:b}=await db.from('membri_lega').select('lega_id').contains('co',[utente.id]);
   const ids=[...new Set([...a,...(b||[]).map(x=>x.lega_id)])];
-  LEGHE=ids.length?chk(await db.from('leghe').select('id,nome').in('id',ids).order('creata_il')):[];
+  LEGHE=profilo&&profilo.ruolo==='admin'?chk(await db.from('leghe').select('id,nome').order('creata_il')):ids.length?chk(await db.from('leghe').select('id,nome').in('id',ids).order('creata_il')):[];
   let s=null;try{s=+localStorage.getItem('lega_att_'+utente.id)}catch(e){}
   LG=(LEGHE.find(l=>l.id===s)||LEGHE[0]||{}).id||null}
 function setLG(id){LG=+id;try{localStorage.setItem('lega_att_'+utente.id,LG)}catch(e){};if(pagina==='fanta'){fz.lega=LG;legaView()}else vai(pagina)}
 let FCOP=[];
-function vaiLega(tab){if(!LG)return vai('dash');fz.lega=LG;fz.tab=tab;vai('fanta')}
+function vaiLega(tab){if(!LG){toast('Prima entra in una lega: creane una o unisciti con il codice');return vai('dash')}fz.lega=LG;fz.tab=tab;vai('fanta')}
 function selLega(){if(!LEGHE.length)return '';return `<div class="lsel"><select onchange="setLG(this.value)">${LEGHE.map(l=>`<option value="${l.id}" ${l.id===LG?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div>`}
 function navK(){if(pagina==='fanta'&&fz.lega===LG&&['rosa','giornate','classifica'].includes(fz.tab))return fz.tab;if(pagina==='dash')return 'dash';if(pagina==='fanta'&&fz.lega===LG&&['formazione','live'].includes(fz.tab))return 'dash';return 'altro'}
 function renderNav(){aggSaldo();
