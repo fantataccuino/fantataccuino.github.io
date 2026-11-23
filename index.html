@@ -1561,7 +1561,8 @@ async function legaView(){
           <div style="margin-top:12px;font-size:14px">${specchio()}</div></div>`;
         try{const FA=chk(await db.from('formazioni').select('giocatore_id,titolare,giocatori(squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',G));
           const FNa=new Set(FA.filter(f=>finita(f.giocatori?.squadra)).map(f=>f.giocatore_id)),TTa=new Set(FA.filter(f=>f.titolare).map(f=>f.giocatore_id));
-          const [LD,BD,incA]=await Promise.all([datiLega(lega,membri,{gg:[G],extra:gid=>{if(EV[gid])return evV(EV[gid]);if(FNa.has(gid))return null;return TTa.has(gid)?{voto:6}:null}}),datiLega(lega,membri),db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata').then(r=>r.data||[])]);
+          const gA=[...new Set(FA.map(f=>f.giocatore_id))],DBA={};(gA.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gA)):[]).forEach(v=>DBA[v.giocatore_id]=v);
+          const [LD,BD,incA]=await Promise.all([datiLega(lega,membri,{gg:[G],extra:gid=>{const d=DBA[gid];if(d)return d.voto!=null?{...d}:null;if(EV[gid])return evV(EV[gid]);if(FNa.has(gid))return null;return TTa.has(gid)?{voto:6}:null}}),datiLega(lega,membri),db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata').then(r=>r.data||[])]);
           const PZ=lega.partenza||{},nuovo=()=>{const t={};membri.forEach(m=>{const z=PZ[m.utente_id]||{};t[m.utente_id]={pt:+z.fp||0,v:+z.v||0,n:+z.n||0,p:+z.p||0,gf:+z.gf||0,gs:+z.gs||0,punti:+z.punti||0}});return t};
           const somma=(t,D,gg)=>{gg.forEach(g=>membri.forEach(m=>{if(t[m.utente_id]&&D.ris[g]?.[m.utente_id])t[m.utente_id].pt+=D.ris[g][m.utente_id].pt}));
             incA.filter(i=>gg.includes(i.giornata)).forEach(i=>{const [gc,gt]=golMatch(i,D.ris,lega);const A=t[i.casa],B=t[i.trasferta];if(!A||!B)return;A.gf+=gc;A.gs+=gt;B.gf+=gt;B.gs+=gc;if(gc>gt){A.v++;B.p++;A.punti+=3}else if(gc<gt){B.v++;A.p++;B.punti+=3}else{A.n++;B.n++;A.punti++;B.punti++}})};
