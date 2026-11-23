@@ -876,13 +876,20 @@ async function statLega(lega,membri){const {pub,ris}=await datiLega(lega,membri)
   const cl=Object.keys(tot).sort((a,b)=>sd?(tot[b].punti-tot[a].punti||tot[b].pt-tot[a].pt):tot[b].pt-tot[a].pt);
   return {tot,cl,inc,sd}}
 async function dashGz(){const el=document.getElementById('dgz');if(!el)return;
-  const [A,W]=await Promise.all([db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(3),
-    db.from('notizie_web').select('id,titolo,fonte,link,pubblicato').eq('tipo','news').order('pubblicato',{ascending:false}).limit(5)]);
-  const a=A.data||[],w=W.data||[];if(!a.length&&!w.length)return;if(!document.getElementById('dgz'))return;ARTS=a;
-  el.innerHTML=`<div class="card"><div class="row between" style="margin-bottom:4px"><h3 style="margin:0">📰 Il Taccuino</h3><small class="muted" style="cursor:pointer" onclick="GZ.vista='';vai('giornale')">Vedi tutto ›</small></div>
+  const [A,W,HH]=await Promise.all([db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(3),
+    db.from('notizie_web').select('id,titolo,fonte,link,pubblicato').eq('tipo','news').order('pubblicato',{ascending:false}).limit(5),
+    db.from('notizie_web').select('id,titolo,video_id,partita_id,pubblicato').eq('tipo','highlights').not('partita_id','is',null).order('pubblicato',{ascending:false}).limit(24)]);
+  const a=A.data||[],w=W.data||[];const vis=new Set(),hl=(HH.data||[]).sort((x,y)=>(/enilive/i.test(y.titolo)?1:0)-(/enilive/i.test(x.titolo)?1:0)).filter(n=>{if(vis.has(n.partita_id))return false;vis.add(n.partita_id);return true}).sort((x,y)=>new Date(y.pubblicato)-new Date(x.pubblicato)).slice(0,10);
+  if(!a.length&&!w.length&&!hl.length)return;if(!document.getElementById('dgz'))return;ARTS=a;
+  const hlNome=t=>{const q=t.split('|').map(x=>x.trim());return q.length>1?q[1]:t};
+  const hlHtml=hl.length?`<div class="card"><div class="row between" style="margin-bottom:8px"><h3 style="margin:0">🎬 Highlights</h3><small class="muted" style="cursor:pointer" onclick="GZ.vista='video';GZ.vt='hl';vai('giornale')">Tutti ›</small></div>
+    <div style="display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;scrollbar-width:none">${hl.map(n=>`<div style="flex:none;width:72%;max-width:260px;scroll-snap-align:start;cursor:pointer" onclick="pagina='seriea';renderNav();pagelle(${n.partita_id})">
+      <div style="position:relative;aspect-ratio:16/9;border-radius:12px;background:#000 url('https://i.ytimg.com/vi/${encodeURIComponent(n.video_id)}/hqdefault.jpg') center/cover"><div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:44px;height:44px;border-radius:50%;background:#000a;display:grid;place-items:center">▶</div></div></div>
+      <div style="font:800 14px system-ui;margin-top:6px;text-transform:uppercase">${esc(hlNome(n.titolo))}</div><small class="muted">${tempoFa(n.pubblicato)}</small></div>`).join('')}</div></div>`:'';
+  el.innerHTML=hlHtml+(!a.length&&!w.length?'':`<div class="card"><div class="row between" style="margin-bottom:4px"><h3 style="margin:0">📰 Il Taccuino</h3><small class="muted" style="cursor:pointer" onclick="GZ.vista='';vai('giornale')">Vedi tutto ›</small></div>
     ${a.length?cardArt(a[0],1)+a.slice(1).map(x=>cardArt(x)).join(''):''}
     ${w.length?`<div class="row between" style="margin:14px 0 2px"><b>🗞️ Ultime dal web</b><small class="muted" style="cursor:pointer" onclick="GZ.vista='web';vai('giornale')">Altre ›</small></div>`+w.map(n=>`<a href="${esc(n.link)}" target="_blank" rel="noopener nofollow" style="display:block;padding:9px 0;border-bottom:1px solid var(--line);color:var(--txt);text-decoration:none"><small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${esc(n.fonte||'')} · ${tempoFa(n.pubblicato)}</small><div style="font:600 14px/1.3 system-ui;margin-top:2px">${esc(n.titolo)} <span class="muted">↗</span></div></a>`).join(''):''}
-    <button class="btnv" style="margin-top:12px" onclick="GZ.vista='';vai('giornale')">Apri Il Taccuino</button></div>`}
+    <button class="btnv" style="margin-top:12px" onclick="GZ.vista='';vai('giornale')">Apri Il Taccuino</button></div>`)}
 async function pDash(){
   if(!LG){const wa=FEAT.wa_premium?`https://wa.me/${String(FEAT.wa_premium).replace(/\D/g,'')}?text=${encodeURIComponent('Ciao! Vorrei trasferire la mia lega su FantaTaccuino. Il mio nome utente è '+(profilo.username||''))}`:'';
     app.innerHTML=`<div class="dhero" style="padding-bottom:22px">${stemma(profilo.username||'?')}<h2 style="margin:4px 0 0">Ciao ${esc(profilo.username||'')}!</h2><p class="muted" style="margin:6px 0 0">Non sei ancora in nessuna lega. Scegli come iniziare:</p></div>
@@ -1496,7 +1503,7 @@ async function legaView(){
           const box=fv!=null?`<div class="lvb"><div>${vb??'–'}</div><div style="color:${lvC(fv)};background:${lvC(fv)}26">${fv}</div></div>`
             :sv!=null?`<button class="lvb lvbs" onclick="lvVoto(${g})"><div>✎</div><div>${sv}</div></button>`
             :`<div class="lvb lvb0">${SVg?'SV':st.k==='fine'?'⊘':'–'}</div>`;
-          const txt=`<div class="lvt" style="text-align:${dx?'right':'left'}"><div class="lvn" style="${dx?'flex-direction:row-reverse':''}">${ruolo(f.giocatori.ruolo)}<b>${esc(f.giocatori.nome)}</b></div>${sub}</div>`;
+          const txt=`<div class="lvt" style="text-align:${dx?'right':'left'}"><div class="lvn" style="${dx?'flex-direction:row-reverse':''}">${ruolo(f.giocatori.ruolo)}<b style="cursor:pointer" onclick="schedaG(${g},'legaView()')">${esc(f.giocatori.nome)}</b></div>${sub}</div>`;
           return `<div class="lvl">${dx?box+txt:txt+box}</div>`};
         const lista=uid=>{const r=form.filter(f=>f.utente_id===uid);return {t:r.filter(f=>f.titolare).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]),pn:r.filter(f=>!f.titolare).sort((a,b)=>a.ordine-b.ordine),n:r.length}};
         const coppiaR=(A,B)=>{let o='';for(let k=0;k<Math.max(A.length,B.length);k++)o+=`<div class="lvrow">${lato(A[k],0)}${cop[1]?lato(B[k],1):'<div></div>'}</div>`;return o};
@@ -2003,7 +2010,7 @@ function forma5(fv){fv=(fv||[]).slice(-5);if(!fv.length)return '<small class="mu
   return `<span title="Ultimi 5 fantavoti: ${fv.join(' · ')}" style="display:flex;align-items:flex-end;gap:2px;height:30px;flex:0 0 auto">${fv.map(x=>`<i style="display:block;width:7px;border-radius:2px;height:${Math.max(4,Math.min(30,x*2.6))}px;background:${c(x)}"></i>`).join('')}</span>`}
 async function votiDi(ids){const m={};if(!ids.length)return m;const vv=chk(await db.from('voti').select('giocatore_id,giornata,fantavoto').in('giocatore_id',ids).not('fantavoto','is',null).order('giornata'));vv.forEach(v=>(m[v.giocatore_id]=m[v.giocatore_id]||[]).push(+v.fantavoto));return m}
 function qv(g){const d=g.var_q||0;return `Q ${g.quotazione}`+(d>0?` <span style="color:#2ecc71">▲${d}</span>`:d<0?` <span style="color:#e74c3c">▼${-d}</span>`:'')}
-async function schedaG(id){
+async function schedaG(id,bk){bk=bk||'pGiocatori()';clearTimeout(LV.t);
   const g=chk(await db.from('giocatori').select('*').eq('id',id).single());
   const vv=chk(await db.from('voti').select('*').eq('giocatore_id',id).order('giornata'));
   const giocate=vv.filter(v=>v.voto!==null);
@@ -2021,7 +2028,7 @@ async function schedaG(id){
     const a=grafico(pv,'#5dff7a','Fantavoto giornata per giornata'),b=grafico(pq,'#ffd447','Quotazione');
     graf=`<div class="card" style="border-color:var(--gold)"><h3>💎 Andamento</h3>${a||'<p class="muted">Il grafico dei voti compare dopo almeno 2 partite giocate.</p>'}${b||'<p class="muted">Il grafico della quotazione compare dopo la prima giornata pubblicata.</p>'}</div>`;
   } else graf='<div class="card" style="border-color:var(--gold)"><p class="muted">💎 Con il Premium vedi i grafici di voti e quotazione giornata per giornata.</p></div>';
-  app.innerHTML=`<button onclick="pGiocatori()">← Giocatori</button>
+  app.innerHTML=`<button onclick="${bk}">${bk==='pGiocatori()'?'← Giocatori':'← Indietro'}</button>
   <div class="card" style="margin-top:12px"><div class="scheda">${g.foto?`<img src="${esc(g.foto)}" alt="">`:''}<div><h2 style="margin:0">${esc(g.nome)}</h2>
     <div style="margin-top:6px">${ruolo(g.ruolo)}${esc(g.squadra)} · <b>${qv(g)}</b>${g.var_q?` <small class="muted">(inizio stagione ${g.quot_iniziale})</small>`:''}</div></div></div>
     <div class="stat"><div><b>${giocate.length}</b>Presenze</div><div><b>${media('voto')}</b>Media voto</div><div><b>${media('fantavoto')}</b>Fantamedia</div>
@@ -2572,7 +2579,7 @@ async function pagelle(id){
   const pr=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
   const probHtml=pr.length&&!vv.length&&!premOk()?`<div class="card" style="border-color:var(--gold)"><h3>📋 Probabili formazioni</h3><p class="muted">💎 Le probabili formazioni sono riservate agli utenti Premium.</p><button class="pri" onclick="vai('premium')">Scopri il Premium</button></div>`:pr.length&&!vv.length?`<div class="card"><h3>📋 Probabili formazioni</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${[p.casa,p.trasferta].map(sq=>`<div><b>${esc(sq)}</b>${gg.filter(g=>g.squadra===sq&&pr.includes(g.id)).sort((a,b)=>ORD[a.ruolo]-ORD[b.ruolo]).map(g=>`<div style="font-size:13px;padding:2px 0">${ruolo(g.ruolo)}${esc(g.nome)}</div>`).join('')}</div>`).join('')}</div></div>`:'';
   const blocco=sq=>{const r=vv.map(v=>({...v,g:gg.find(x=>x.id===v.giocatore_id)})).filter(v=>v.g.squadra===sq).sort((a,b)=>ORD[a.g.ruolo]-ORD[b.g.ruolo]||(b.minuti-a.minuti));
-    return `<div class="card"><h3>${esc(sq)}</h3>${r.map(v=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row between"><span>${ruolo(v.g.ruolo)}<b>${esc(v.g.nome)}</b> <small class="muted">${v.minuti??''}'</small></span>
+    return `<div class="card"><h3>${esc(sq)}</h3>${r.map(v=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row between"><span>${ruolo(v.g.ruolo)}<b style="cursor:pointer;text-decoration:underline dotted #fff6" onclick="schedaG(${v.g.id},'pagelle(${p.api_id})')">${esc(v.g.nome)}</b> <small class="muted">${v.minuti??''}'</small></span>
       <span><b style="font-size:18px">${v.voto??'s.v.'}</b> <small class="muted">fv</small> <b style="color:var(--gold)">${v.fantavoto??'-'}</b></span></div>
       ${bonusRighe(v).length?`<small class="muted">${bonusRighe(v).join(' · ')}</small>`:''}${v.giudizio?`<div style="font-style:italic;margin-top:3px">"${esc(v.giudizio)}"</div>`:''}</div>`).join('')||'<p class="muted">Voti non ancora pubblicati.</p>'}</div>`};
   app.innerHTML=`<button onclick="pSerieA()">← Serie A</button>${HL?`<div style="margin-top:12px">${ytBox(HL,'🎬 Highlights ufficiali')}</div>`:''}<h2 style="margin-top:12px">${vv.length?'Pagelle FantaTaccuino':'La partita'}</h2>
