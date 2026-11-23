@@ -1456,7 +1456,7 @@ async function legaView(){
     const ombraMia=lega.modalita==='ombra'&&fz.vedi===MIO;
     h+=`<select onchange="fz.vedi=this.value;legaView()">${membri.map(m=>`<option value="${m.utente_id}" ${m.utente_id===fz.vedi?'selected':''}>${esc(m.nome_squadra)} · ${esc(m.profili?.username||'')}${isOnline(m.profili)?' 🟢':''}</option>`).join('')}</select>
     <div class="card"><p class="muted">${(()=>{const R=REG(lega);return ['P','D','C','A'].map(k=>{const n=mia.filter(x=>x.giocatori.ruolo===k).length;return `${ruolo(k)}<b style="color:${n===R.rosa[k]?'var(--green)':n>R.rosa[k]?'var(--red)':'var(--txt)'}">${n}/${R.rosa[k]}</b>`}).join(' ')})()}</p><p class="muted">${mia.length} giocatori${lega.modalita==='asta'?` · spesi ${spesi} · residui <b style="color:var(--gold)">${lega.crediti-spesi+(+((lega.bonus||{}).cred||{})[fz.vedi]||0)}</b>`:''}</p>
-    <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}${esc(r.giocatori.nome)}<br>${titG(r.giocatori)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
+    <table>${mia.map(r=>`<tr><td>${foto(r.giocatori.foto)}${ruolo(r.giocatori.ruolo)}<b style="cursor:pointer;text-decoration:underline dotted #fff6" onclick="schedaG(${r.giocatore_id},'legaView()')">${esc(r.giocatori.nome)}</b><br>${titG(r.giocatori)}</td><td class="muted">${esc(r.giocatori.squadra)}</td><td>${ombraMia?`<button class="del" onclick="togliGiocatore(${r.id})">✕</button>`:lega.modalita==='asta'?r.prezzo:''}</td></tr>`).join('')||'<tr><td class="muted">Rosa vuota.</td></tr>'}</table></div>`;
     const mm=membri.find(m=>m.utente_id===fz.vedi);
     if(mm&&fz.vedi===MIO){const co=mm.co||[];const nomiCo=co.length?chk(await db.from('profili').select('id,username').in('id',co)):[];
       h+=`<div class="card"><h3>👥 Co-allenatori</h3>${isCo?`<p class="muted">Gestisci <b>${esc(mm.nome_squadra)}</b> insieme a ${esc(mm.profili?.username||'')}: puoi schierare la formazione.</p><button class="del" onclick="coTogli(${lega.id},'${utente.id}')">Lascia la gestione</button>`
@@ -1984,14 +1984,21 @@ function listaG(){clearTimeout(tG);tG=setTimeout(async()=>{
 function spiega(r,st,gc){
   if(!st) return null;
   const n=(...p)=>{let x=st;for(const k of p)x=x?.[k];return Number(x)||0};
-  const mins=n('games','minutes'),gol=n('goals','total'),ass=n('goals','assists');
-  if(mins<15&&!gol&&!ass) return ['Meno di 15 minuti senza gol né assist: s.v.'];
-  let v=6;const L=['Base: 6'];const add=(d,t)=>{v+=d;L.push(`${d>0?'+':''}${String(d).replace('.',',')} ${t}`)};
-  if(r==='P'){const pz=Math.floor(n('goals','saves')/3)*0.5;if(pz)add(pz,`${n('goals','saves')} parate`);if(gc===0&&mins>=60)add(0.5,'porta inviolata');if(gc>=3)add(-0.5,'la squadra ha subito 3+ gol')}
-  else if(r==='D'){if(gc===0&&mins>=60)add(0.5,'porta inviolata');const dif=n('tackles','total')+n('tackles','interceptions')+n('tackles','blocks');if(dif>=6)add(0.5,`${dif} azioni difensive`);const dt=n('duels','total');if(dt>=6&&n('duels','won')/dt>=0.6)add(0.5,`duelli vinti ${n('duels','won')}/${dt}`);if(n('dribbles','past')>=3)add(-0.5,`saltato ${n('dribbles','past')} volte`);if(gc>=3)add(-0.5,'la squadra ha subito 3+ gol');if(n('penalty','commited')>=1)add(-1,'rigore causato')}
-  else if(r==='C'){const k=n('passes','key');if(k>=4)add(1,`${k} passaggi chiave`);else if(k>=2)add(0.5,`${k} passaggi chiave`);const tot=n('passes','total'),acc=n('passes','accuracy');const pct=tot?(acc<=tot?100*acc/tot:acc):null;if(pct!==null&&pct>=88&&tot>=30)add(0.5,`precisione passaggi ${Math.round(pct)}%`);if(pct!==null&&pct<70&&tot>=20)add(-0.5,`precisione passaggi ${Math.round(pct)}%`);const tk=n('tackles','total')+n('tackles','interceptions');if(tk>=4)add(0.5,`${tk} contrasti e intercetti`);if(n('dribbles','success')>=3)add(0.5,`${n('dribbles','success')} dribbling riusciti`)}
-  else{if(n('shots','on')>=3)add(0.5,`${n('shots','on')} tiri in porta`);if(n('passes','key')>=2)add(0.5,`${n('passes','key')} passaggi chiave`);if(n('dribbles','success')>=3)add(0.5,`${n('dribbles','success')} dribbling riusciti`);if(n('penalty','won')>=1)add(0.5,'rigore procurato');if(mins>=60&&n('shots','total')===0)add(-0.5,'nessun tiro in 60+ minuti')}
-  const max=(gol||ass)?9:7.5;if(v>max)L.push(`Tetto massimo ${String(max).replace('.',',')}${max===7.5?' senza gol né assist':''}`);if(v<4)L.push('Voto minimo 4');
+  const mins=n('games','minutes'),rat=Number(st?.games?.rating)||0,L=[];
+  if(mins)L.push(`⏱️ ${mins} minuti giocati`);
+  if(mins<20&&!n('goals','total')&&!n('goals','assists'))L.push('Meno di 20 minuti senza gol né assist: S.V. (entra il primo della panchina)');
+  if(rat)L.push(`📊 Valutazione statistica della partita: <b>${String(rat.toFixed(2)).replace('.',',')}</b> → arrotondata al mezzo punto più vicino`);
+  const st2=[];const p=(c,t)=>{if(c)st2.push(t)};
+  if(r==='P'){p(n('goals','saves'),`🧤 ${n('goals','saves')} parate`);p(gc!=null,`🥅 squadra: ${gc} gol subiti`);}
+  p(n('shots','total'),`🎯 ${n('shots','total')} tiri (${n('shots','on')} in porta)`);
+  p(n('passes','key'),`🔑 ${n('passes','key')} passaggi chiave`);
+  const tot=n('passes','total'),acc=n('passes','accuracy');if(tot)st2.push(`📨 ${tot} passaggi${acc?` · precisione ${Math.round(acc<=tot?100*acc/tot:acc)}%`:''}`);
+  if(n('duels','total'))st2.push(`⚔️ duelli vinti ${n('duels','won')}/${n('duels','total')}`);
+  const dif=n('tackles','total')+n('tackles','interceptions')+n('tackles','blocks');p(dif,`🛡️ ${dif} contrasti/intercetti/respinte`);
+  p(n('dribbles','success'),`🏃 ${n('dribbles','success')} dribbling riusciti`);
+  p(n('fouls','drawn'),`🤕 ${n('fouls','drawn')} falli subiti`);p(n('fouls','committed'),`⚠️ ${n('fouls','committed')} falli fatti`);
+  p(n('penalty','won'),'✅ rigore procurato');p(n('penalty','commited')||n('penalty','committed'),'❌ rigore causato');
+  if(st2.length)L.push('<b>I numeri della partita</b><br>'+st2.join('<br>'));
   return L;
 }
 function bonusRighe(v){const b=[];
@@ -2039,7 +2046,7 @@ async function schedaG(id,bk){bk=bk||'pGiocatori()';clearTimeout(LV.t);
     if(!sp) return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">${testa}${v.giudizio?`<div style="font-style:italic;margin-top:3px">"${esc(v.giudizio)}"</div>`:''}</div>`;
     return `<details style="padding:8px 0;border-bottom:1px solid var(--line)"><summary style="color:var(--txt)">${testa}</summary><div style="padding:8px 0 0 10px">
       ${v.corretto?`<p style="color:var(--gold)">✏️ Voto corretto dalla redazione (formula: ${v.voto_auto??'s.v.'})</p>`:''}
-      ${sp.map(x=>`<div class="muted">${esc(x)}</div>`).join('')}<div style="margin-top:4px"><b>= Voto ${v.voto??'s.v.'}</b></div>
+      ${sp.map(x=>`<div class="muted" style="margin-bottom:4px">${x}</div>`).join('')}<div style="margin-top:4px"><b>= Voto ${v.voto??'s.v.'}</b></div>
       ${bn.length?`<div style="margin-top:6px">${bn.map(x=>`<div class="muted">${x}</div>`).join('')}</div><div style="margin-top:4px"><b>= Fantavoto ${v.fantavoto??'-'}</b></div>`:''}</div></details>`}).join('')||'<p class="muted">Nessun voto pubblicato.</p>'}</div>`;
 }
 
