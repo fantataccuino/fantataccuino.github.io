@@ -194,10 +194,11 @@ function mostraPiani(){if(document.getElementById('piani'))return;const o=docume
     <div class="card" style="margin:10px 0"><b style="font-size:17px">🆓 Free · gratis per sempre</b>${li(F)}</div>
     <div class="card" style="margin:10px 0;border-color:var(--gold)"><b style="font-size:17px;color:var(--gold)">💎 Premium · tutto il Free, più:</b>${li(Pm)}</div>
     ${P?'<p style="color:var(--green);text-align:center;font-weight:700">✅ Tu sei Premium: hai già tutto sbloccato!</p>':''}
+    <button class="btnv" style="width:100%;margin-bottom:8px" onclick="chiudiPiani(2)">📖 Leggi come funziona</button>
     ${P?'':`<button class="pri" style="width:100%" onclick="chiudiPiani(1)">💎 Scopri il Premium</button>`}
     <button style="width:100%;margin-top:8px" onclick="chiudiPiani()">${P?'Iniziamo!':'Continua con il Free'}</button></div>`;
   document.body.appendChild(o)}
-function chiudiPiani(prem){try{localStorage.setItem('piani1_'+utente.id,'1')}catch(e){}document.getElementById('piani')?.remove();if(prem)vai('premium');else dopoBenv()}
+function chiudiPiani(prem){try{localStorage.setItem('piani1_'+utente.id,'1')}catch(e){}document.getElementById('piani')?.remove();if(prem===2)vai('guida');else if(prem)vai('premium');else dopoBenv()}
 function dopoBenv(){let pv=true;try{pv=!!localStorage.getItem('piani1_'+utente.id)}catch(e){}
   if(!pv&&on('f_premium'))return mostraPiani();
   let n=true;try{n=!!localStorage.getItem('nintro_'+utente.id)}catch(e){}
@@ -281,7 +282,7 @@ async function registrati(){
 async function esci(){await db.auth.signOut();utente=null;profilo=null;pagina='home';renderAuth()}
 
 // ---------- navigazione ----------
-const PAGINE = {home:'🏠 Home',fanta:'📋 Leghe',sng:'⚽ Calcetto',giocatori:'🔎 Giocatori',seriea:'📅 Serie A',chat:'💬 Chat',premium:'💎 Premium',termini:'📜 Termini',admin:'⚙️ Admin'};
+const PAGINE = {home:'🏠 Home',guida:'📖 Come funziona',fanta:'📋 Leghe',sng:'⚽ Calcetto',giocatori:'🔎 Giocatori',seriea:'📅 Serie A',chat:'💬 Chat',premium:'💎 Premium',termini:'📜 Termini',admin:'⚙️ Admin'};
 function navB(v){const i=v.indexOf(' ');return `<span class="ic">${v.slice(0,i)}</span><span>${v.slice(i+1)}</span>`}
 function aggSaldo(){const el=document.getElementById('saldo');if(!el||!profilo)return;
   if(!on('f_sng')){el.style.display='none';return}
@@ -315,7 +316,7 @@ function vai(p){
   if(chatCanale){db.removeChannel(chatCanale);chatCanale=null}
   if(typeof liveIv!=='undefined'&&liveIv){clearInterval(liveIv);liveIv=null}
   app.innerHTML='<p class="muted">Caricamento…</p>';
-  ({home:pHome,dash:pDash,altro:pAltro,tornei:pTornei,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,premium:pPremium,admin:pAdmin,notifiche:pNotif,giornale:pGiornale,scrivi:pScrivi})[p]();
+  ({home:pHome,dash:pDash,altro:pAltro,tornei:pTornei,fanta:pFanta,sng:pSng,giocatori:pGiocatori,seriea:pSerieA,chat:pChat,termini:pTermini,guida:pGuida,premium:pPremium,admin:pAdmin,notifiche:pNotif,giornale:pGiornale,scrivi:pScrivi})[p]();
 }
 
 
@@ -352,6 +353,20 @@ function testoTermini(){const m=`<a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a>`;r
 <p><b>9. Modifiche.</b> Questi termini possono essere aggiornati; le modifiche importanti vengono comunicate sul sito.</p>
 <p><b>10. Legge.</b> Si applica la legge italiana. Per qualsiasi domanda scrivi a ${m}.</p></div>`}
 function mostraTermini(){document.getElementById('nav').innerHTML='';document.getElementById('top').style.display='none';app.innerHTML=`<button onclick="renderAuth()">← Torna all'accesso</button><div style="margin-top:12px">${testoTermini()}</div>`}
+function pGuida(){const S=(t,b,open)=>`<details class="card" ${open?'open':''} style="padding:12px 14px"><summary style="font:800 17px system-ui;cursor:pointer">${t}</summary><div style="margin-top:10px;line-height:1.55">${b}</div></details>`;
+  const ul=a=>`<ul style="margin:6px 0;padding-left:20px">${a.map(x=>`<li style="margin:4px 0">${x}</li>`).join('')}</ul>`;
+  app.innerHTML=`<h2>📖 Come funziona FantaTaccuino</h2><p class="muted">Tutto quello che serve per giocare da noi. Tocca una sezione per aprirla.</p>
+  ${S('🏆 Le leghe',ul(['<b>Crea una lega</b> e diventi il presidente: scegli regole, crediti, moduli, bonus e come si danno i gol. Oppure <b>entra</b> in quella di un amico con il <b>codice lega</b>.','Il presidente gestisce la lega: apre e chiude il <b>mercato</b> (buste chiuse o asta dal vivo), crea le <b>coppe</b> (gironi + eliminazione), può scegliere la modalità <b>Classic</b> o <b>A ruoli</b>.','Puoi <b>portare la tua lega</b> da un\'altra app: importiamo rose, calendario e risultati già giocati.','Con il piano Free crei fino a <b>2 leghe</b>; nelle leghe degli amici entri senza limiti.']),1)}
+  ${S('📋 La formazione',ul(['Schiera la formazione <b>prima della scadenza</b> (la vedi in Dashboard): di solito è poco prima della prima partita della giornata.','Metti <b>11 titolari</b> in un modulo consentito e ordina la <b>panchina</b>: l\'ordine conta per le sostituzioni.','Se dimentichi la formazione vale la regola scelta dalla tua lega: la trovi nelle regole della lega.']))}
+  ${S('📊 Come nascono i voti',ul(['I voti sono <b>nostri</b>: nascono dai <b>numeri della partita</b> di ogni giocatore (tiri, passaggi, duelli, contrasti, parate…). Da questi numeri esce una valutazione statistica che portiamo sulla scala delle pagelle e arrotondiamo al mezzo punto: la sufficienza è il <b>6</b>, come sui giornali.','Per questo su qualche giocatore il voto può essere diverso di mezzo punto da altre app, che usano il giudizio di un giornalista: noi guardiamo cosa ha fatto in campo.','<b>S.V. (senza voto)</b>: chi gioca <b>meno di 20 minuti</b> senza bonus o malus non prende voto e al suo posto entra un giocatore della panchina.','Chi gioca meno di 20 minuti ma fa qualcosa di importante prende <b>6 + bonus/malus</b> (es. entra e segna: 6+3 = 9); solo ammonito 5,5; espulso 4.','Il <b>portiere</b> prende il malus per ogni gol subito mentre era in campo.','I voti arrivano <b>in diretta</b> durante le partite e diventano <b>ufficiali circa 4 ore dopo l\'ultima partita</b> della giornata: in quel momento si calcolano risultati e classifiche. La redazione può correggere un voto sbagliato.','Nella scheda di ogni giocatore, con 🔍 <b>Voto spiegato</b> (Premium), vedi i numeri da cui è nato il voto.']))}
+  ${S('➕ Fantavoto e bonus',`<p style="margin:0 0 6px">Fantavoto = voto + bonus − malus. Questi sono quelli <b>di base</b>; ogni lega può cambiarli (li trovi nelle regole della lega):</p>`+ul(['⚽ Gol <b>+3</b> · 👟 Assist <b>+1</b> · 🎯 Gol su rigore <b>+3</b>','🧤 Rigore parato <b>+3</b> · ❌ Rigore sbagliato <b>−3</b> · 😱 Autogol <b>−2</b>','🟨 Ammonizione <b>−0,5</b> · 🟥 Espulsione <b>−1</b> · 🥅 Gol subito (portiere) <b>−1</b>']))}
+  ${S('🔄 Sostituzioni e risultato',ul(['Se un titolare non gioca o prende S.V., entra <b>il primo della panchina del suo ruolo</b> (nella modalità A ruoli quello compatibile con il modulo), fino a un massimo di cambi deciso dalla lega (di base 3).','La somma dei fantavoti fa i <b>fantapunti</b>. I fantapunti diventano <b>gol</b> a fasce: di base 66 punti = 1 gol, poi un gol ogni 6 punti in più (72 = 2 gol, 78 = 3…). Le fasce le decide la lega.','Vittoria 3 punti, pareggio 1, sconfitta 0: così si forma la <b>classifica</b>.']))}
+  ${S('🔴 Live e simulazione',ul(['Durante la giornata, nel <b>Live</b> della lega vedi i voti in diretta della tua partita, una squadra di fronte all\'altra, con gol, assist e cartellini.','Con ⭐ <b>Simula risultato</b> vedi come finirebbe adesso: chi deve ancora giocare vale 6 (puoi cambiarlo con ✎), chi non ha giocato o ha S.V. viene sostituito dalla panchina.','Live e simulazione sono per gli utenti <b>Premium</b>.']))}
+  ${S('🆓 Free e 💎 Premium',`<b>Free, gratis per sempre</b>`+ul(['Fino a 2 leghe create, tutta la lega (rosa, formazione, calendario, classifica, coppe, mercato, scambi)','Voti, fantavoti, risultati e classifica di Serie A','Il Taccuino: post-partita, risultati, classifiche, "Verso la giornata"','Chat'])+`<b style="color:var(--gold)">Premium, in più</b>`+ul(['🔴 Live e simulazione · 🔔 Notifiche sul telefono','📋 Probabili formazioni e titolarità con ⚠️ allarme · 🪄 Consiglio formazione','🔍 Voto spiegato e 📈 grafici','🎬 Highlights ufficiali, 🎥 conferenze stampa e 🗞️ notizie dal web','📰 Il Taccuino Premium (pre-partita, probabili, indisponibili, Top 11, quotazioni)','♾️ Leghe illimitate e badge 💎'])+`<button class="pri" style="margin-top:6px" onclick="vai('premium')">💎 Vai al Premium</button>`)}
+  ${S('🔔 Notifiche',ul(['Per i Premium: avvisi sul telefono per <b>tutti i giocatori delle tue rose</b> (o solo per gli schierati, se preferisci): in campo, gol, assist, rigori, gol subiti, cartellini, infortuni, squalifiche, giocatori in dubbio e di nuovo disponibili.','Più i promemoria: un\'ora prima della scadenza se non hai messo la formazione, e quando la giornata è conclusa.','Le attivi e scegli cosa ricevere da ☰ Altro → 🔔 Notifiche. Su iPhone prima devi aggiungere il sito alla schermata Home.']))}
+  ${S('💰 Quotazioni e ruoli',ul(['Le <b>quotazioni</b> dei giocatori sono nostre: partono dal valore di inizio stagione e salgono o scendono in base ai fantavoti.','Anche i <b>ruoli</b> (P, D, C, A e quelli della modalità A ruoli) sono assegnati da noi in base a come gioca davvero ogni calciatore.']))}
+  ${S('📰 Il Taccuino',ul(['Il nostro giornale: articoli automatici dopo ogni partita (gol minuto per minuto con assist), risultati, classifiche e "Verso la giornata", più gli articoli della redazione.','Per i Premium anche pre-partita, probabili, indisponibili, Top 11, quotazioni, highlights, video e notizie dal web.']))}
+  <p class="muted" style="text-align:center;font-size:13px">Hai un dubbio? Scrivici in 💬 Chat.</p>`}
 function pTermini(){app.innerHTML=testoTermini()+`<div class="card" style="border-color:var(--red)"><h3>🗑️ Elimina il mio account</h3><p class="muted">Cancella il tuo account e i tuoi dati. Non si può annullare.</p><button class="del" onclick="eliminaAccount()">Elimina il mio account</button></div>`}
 async function eliminaAccount(){
   if(!confirm('Eliminare definitivamente il tuo account e i tuoi dati?'))return;
