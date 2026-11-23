@@ -605,8 +605,14 @@ function cardArt(a,big){
   if(big)return `<div style="position:relative;border-radius:18px;overflow:hidden;cursor:pointer;margin-bottom:12px" onclick="apriArt(${a.id})">${copertina(a,230)}<span style="position:absolute;top:10px;right:10px;background:#000a;border-radius:999px;padding:4px 10px;font:700 11px system-ui;letter-spacing:.5px">IN EVIDENZA</span><div style="position:absolute;left:0;right:0;bottom:0;padding:40px 14px 12px;background:linear-gradient(180deg,transparent,#000d)"><div style="font:800 20px system-ui;line-height:1.25">${esc(a.titolo)}</div><small style="color:#ffffffaa;text-transform:uppercase;font-weight:700;font-size:11px">${esc(sezDi(a))}${a.premium?' · 💎':''} • ${tempoFa(a.pubblicato_il)}</small></div></div>`;
   return `<div style="display:flex;gap:12px;align-items:stretch;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="apriArt(${a.id})"><div style="width:118px;flex-shrink:0;border-radius:12px;overflow:hidden">${copertina(a,84)}</div><div style="min-width:0;display:flex;flex-direction:column;justify-content:space-between"><div style="font:700 15px system-ui;line-height:1.3">${esc(a.titolo)}</div><small class="muted" style="text-transform:uppercase;font-weight:700;font-size:11px;margin-top:6px">${esc(sezDi(a))}${a.premium?' · 💎':''} • ${tempoFa(a.pubblicato_il)}</small></div></div>`}
 function gzTabs(){return `<div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${[['','📰 Taccuino'],['web','🗞️ Dal web'],['video','🎥 Video']].map(([k,l])=>`<button style="flex:1;padding:9px 4px;font-size:14px;${(GZ.vista||'')===k?'background:var(--green);color:#120a3a;border-color:var(--green)':''}" onclick="GZ.vista='${k}';pGiornale()">${l}</button>`).join('')}</div>`}
-async function pWeb(){const V=GZ.vista==='video';let q=db.from('notizie_web').select('*').eq('tipo',V?'video':'news').order('pubblicato',{ascending:false}).limit(V?40:80);
-  if(GZ.wsq)q=q.eq('squadra',GZ.wsq);const L=chk(await q);
+function ytBox(n,titolo){const v=encodeURIComponent(n.video_id);return `<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px">
+  <div style="position:relative;aspect-ratio:16/9;background:#000 url('https://i.ytimg.com/vi/${v}/hqdefault.jpg') center/cover;cursor:pointer" onclick="this.innerHTML='<iframe src=&quot;https://www.youtube-nocookie.com/embed/${v}?autoplay=1&amp;rel=0&quot; style=&quot;position:absolute;inset:0;width:100%;height:100%;border:0&quot; allow=&quot;autoplay; encrypted-media; picture-in-picture&quot; allowfullscreen></iframe>';this.onclick=null">
+    <div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:58px;height:58px;border-radius:50%;background:#000a;display:grid;place-items:center;font-size:24px">▶</div></div></div>
+  <div style="padding:10px 12px">${titolo?`<small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${titolo}</small>`:''}<div style="font:700 15px/1.3 system-ui;margin-top:3px">${esc(n.titolo)}</div>
+  <a href="https://www.youtube.com/watch?v=${v}" target="_blank" rel="noopener" class="muted" style="font-size:12px">Non parte? Guarda su YouTube ↗</a></div></div>`}
+async function pWeb(){const V=GZ.vista==='video',H=V&&GZ.vt==='hl';let q=db.from('notizie_web').select('*').eq('tipo',H?'highlights':V?'video':'news').order('pubblicato',{ascending:false}).limit(V?40:80);
+  if(GZ.wsq&&!H)q=q.eq('squadra',GZ.wsq);let L=chk(await q);
+  if(H){if(GZ.wsq)L=L.filter(n=>n.titolo.toUpperCase().includes(GZ.wsq.toUpperCase()));const vis=new Set();L=L.sort((a,b)=>(/enilive/i.test(b.titolo)?1:0)-(/enilive/i.test(a.titolo)?1:0)).filter(n=>{const k=n.partita_id||n.id;if(vis.has(k))return false;vis.add(k);return true}).sort((a,b)=>new Date(b.pubblicato)-new Date(a.pubblicato))}
   const sq=[...new Set(chk(await db.from('partite_sa').select('casa')).map(x=>x.casa))].sort();
   const filtro=`<select style="width:100%;margin:0 0 10px" onchange="GZ.wsq=this.value;pGiornale()"><option value="">Tutte le squadre</option>${sq.map(x=>`<option ${GZ.wsq===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
   const vuoto=`<p class="muted">${GZ.wsq?'Niente di nuovo per questa squadra.':'Ancora niente: si aggiorna da solo ogni 20 minuti.'}</p>`;
@@ -614,11 +620,9 @@ async function pWeb(){const V=GZ.vista==='video';let q=db.from('notizie_web').se
       <small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${esc(n.fonte||'')} · ${tempoFa(n.pubblicato)}${n.squadra?' · '+esc(n.squadra):''}</small>
       <div style="font:700 15px/1.3 system-ui;margin-top:3px">${esc(n.titolo)} <span class="muted" style="font-weight:400">↗</span></div></a>`).join(''):vuoto)
     +`<p class="muted" style="font-size:12px;text-align:center">Titoli e link dalle testate sportive: tocca per leggere l'articolo sul loro sito.</p>`;return}
-  app.innerHTML=testata(28)+gzTabs()+filtro+(L.length?L.map(n=>`<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px">
-      <div id="yv${n.id}" style="position:relative;aspect-ratio:16/9;background:#000 url('https://i.ytimg.com/vi/${encodeURIComponent(n.video_id)}/hqdefault.jpg') center/cover;cursor:pointer" onclick="this.innerHTML='<iframe src=&quot;https://www.youtube-nocookie.com/embed/${encodeURIComponent(n.video_id)}?autoplay=1&amp;rel=0&quot; style=&quot;position:absolute;inset:0;width:100%;height:100%;border:0&quot; allow=&quot;autoplay; encrypted-media; picture-in-picture&quot; allowfullscreen></iframe>';this.onclick=null">
-        <div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:58px;height:58px;border-radius:50%;background:#000a;display:grid;place-items:center;font-size:24px">▶</div></div></div>
-      <div style="padding:10px 12px"><small style="color:var(--gold);font-weight:700;font-size:11px;text-transform:uppercase">${esc(n.fonte||'')} · ${tempoFa(n.pubblicato)}</small><div style="font:700 15px/1.3 system-ui;margin-top:3px">${esc(n.titolo)}</div></div></div>`).join(''):vuoto)
-    +`<p class="muted" style="font-size:12px;text-align:center">Video dai canali YouTube ufficiali delle squadre.</p>`}
+  const sub=`<div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">${[['','🎤 Conferenze e allenamenti'],['hl','🎬 Highlights']].map(([k,l])=>`<button style="flex:1;padding:7px 4px;font-size:13px;${(GZ.vt||'')===k?'background:#ffffff26;border-color:#fff6':''}" onclick="GZ.vt='${k}';pGiornale()">${l}</button>`).join('')}</div>`;
+  app.innerHTML=testata(28)+gzTabs()+sub+filtro+(L.length?L.map(n=>ytBox(n,esc(n.fonte||'')+' · '+tempoFa(n.pubblicato))).join(''):vuoto)
+    +`<p class="muted" style="font-size:12px;text-align:center">${H?'Highlights dal canale YouTube ufficiale della Serie A.':'Video dai canali YouTube ufficiali delle squadre.'}</p>`}
 async function pGiornale(){if(GZ.vista==='web'||GZ.vista==='video')return pWeb();ARTS=chk(await db.from('articoli').select('*').eq('stato','pubblicato').order('pubblicato_il',{ascending:false}).limit(60));
   const BLK=premOk()?[]:((await db.rpc('notizie_bloccate')).data||[]);
   const tutte=[...new Set([...SEZ,'Pre-partita','Post-partita','Classifiche','La tua lega'])],nV={},nB={};ARTS.forEach(a=>nV[sezDi(a)]=(nV[sezDi(a)]||0)+1);BLK.forEach(a=>nB[sezDi(a)]=(nB[sezDi(a)]||0)+1);
@@ -2562,6 +2566,7 @@ async function liveView(id){
 async function pagelle(id){
   const p=chk(await db.from('partite_sa').select('*').eq('api_id',id).single());
   if(p.live) return liveView(id);
+  const HLs=(await db.from('notizie_web').select('video_id,titolo').eq('tipo','highlights').eq('partita_id',id).order('pubblicato',{ascending:false}).limit(4)).data||[],HL=HLs.find(x=>/enilive/i.test(x.titolo))||HLs[0];
   const gg=chk(await db.from('giocatori').select('id,nome,ruolo,squadra,foto').in('squadra',[p.casa,p.trasferta]));
   const vv=gg.length?chk(await db.from('voti').select('*').eq('giornata',p.giornata).in('giocatore_id',gg.map(g=>g.id))):[];
   const pr=chk(await db.from('probabili').select('giocatore_id').eq('partita_id',id)).map(x=>x.giocatore_id);
@@ -2570,7 +2575,7 @@ async function pagelle(id){
     return `<div class="card"><h3>${esc(sq)}</h3>${r.map(v=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><div class="row between"><span>${ruolo(v.g.ruolo)}<b>${esc(v.g.nome)}</b> <small class="muted">${v.minuti??''}'</small></span>
       <span><b style="font-size:18px">${v.voto??'s.v.'}</b> <small class="muted">fv</small> <b style="color:var(--gold)">${v.fantavoto??'-'}</b></span></div>
       ${bonusRighe(v).length?`<small class="muted">${bonusRighe(v).join(' · ')}</small>`:''}${v.giudizio?`<div style="font-style:italic;margin-top:3px">"${esc(v.giudizio)}"</div>`:''}</div>`).join('')||'<p class="muted">Voti non ancora pubblicati.</p>'}</div>`};
-  app.innerHTML=`<button onclick="pSerieA()">← Serie A</button><h2 style="margin-top:12px">${vv.length?'Pagelle FantaTaccuino':'La partita'}</h2>
+  app.innerHTML=`<button onclick="pSerieA()">← Serie A</button>${HL?`<div style="margin-top:12px">${ytBox(HL,'🎬 Highlights ufficiali')}</div>`:''}<h2 style="margin-top:12px">${vv.length?'Pagelle FantaTaccuino':'La partita'}</h2>
   <div class="card row between"><b>${esc(p.casa)}</b><span class="ris">${p.gol_casa??''} - ${p.gol_trasferta??''}</span><b>${esc(p.trasferta)}</b></div>${probHtml}${vv.length?blocco(p.casa)+blocco(p.trasferta):(probHtml?'':'<p class="muted">Probabili formazioni e pagelle non ancora disponibili.</p>')}`;
 }
 
