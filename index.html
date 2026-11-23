@@ -182,7 +182,25 @@ async function avvia(session){
   if(!visto) setTimeout(mostraBenvenuto,500);
   else setTimeout(dopoBenv,700);
 }
-function dopoBenv(){let n=true;try{n=!!localStorage.getItem('nintro_'+utente.id)}catch(e){}
+function mostraPiani(){if(document.getElementById('piani'))return;const o=document.createElement('div');o.id='piani';
+  o.style.cssText='position:fixed;inset:0;z-index:102;background:#0b0628f2;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+  const P=isPrem(),li=a=>a.map(([i,t,d])=>`<div style="display:flex;gap:10px;padding:6px 0"><span style="font-size:20px;flex:none">${i}</span><div><b>${t}</b>${d?`<br><small class="muted">${d}</small>`:''}</div></div>`).join('');
+  const F=[['🏆','Le tue leghe','crei fino a 2 leghe ed entri in quelle degli amici con il codice'],['📋','Tutta la lega','rosa, formazione, calendario, classifica, coppe, mercato e scambi'],['📊','Voti e risultati','voti e fantavoti, risultati e classifica di Serie A'],['📰','Il Taccuino','post-partita, risultati, classifiche e "Verso la giornata"'],['💬','Chat','e chi è online']];
+  const Pm=[['🔴','Live e simulazione','voti in diretta della tua partita e ⭐ simula il risultato'],['🔔','Notifiche sul telefono','gol, assist, cartellini e infortuni dei tuoi schierati'],['📋','Probabili e titolarità','con ⚠️ allarme se un tuo titolare non gioca'],['🪄','Consiglio formazione',''],['🔍','Voto spiegato e grafici','i numeri della partita di ogni giocatore'],['🎬','Highlights, video e notizie dal web','highlights ufficiali, conferenze stampa e le ultime dai giornali'],['📰','Il Taccuino Premium','pre-partita, probabili, indisponibili, Top 11, quotazioni'],['♾️','Leghe illimitate','e il badge 💎']];
+  o.innerHTML=`<div class="card" style="max-width:480px;width:100%;margin:auto">
+    <div style="font-size:42px;text-align:center">👋</div>
+    <p style="font:800 26px var(--cond);margin:0;text-align:center">Benvenuto su FantaTaccuino!</p>
+    <p class="muted" style="text-align:center;margin-top:6px">Ecco cosa puoi fare con il tuo piano.</p>
+    <div class="card" style="margin:10px 0"><b style="font-size:17px">🆓 Free · gratis per sempre</b>${li(F)}</div>
+    <div class="card" style="margin:10px 0;border-color:var(--gold)"><b style="font-size:17px;color:var(--gold)">💎 Premium · tutto il Free, più:</b>${li(Pm)}</div>
+    ${P?'<p style="color:var(--green);text-align:center;font-weight:700">✅ Tu sei Premium: hai già tutto sbloccato!</p>':''}
+    ${P?'':`<button class="pri" style="width:100%" onclick="chiudiPiani(1)">💎 Scopri il Premium</button>`}
+    <button style="width:100%;margin-top:8px" onclick="chiudiPiani()">${P?'Iniziamo!':'Continua con il Free'}</button></div>`;
+  document.body.appendChild(o)}
+function chiudiPiani(prem){try{localStorage.setItem('piani1_'+utente.id,'1')}catch(e){}document.getElementById('piani')?.remove();if(prem)vai('premium');else dopoBenv()}
+function dopoBenv(){let pv=true;try{pv=!!localStorage.getItem('piani1_'+utente.id)}catch(e){}
+  if(!pv&&on('f_premium'))return mostraPiani();
+  let n=true;try{n=!!localStorage.getItem('nintro_'+utente.id)}catch(e){}
   if(!n)return mostraNotifIntro();
   if(on('f_sng')&&profilo.ultimo_pacco!==oggiStr()) mostraPacchi()}
 function mostraNotifIntro(){if(document.getElementById('nintro'))return;const o=document.createElement('div');o.id='nintro';
@@ -307,7 +325,7 @@ const TITOLARE='Luca Scanga',MAIL_TIT='fantataccuino@gmail.com';
 function pPremium(){
   const fino=profilo.premium_fino&&profilo.premium_fino>=new Date().toISOString().slice(0,10)?profilo.premium_fino:null;
   const V=[['📊','Titolarità e indisponibili','Percentuale di titolarità di ogni giocatore e chi è infortunato, squalificato o in dubbio, nella rosa e in formazione.'],['⚽','Calcetto','Gioca ai tavoli del Calcetto con i palloni dorati.'],['📋','Leghe illimitate','Crea tutte le leghe che vuoi (senza Premium al massimo 2).'],['🪄','Consiglio formazione','Il sito ti propone la formazione migliore della tua rosa.'],['⚠️','Allarme probabili','Ti avvisa se un tuo titolare non è nelle probabili formazioni.'],['🔍','Voto spiegato','Scopri da cosa nasce ogni voto della redazione.'],['📈','Grafici giocatore','Andamento di voti e quotazione giornata per giornata.'],['🔴','Diretta live','Segui in diretta gol, assist, cartellini e fantavoti della gara serale.'],['🔔','Notifiche live','Ti arriva un avviso sul telefono quando un tuo giocatore schierato segna, fa assist, prende un cartellino, subisce gol o si infortuna. E il promemoria della formazione.'],['🎬','Highlights e video','Gli highlights ufficiali di ogni partita di Serie A, le conferenze stampa e gli allenamenti dai canali dei club.'],['🗞️','Notizie dal web','Le ultime sulla Serie A dai principali giornali sportivi, aggiornate ogni 20 minuti.'],['💎','Badge Premium','Il diamante accanto al tuo nome in chat, classifiche e tavoli.']];
-  app.innerHTML=`<h2>💎 Premium</h2>
+  app.innerHTML=`<button style="width:100%;margin-bottom:10px" onclick="mostraPiani()">📋 Confronta Free e Premium</button><h2>💎 Premium</h2>
   <div class="card" style="border-color:var(--gold);text-align:center">${profilo.ruolo==='admin'?'<h3>Sei amministratore: hai tutte le funzioni Premium.</h3>':fino?`<h3 style="color:var(--gold)">✅ Sei Premium</h3><p class="muted">Attivo fino al <b>${new Date(fino).toLocaleDateString('it-IT')}</b></p>`:`<h3>Non sei ancora Premium</h3><p class="muted">Per attivarlo scrivi all'amministratore.</p>${FEAT.wa_premium?`<button class="pri" style="width:100%" onclick="window.open('https://wa.me/${FEAT.wa_premium}?text='+encodeURIComponent('Ciao! Vorrei attivare il Premium su FantaTaccuino. Il mio nome utente è: '+profilo.username),'_blank')">💬 Scrivimi su WhatsApp</button>`:`<p class="muted">Contatto: <a href="mailto:${MAIL_TIT}">${MAIL_TIT}</a></p>`}`}</div>
   <h3 style="margin-top:16px">Cosa sblocca</h3>
   ${V.map(v=>`<div class="card row" style="flex-wrap:nowrap;padding:12px 14px"><div style="font-size:28px">${v[0]}</div><div><b>${v[1]}</b><br><small class="muted">${v[2]}</small></div></div>`).join('')}`;
