@@ -1474,11 +1474,11 @@ async function legaView(){
         const FIN=new Set(form.filter(f=>finita(f.giocatori.squadra)).map(f=>f.giocatore_id));
         const fvDi=(D,uid,gid)=>{const r=(D.ris[G]?.[uid]?.righe||[]).find(x=>x.g?.id===gid);return r?r.fv:undefined};
         const gidsL=form.map(f=>f.giocatore_id),VV={};
-        const EVT={};(gidsL.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gidsL)):[]).forEach(v=>{EVT[v.giocatore_id]=v;const f=form.find(x=>x.giocatore_id===v.giocatore_id);if(v.voto!=null)VV[v.giocatore_id]=fvL(v,f?.giocatori.ruolo,lega.bonus,null)});
-        form.forEach(f=>{if(VV[f.giocatore_id]==null&&EV[f.giocatore_id]){const v={minuti:90,...evV(EV[f.giocatore_id])};VV[f.giocatore_id]=fvL(v,f.giocatori.ruolo,lega.bonus,null)}});
+        const EVT={},DBV={};(gidsL.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gidsL)):[]).forEach(v=>{DBV[v.giocatore_id]=v;EVT[v.giocatore_id]=v;const f=form.find(x=>x.giocatore_id===v.giocatore_id);if(v.voto!=null)VV[v.giocatore_id]=fvL(v,f?.giocatori.ruolo,lega.bonus,null)});
+        form.forEach(f=>{if(VV[f.giocatore_id]==null&&!DBV[f.giocatore_id]&&EV[f.giocatore_id]){const v={minuti:90,...evV(EV[f.giocatore_id])};VV[f.giocatore_id]=fvL(v,f.giocatori.ruolo,lega.bonus,null)}});
         form.forEach(f=>{const e=EV[f.giocatore_id];if(e){const o=evV(e),w=EVT[f.giocatore_id];EVT[f.giocatore_id]=w?{...o,...Object.fromEntries(Object.entries(w).filter(([k,x])=>x))}:o}});
         const icE=gid=>{const e=EVT[gid];if(!e)return '';const x=(n,i)=>n>0?(n>1?i+'×'+n:i):'';const t=[x(e.gol,'⚽'),x(e.assist,'👟'),e.ammonizione?'🟨':'',e.espulsione?'🟥':'',e.gol_subiti>0?'🥅-'+e.gol_subiti:'',x(e.rigori_parati,'🧤'),x(e.rigori_sbagliati,'❌'),x(e.autogol,'🔙')].filter(Boolean).join(' ');return t};
-        const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>{const w=EVT[gid];if(w&&w.voto!=null)return {...w};if(EV[gid])return evV(EV[gid]);return FIN.has(gid)?null:{voto:LV.v[gid]??6}}}):null;
+        const sim=LV.sim?await datiLega(lega,membri,{gg:[G],extra:gid=>{const d=DBV[gid];if(d)return d.voto!=null?{...d}:null;if(EV[gid])return evV(EV[gid]);return FIN.has(gid)?null:{voto:LV.v[gid]??6}}}):null;
         const SUBo={},SUBi={};if(sim)cop.forEach(uid=>{const R=sim.ris[G]?.[uid]?.righe||[];R.forEach((r,k)=>{if(r.entra&&k>0&&R[k-1].g&&r.g){SUBo[R[k-1].g.id]=r.g.nome;SUBi[r.g.id]=R[k-1].g.nome}})});
         const vDi=gid=>VV[gid]!=null?Math.round(VV[gid]*10)/10:undefined;
         const parz=uid=>Math.round(form.filter(f=>f.utente_id===uid&&f.titolare).reduce((a,f)=>{const v=vDi(f.giocatore_id);return a+(v!=null?v:0)},0)*10)/10;
@@ -1487,11 +1487,11 @@ async function legaView(){
         const stG=sq=>{const p=pps.find(x=>x.casa===sq||x.trasferta===sq);if(!p)return {k:'no'};if(p.live)return {k:'live'};if(new Date(p.data)>new Date())return {k:'dopo',t:new Date(p.data).toLocaleString('it-IT',{weekday:'short',hour:'2-digit',minute:'2-digit'})};return {k:'fine'}};
         const lvC=v=>v==null?'':v>=6.5?'#3ddc84':v<6?'#ff6b6b':'#e8e6ff';
         const lato=(f,dx)=>{if(!f)return '<div></div>';const g=f.giocatore_id,fv=vDi(g),e=EVT[g],vb=e&&e.voto!=null?e.voto:(fv!=null?6:null),st=stG(f.giocatori.squadra);
-          const sv=LV.sim&&fv==null&&!FIN.has(g)?(LV.v[g]??6):null,ic=icE(g);
-          const sub=SUBi[g]?`<div class="lvs" style="color:#3ddc84">🔄 entra per ${esc(SUBi[g])}</div>${fv!=null&&ic?`<div class="lvi">${ic}</div>`:''}`:SUBo[g]?`<div class="lvs" style="color:#ff9b9b">⊘ Non ha giocato · esce, entra ${esc(SUBo[g])}</div>`:fv!=null?(ic?`<div class="lvi">${ic}</div>`:''):sv!=null?'<div class="lvs">simulato</div>':st.k==='fine'?'<div class="lvs">Non ha giocato</div>':st.k==='dopo'?`<div class="lvs">⏳ ${esc(st.t)}</div>`:st.k==='live'?'<div class="lvs">🔴 in corso</div>':'';
+          const SVg=!!(DBV[g]&&DBV[g].voto==null),sv=LV.sim&&fv==null&&!FIN.has(g)&&!SVg?(LV.v[g]??6):null,ic=icE(g);
+          const sub=SUBi[g]?`<div class="lvs" style="color:#3ddc84">🔄 entra per ${esc(SUBi[g])}</div>${fv!=null&&ic?`<div class="lvi">${ic}</div>`:''}`:SUBo[g]?`<div class="lvs" style="color:#ff9b9b">${SVg?'S.V. ('+DBV[g].minuti+"')":'⊘ Non ha giocato'} · esce, entra ${esc(SUBo[g])}</div>`:SVg?`<div class="lvs">S.V. · solo ${DBV[g].minuti}' giocati</div>`:fv!=null?(ic?`<div class="lvi">${ic}</div>`:''):sv!=null?'<div class="lvs">simulato</div>':st.k==='fine'?'<div class="lvs">Non ha giocato</div>':st.k==='dopo'?`<div class="lvs">⏳ ${esc(st.t)}</div>`:st.k==='live'?'<div class="lvs">🔴 in corso</div>':'';
           const box=fv!=null?`<div class="lvb"><div>${vb??'–'}</div><div style="color:${lvC(fv)};background:${lvC(fv)}26">${fv}</div></div>`
             :sv!=null?`<button class="lvb lvbs" onclick="lvVoto(${g})"><div>✎</div><div>${sv}</div></button>`
-            :`<div class="lvb lvb0">${st.k==='fine'?'⊘':'–'}</div>`;
+            :`<div class="lvb lvb0">${SVg?'SV':st.k==='fine'?'⊘':'–'}</div>`;
           const txt=`<div class="lvt" style="text-align:${dx?'right':'left'}"><div class="lvn" style="${dx?'flex-direction:row-reverse':''}">${ruolo(f.giocatori.ruolo)}<b>${esc(f.giocatori.nome)}</b></div>${sub}</div>`;
           return `<div class="lvl">${dx?box+txt:txt+box}</div>`};
         const lista=uid=>{const r=form.filter(f=>f.utente_id===uid);return {t:r.filter(f=>f.titolare).sort((a,b)=>ORD[a.giocatori.ruolo]-ORD[b.giocatori.ruolo]),pn:r.filter(f=>!f.titolare).sort((a,b)=>a.ordine-b.ordine),n:r.length}};
