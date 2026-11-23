@@ -457,7 +457,7 @@ async function salvaFormT(id,g){chk(await db.from('tornei_form').upsert({torneo_
 
 // ---------- notifiche push ----------
 const VAPID_PUB='BMuCxxQHziWvG1FraPNV2Xs-rwuf5wIJsSjdHmojsOkNRQ5nh02vhGmy4S6dTFR3rIU68EVU9Us_ENDk8XjvpXU';
-const NCAT=[['gol','⚽ Gol, assist e rigori','Gol, assist, rigori parati o sbagliati, autogol dei tuoi schierati'],['gs','🥅 Gol subiti','Ogni gol subito dal tuo portiere schierato'],['cart','🟨 Cartellini e infortuni','Ammonizioni, espulsioni, infortuni e squalifiche dei tuoi giocatori'],['serv','⏰ Avvisi di servizio','Promemoria un\'ora prima della scadenza se non hai messo la formazione, giornata conclusa']];
+const NCAT=[['rosa','👀 Segui tutta la rosa','Avvisi per TUTTI i giocatori delle tue rose, non solo per quelli schierati in formazione'],['campo','🟢 In campo','Quando un tuo giocatore è titolare o entra dalla panchina'],['gol','⚽ Gol, assist e rigori','Gol, assist, rigori parati o sbagliati, autogol dei tuoi giocatori'],['gs','🥅 Gol subiti','Ogni gol subito dal tuo portiere'],['cart','🟨 Cartellini e infortuni','Ammonizioni, espulsioni, infortuni, squalifiche, giocatori in dubbio e di nuovo disponibili'],['serv','⏰ Avvisi di servizio','Promemoria un\'ora prima della scadenza se non hai messo la formazione, giornata conclusa']];
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const isApp=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 function u8(b){const p='='.repeat((4-b.length%4)%4),s=atob((b+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(s,c=>c.charCodeAt(0))}
