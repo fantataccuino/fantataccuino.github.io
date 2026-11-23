@@ -1303,7 +1303,7 @@ async function datiLega(lega,membri,opt={}){
   if(opt.coppa){const hc=new Set(form.filter(f=>f.coppa===opt.coppa).map(f=>f.utente_id+'-'+f.giornata));form=form.filter(f=>f.coppa===opt.coppa||!hc.has(f.utente_id+'-'+f.giornata))}
   const carte=lega.carte?chk(await db.from('carte_usate').select('*').eq('lega_id',lega.id)):[];
   const gids=[...new Set([...form.map(f=>f.giocatore_id),...carte.filter(c=>c.giocatore_id).map(c=>c.giocatore_id)])];
-  const voti=gids.length?chk(await db.from('voti').select('giocatore_id,giornata,voto,minuti,gol,assist,ammonizione,espulsione,gol_subiti,rigori_parati,rigori_sbagliati,autogol,rigori_segnati,gol_decisivi,gol_pareggio,potm').in('giocatore_id',gids)):[];
+  const voti=gids.length&&pub.length?chk(await db.from('voti').select('giocatore_id,giornata,voto,minuti,gol,assist,ammonizione,espulsione,gol_subiti,rigori_parati,rigori_sbagliati,autogol,rigori_segnati,gol_decisivi,gol_pareggio,potm').in('giocatore_id',gids).in('giornata',pub)):[];
   const partL=pub.length?chk(await db.from('partite_sa').select('giornata,casa,trasferta,gol_casa,gol_trasferta').in('giornata',pub)):[];
   const gioc=gids.length?chk(await db.from('giocatori').select('id,nome,ruolo,squadra,ruoli_m').in('id',gids)):[];
   const vm={};voti.forEach(v=>vm[v.giocatore_id+'-'+v.giornata]=v);
@@ -1559,10 +1559,11 @@ async function legaView(){
           <button class="${LV.sim?'del':'pri'}" style="width:100%" onclick="LV.sim=!LV.sim;legaView()">${LV.sim?'✕ Torna al parziale':'⭐ Simula risultato'}</button>
           ${LV.sim?'<p class="muted" style="font-size:13px">I titolari che devono ancora giocare valgono 6 (tocca ✎ per cambiarlo). Chi non ha giocato o ha S.V. esce ed entra il primo panchinaro del suo ruolo che ha già il voto (🔄). Un panchinaro che deve ancora giocare non entra finché non gioca: se vuoi simularlo tocca ✎.</p>':'<p class="muted" style="font-size:13px">Voti in diretta (dal live e dalla redazione). Si aggiorna da solo ogni minuto.</p><details style="font-size:13px;margin:-4px 0 4px"><summary class="muted">ⓘ Legenda icone</summary><div class="muted" style="margin-top:4px;line-height:1.7">🔄 entrato al minuto · ⚽ gol · 👟 assist · 🟨 ammonito · 🟥 espulso · 🥅 gol subiti · 🧤 rigore parato · ❌ rigore sbagliato · 🔙 autogol</div></details>'}
           <div style="margin-top:12px;font-size:14px">${specchio()}</div></div>`;
-        try{const FA=chk(await db.from('formazioni').select('giocatore_id,titolare,giocatori(squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',G));
+        h+=`<div id="clive"><div class="card"><p class="muted">📊 Calcolo partite e classifica live…</p></div></div>`;
+        const cliveJob=async()=>{let h='';try{const FA=chk(await db.from('formazioni').select('giocatore_id,titolare,giocatori(squadra)').eq('lega_id',lega.id).eq('coppa',0).eq('giornata',G));
           const FNa=new Set(FA.filter(f=>finita(f.giocatori?.squadra)).map(f=>f.giocatore_id)),TTa=new Set(FA.filter(f=>f.titolare).map(f=>f.giocatore_id));
           const gA=[...new Set(FA.map(f=>f.giocatore_id))],DBA={};(gA.length?chk(await db.from('voti').select('*').eq('giornata',G).in('giocatore_id',gA)):[]).forEach(v=>DBA[v.giocatore_id]=v);
-          const [LD,BD,incA]=await Promise.all([datiLega(lega,membri,{gg:[G],extra:gid=>{const d=DBA[gid];if(d)return d.voto!=null?{...d}:null;if(EV[gid])return evV(EV[gid]);if(FNa.has(gid))return null;return TTa.has(gid)?{voto:6}:null}}),datiLega(lega,membri),db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata').then(r=>r.data||[])]);
+          const [LD,BD,incA]=await Promise.all([datiLega(lega,membri,{gg:[G],extra:gid=>{const d=DBA[gid];if(d)return d.voto!=null?{...d}:null;if(EV[gid])return evV(EV[gid]);if(FNa.has(gid))return null;return TTa.has(gid)?{voto:6}:null}}),(window.BDC&&BDC.id===lega.id&&Date.now()-BDC.t<300000?Promise.resolve(BDC.d):datiLega(lega,membri).then(d=>{window.BDC={id:lega.id,t:Date.now(),d};return d})),db.from('incontri').select('*').eq('lega_id',lega.id).order('giornata').then(r=>r.data||[])]);
           const PZ=lega.partenza||{},nuovo=()=>{const t={};membri.forEach(m=>{const z=PZ[m.utente_id]||{};t[m.utente_id]={pt:+z.fp||0,v:+z.v||0,n:+z.n||0,p:+z.p||0,gf:+z.gf||0,gs:+z.gs||0,punti:+z.punti||0}});return t};
           const somma=(t,D,gg)=>{gg.forEach(g=>membri.forEach(m=>{if(t[m.utente_id]&&D.ris[g]?.[m.utente_id])t[m.utente_id].pt+=D.ris[g][m.utente_id].pt}));
             incA.filter(i=>gg.includes(i.giornata)).forEach(i=>{const [gc,gt]=golMatch(i,D.ris,lega);const A=t[i.casa],B=t[i.trasferta];if(!A||!B)return;A.gf+=gc;A.gs+=gt;B.gf+=gt;B.gs+=gc;if(gc>gt){A.v++;B.p++;A.punti+=3}else if(gc<gt){B.v++;A.p++;B.punti+=3}else{A.n++;B.n++;A.punti++;B.punti++}})};
@@ -1580,6 +1581,8 @@ async function legaView(){
             <table><tr><th>#</th><th></th><th>Squadra</th><th>Pt</th>${scd?'<th>G+</th>':''}<th>FP</th></tr>
             ${o1.map((u,k)=>{const d=o0.indexOf(u)-k,a=t1[u],b=t0[u],dp=a.punti-b.punti;return `<tr style="${u===utente.id?'background:#3ddc8414':''}"><td>${k+1}</td><td style="font-size:12px;color:${d>0?'#3ddc84':d<0?'#ff6b6b':'#aab'}">${d>0?'▲'+d:d<0?'▼'+(-d):'='}</td><td><b>${nm(u)}</b></td><td><b style="color:var(--gold)">${scd?a.punti:a.pt.toFixed(1)}</b>${scd&&dp?` <small style="color:#3ddc84">+${dp}</small>`:''}</td>${scd?`<td>${a.gf-b.gf}</td>`:''}<td>${a.pt.toFixed(1)}</td></tr>`}).join('')}</table></div>`;
         }catch(e){h+=`<div class="card"><p class="muted" style="font-size:12px">Classifica live non disponibile: ${esc(e.message||String(e))}</p></div>`}
+          for(let t=0;t<60&&!document.getElementById('clive');t++)await new Promise(r=>setTimeout(r,100));const el=document.getElementById('clive');if(el)el.innerHTML=h};
+        setTimeout(cliveJob,50);
         clearTimeout(LV.t);LV.t=setTimeout(()=>{if(pagina==='fanta'&&fz.tab==='live'&&!LV.sim)legaView()},60000);
       }
     }
